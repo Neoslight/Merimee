@@ -187,6 +187,42 @@ try {
     `${(avantFiche / 1024).toFixed(0)} Ko`
   );
 
+  // --- Passerelle Palissy ---------------------------------------------------
+  // Une notice porte jusqu'a 2 225 objets : le depliage par paquets evite de
+  // rendre 2 225 ancres d'un coup. On ouvre la notice la plus riche du corpus,
+  // premiere de la liste puisqu'elle est triee par nb_palissy decroissant.
+  // Deux sections rendent des jetons (objets, notices liees) : ne compter que
+  // la premiere, celle des objets Palissy.
+  const listeObjets = page.locator('.jetons').first();
+  const jetons = await listeObjets.locator('a').count();
+  verifier('objets Palissy deplies par paquets', jetons > 0 && jetons <= 50, `${jetons} liens`);
+  const premierJeton = await listeObjets.locator('a').first().getAttribute('href');
+  verifier(
+    'lien direct vers la notice de l objet',
+    /pop\.culture\.gouv\.fr\/notice\/(palissy|merimee)\//.test(premierJeton ?? ''),
+    premierJeton ?? 'aucun'
+  );
+
+  const boutonPlus = page.locator('button.plus');
+  if (await boutonPlus.count()) {
+    await boutonPlus.first().click();
+    await page.waitForTimeout(300);
+    const apres = await listeObjets.locator('a').count();
+    verifier('depliage ajoute un paquet', apres > jetons, `${jetons} -> ${apres}`);
+  }
+
+  // --- Densite --------------------------------------------------------------
+  await page.click('.bascule');
+  await page.getByRole('button', { name: 'densité' }).click();
+  await page.waitForTimeout(500);
+  const etatDensite = await page.evaluate(() => {
+    const b = document.querySelector('.legende button[aria-pressed]');
+    return b?.getAttribute('aria-pressed');
+  });
+  verifier('bascule densite active', etatDensite === 'true', String(etatDensite));
+  await page.getByRole('button', { name: 'densité' }).click();
+  await page.click('.bascule');
+
   // --- Notices sans coordonnees, absentes de la carte ----------------------
   const mention = await page.textContent('.liste header p');
   verifier('notices sans coordonnees signalees', /2\s?276/.test(mention ?? ''), mention ?? '');

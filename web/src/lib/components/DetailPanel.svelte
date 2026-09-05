@@ -48,6 +48,35 @@
 
   const nf = new Intl.NumberFormat('fr-FR');
   const popUrl = (ref: string) => `https://www.pop.culture.gouv.fr/notice/merimee/${ref}`;
+
+  // Les identifiants stockes disent leur base par leur prefixe. Attestes dans
+  // le corpus : PM (119 203), IM (4 217), EM (3 006) et PP (154) viennent de la
+  // colonne Palissy ; IA (7 470) et PA (743) des renvois Merimee. JA et AC
+  // (76 au total) ne sont pas identifies : les envoyer vers une notice
+  // fabriquee serait un lien mort, ils partent vers la recherche POP.
+  const BASES: Record<string, string> = {
+    PA: 'merimee', IA: 'merimee', EA: 'merimee',
+    PM: 'palissy', IM: 'palissy', EM: 'palissy', PP: 'palissy'
+  };
+
+  function lienNotice(identifiant: string): string {
+    const base = BASES[identifiant.slice(0, 2).toUpperCase()];
+    return base
+      ? `https://www.pop.culture.gouv.fr/notice/${base}/${identifiant}`
+      : `https://www.pop.culture.gouv.fr/search/list?mainSearch=%22${identifiant}%22`;
+  }
+
+  // Une notice porte jusqu'a 2 225 objets : rendre toutes les ancres d'un coup
+  // figerait la fiche. On deplie par paquets.
+  const PAQUET = 50;
+  let montres = $state(PAQUET);
+
+  // Remise a zero au changement de notice, sinon une fiche pauvre heriterait
+  // du depliage de la precedente.
+  $effect(() => {
+    reference;
+    montres = PAQUET;
+  });
 </script>
 
 <aside class="fiche" aria-live="polite">
@@ -143,12 +172,44 @@
           <li>
             <a href={`https://www.pop.culture.gouv.fr/search/list?base=%5B%22Palissy%22%5D&mainSearch=%22${fiche.reference}%22`}
                target="_blank" rel="noreferrer">
-              {nf.format(fiche.nb_palissy)} objets mobiliers Palissy
+              Rechercher les {nf.format(fiche.nb_palissy)} objets dans POP
             </a>
           </li>
         {/if}
       </ul>
     </section>
+
+    {#if fiche.palissy.length}
+      <section>
+        <h3>Objets mobiliers <em>{nf.format(fiche.palissy.length)}</em></h3>
+        <ul class="jetons">
+          {#each fiche.palissy.slice(0, montres) as identifiant (identifiant)}
+            <li>
+              <a href={lienNotice(identifiant)} target="_blank" rel="noreferrer">{identifiant}</a>
+            </li>
+          {/each}
+        </ul>
+        {#if fiche.palissy.length > montres}
+          <button class="plus" onclick={() => (montres += PAQUET)}>
+            voir {nf.format(Math.min(PAQUET, fiche.palissy.length - montres))} objets de plus
+            <em>({nf.format(fiche.palissy.length - montres)} restants)</em>
+          </button>
+        {/if}
+      </section>
+    {/if}
+
+    {#if fiche.renvois.length}
+      <section>
+        <h3>Notices liées <em>{nf.format(fiche.renvois.length)}</em></h3>
+        <ul class="jetons">
+          {#each fiche.renvois.slice(0, PAQUET) as identifiant (identifiant)}
+            <li>
+              <a href={lienNotice(identifiant)} target="_blank" rel="noreferrer">{identifiant}</a>
+            </li>
+          {/each}
+        </ul>
+      </section>
+    {/if}
   {/if}
 </aside>
 
@@ -310,6 +371,55 @@
     display: grid;
     gap: 5px;
     font-size: 12px;
+  }
+
+  h3 em {
+    font-style: normal;
+    font-variant-numeric: tabular-nums;
+    color: var(--texte);
+  }
+
+  /* Identifiants POP : une grille de jetons courts tient bien plus d'entrees
+     qu'une liste verticale, et reste balayable a l'oeil. */
+  .jetons {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .jetons a {
+    display: block;
+    padding: 2px 7px;
+    border: 1px solid var(--bord);
+    border-radius: 4px;
+    background: var(--fond-creux);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    color: var(--texte-faible);
+  }
+
+  .jetons a:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .plus {
+    margin-top: 8px;
+    border: 1px solid var(--bord);
+    background: transparent;
+    color: var(--accent);
+    border-radius: 999px;
+    padding: 3px 12px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+
+  .plus em {
+    font-style: normal;
+    color: var(--texte-faible);
   }
 
   a {

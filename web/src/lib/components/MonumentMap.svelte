@@ -61,6 +61,29 @@
 
     map.on('load', () => {
       map.addSource('monuments', { type: 'geojson', data: geojson([]) });
+      // Couche de densite, masquee par defaut. Elle repond a ce que 44 000
+      // points superposes cachent : au niveau national, la carte de points
+      // sature et ne distingue plus une commune riche d'un departement dense.
+      map.addLayer({
+        id: 'monuments-densite',
+        type: 'heatmap',
+        source: 'monuments',
+        layout: { visibility: 'none' },
+        paint: {
+          'heatmap-weight': ['interpolate', ['linear'], ['get', 'nb'], 0, 0.6, 200, 1.4],
+          'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 4, 0.8, 12, 2.4],
+          'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 4, 10, 12, 34],
+          'heatmap-opacity': 0.75,
+          'heatmap-color': [
+            'interpolate', ['linear'], ['heatmap-density'],
+            0, 'rgba(11, 14, 20, 0)',
+            0.2, '#1d3b57',
+            0.4, '#4ea8de',
+            0.65, '#e0a458',
+            1, '#f4f1ea'
+          ]
+        }
+      });
       map.addLayer({
         id: 'monuments-halo',
         type: 'circle',
@@ -142,6 +165,17 @@
     carte?.setFilter('monuments-selection', ['==', ['get', 'reference'], selection ?? '']);
   });
 
+  // Les points restent la couche interactive : les masquer sous la densite
+  // supprimerait le clic vers la fiche, on les garde en filigrane.
+  let densite = $state(false);
+
+  $effect(() => {
+    if (!pret || !carte) return;
+    carte.setLayoutProperty('monuments-densite', 'visibility', densite ? 'visible' : 'none');
+    carte.setPaintProperty('monuments-points', 'circle-opacity', densite ? 0.25 : 0.82);
+    carte.setPaintProperty('monuments-halo', 'circle-opacity', densite ? 0 : 0.14);
+  });
+
   function basculerSuivi() {
     suivreVue = !suivreVue;
     if (suivreVue) emettreBbox();
@@ -155,7 +189,12 @@
   <span><i style="background:#e0a458"></i>classé</span>
   <span><i style="background:#4ea8de"></i>inscrit</span>
   <span><i style="background:#b07bd4"></i>les deux</span>
-  <button class:actif={suivreVue} onclick={basculerSuivi} title="Restreindre les filtres à la zone visible">
+  <button class:actif={densite} onclick={() => (densite = !densite)}
+          aria-pressed={densite} title="Afficher la densité plutôt que les points seuls">
+    densité
+  </button>
+  <button class:actif={suivreVue} onclick={basculerSuivi} aria-pressed={suivreVue}
+          title="Restreindre les filtres à la zone visible">
     {suivreVue ? 'vue liée' : 'lier la vue'}
   </button>
 </div>
