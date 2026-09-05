@@ -108,12 +108,15 @@
 
   --barre-sourde: #cbc5b7;
 
-  /* Rampe inversee : en clair, l'effectif fort est le plus sombre. */
-  --matrice-0: #f1ede3;
-  --matrice-1: #cbd9e5;
-  --matrice-2: #5c9cc8;
-  --matrice-3: #c98a2e;
-  --matrice-4: #3b2c14;
+  /* Rampe inversee : en clair, l'effectif fort est le plus sombre. Monochrome
+     ambre, contrairement au theme sombre : interpoler du bleu vers l'ambre
+     traverse un gris terne, que le fond sombre masque et que le fond clair
+     etale au milieu de la matrice. */
+  --matrice-0: #f4efe4;
+  --matrice-1: #e2cfa6;
+  --matrice-2: #cfa257;
+  --matrice-3: #9a6414;
+  --matrice-4: #3d2708;
   --matrice-texte: #faf8f4;
   --matrice-cerclee: #1f2229;
 

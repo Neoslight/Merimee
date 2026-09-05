@@ -249,6 +249,29 @@ mesurée), pas le *quoi*.
 - Filtres « figures » préréglés (Vauban, Guimard, Le Corbusier) en un clic, au-dessus
   de la facette auteurs existante. Devenus de simples liens depuis les permaliens.
 - Exploitation NLP des 23,6 Mo de texte libre (`historique`, `precision_protection`).
+- **Fonds de carte historiques en superposition**, mesuré et prêt à poser. Géoplateforme
+  IGN, **sans clé d'API**, `access-control-allow-origin: *`, `cache-control` 21 jours :
+  - Cassini = `BNF-IGNF_GEOGRAPHICALGRIDSYSTEMS.CASSINI` (le préfixe `BNF-IGNF_` est
+    obligatoire, l'identifiant nu renvoie 400), PNG, **z ≤ 14, ~160 Ko la tuile** —
+    ~2 Mo par écran, donc superposition explicite et jamais par défaut ;
+  - État-Major = `GEOGRAPHICALGRIDSYSTEMS.ETATMAJOR40`, JPEG, **z ≤ 15, ~18 Ko**.
+  `poserCouches()` est déjà le bon point d'accroche, avec un `beforeId` sous
+  `monuments-densite`.
+- **Repères d'histoire sur les frises.** Attention, ils ne vont pas sur la même piste :
+  Guerre de Cent Ans et Révolution sur l'axe *construction*, 1840 (première liste
+  Mérimée), 1913 (loi) et 1962 (Malraux) sur l'axe *protection*. Les mélanger sur une
+  seule frise serait faux.
+- **Matrice typologie × siècle**, variante de la matrice existante : `domaines` compte
+  **20 valeurs distinctes** (architecture domestique 19 154, religieuse 15 567,
+  militaire 1 688…), soit 20 × 12 cellules, comparable aux 205 actuelles.
+  `denominations` en compte 714 et ne fait pas un axe.
+- **`etat_de_conservation` (colonne 29 du CSV) reste hors de l'ETL.** Renseignée pour
+  **2 515 notices seulement (5,4 %)** : vestiges 1 250 · fragment 448 · désaffecté 321 ·
+  détruit 88, et le vocabulaire est mêlé de texte libre (`restauré en 2020`, `Etat
+  préoccupant`). Utilisable en facette, **jamais** pour dessiner « ce qui est intact » :
+  l'absence de valeur ne dit pas bon état, elle dit champ non rempli sur 94,6 % du corpus.
+- Auteur cliquable dans la fiche, ouvrant ses autres réalisations — `filters.auteurs`
+  existe déjà, c'est une poignée de lignes.
 - `deck.gl` reste l'échappatoire si le rendu GeoJSON de 44 k points devient limitant ;
   l'interface de la couche est isolée dans `MonumentMap.svelte`. La couche `heatmap`
   native ajoutée depuis répond déjà à la saturation aux vues larges — mesurer avant

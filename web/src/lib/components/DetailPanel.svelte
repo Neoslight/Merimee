@@ -74,7 +74,7 @@
     reference;
     montres = PAQUET;
     imageChoisie = 0;
-    imageCassee = false;
+    cassees = [];
   });
 
   // --- Photographie -------------------------------------------------------
@@ -84,8 +84,18 @@
   const COMMONS = 'https://commons.wikimedia.org';
 
   let imageChoisie = $state(0);
-  let imageCassee = $state(false);
+  // Un fichier supprime de Commons depuis l'instantane rend un 404. On l'ecarte
+  // au lieu de laisser l'icone d'image brisee, et la section ne disparait que
+  // si toutes les images de la notice sont tombees.
+  let cassees = $state<string[]>([]);
   let credit = $state<{ auteur: string; licence: string } | null>(null);
+
+  const images = $derived((fiche?.commons ?? []).filter((nom) => !cassees.includes(nom)));
+  const courante = $derived(images[Math.min(imageChoisie, images.length - 1)] ?? null);
+
+  function signalerCassee(nom: string) {
+    if (!cassees.includes(nom)) cassees = [...cassees, nom];
+  }
 
   const vignette = (nom: string, largeur: number) =>
     `${COMMONS}/wiki/Special:FilePath/${encodeURIComponent(nom)}?width=${largeur}`;
@@ -106,7 +116,7 @@
    * vers la page du fichier, qui porte l'information complete.
    */
   $effect(() => {
-    const nom = fiche?.commons?.[imageChoisie];
+    const nom = courante;
     credit = null;
     if (!nom) return;
     let annule = false;
@@ -161,30 +171,31 @@
       </p>
     </header>
 
-    {#if fiche.commons.length && !imageCassee}
+    {#if courante}
       <!-- Une notice sur six n'a pas d'image : la section disparait alors
            entierement. Un cadre gris de remplacement laisserait croire a un
            chargement en cours. -->
       <figure class="photo">
         <img
-          src={vignette(fiche.commons[imageChoisie], 640)}
+          src={vignette(courante, 640)}
           alt="Photographie de {fiche.titre}"
           loading="lazy"
-          onerror={() => (imageCassee = true)}
+          onerror={() => signalerCassee(courante)}
         />
-        {#if fiche.commons.length > 1}
+        {#if images.length > 1}
           <div class="bande">
-            {#each fiche.commons as nom, i (nom)}
-              <button class:choisi={i === imageChoisie} onclick={() => (imageChoisie = i)}
+            {#each images as nom, i (nom)}
+              <button class:choisi={nom === courante} onclick={() => (imageChoisie = i)}
                       aria-label="Photographie {i + 1}">
-                <img src={vignette(nom, 120)} alt="" loading="lazy" />
+                <img src={vignette(nom, 120)} alt="" loading="lazy"
+                     onerror={() => signalerCassee(nom)} />
               </button>
             {/each}
           </div>
         {/if}
         <figcaption>
           {#if credit?.auteur}<span class="auteur">{credit.auteur}</span>{/if}
-          <a href={pageFichier(fiche.commons[imageChoisie])} target="_blank" rel="noreferrer">
+          <a href={pageFichier(courante)} target="_blank" rel="noreferrer">
             {credit?.licence || 'Wikimedia Commons'}
           </a>
         </figcaption>

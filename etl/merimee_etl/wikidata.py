@@ -93,7 +93,12 @@ def interroger(timeout: int = 300) -> list[tuple[str, str]]:
         image = ligne["img"]
         if not image.startswith(PREFIXE):
             continue
-        couples.append((ligne["ref"].strip(), image[len(PREFIXE):]))
+        # Wikidata renvoie une **URL** : le nom de fichier y est percent-encode
+        # (`Nohant%2006%202009.jpg`). Le stocker tel quel puis le reencoder
+        # cote navigateur produit `%252006` et un 404. On decode ici, une fois.
+        couples.append(
+            (ligne["ref"].strip(), urllib.parse.unquote(image[len(PREFIXE):]))
+        )
     return couples
 
 
