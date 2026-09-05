@@ -75,9 +75,13 @@
         source: 'monuments',
         layout: { visibility: 'none' },
         paint: {
-          'heatmap-weight': ['interpolate', ['linear'], ['get', 'nb'], 0, 0.6, 200, 1.4],
-          'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 4, 0.8, 12, 2.4],
-          'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 4, 10, 12, 34],
+          // Calibrage contraint par la vue nationale : a z4,7 les 44 000 points
+          // couvrent le territoire, et un rayon genereux sature la France
+          // entiere en un aplat blanc qui ne dit plus rien. Le rayon reste
+          // donc minuscule au depart et ne s'ouvre qu'au zoom.
+          'heatmap-weight': ['interpolate', ['linear'], ['get', 'nb'], 0, 0.35, 200, 1],
+          'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 4, 0.16, 8, 0.6, 12, 1.6],
+          'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 4, 6, 8, 14, 12, 30],
           'heatmap-opacity': 0.75,
           'heatmap-color': [
             'interpolate', ['linear'], ['heatmap-density'],
@@ -177,7 +181,7 @@
   $effect(() => {
     if (!pret || !carte) return;
     carte.setLayoutProperty('monuments-densite', 'visibility', densite ? 'visible' : 'none');
-    carte.setPaintProperty('monuments-points', 'circle-opacity', densite ? 0.25 : 0.82);
+    carte.setPaintProperty('monuments-points', 'circle-opacity', densite ? 0.12 : 0.82);
     carte.setPaintProperty('monuments-halo', 'circle-opacity', densite ? 0 : 0.14);
   });
 
