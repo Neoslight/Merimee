@@ -17,10 +17,15 @@
  */
 import { ANNEE_MAX, ANNEE_MIN, filtresVides, type Filters } from './filters.svelte';
 
+/** Vue occupant la scene centrale. `carte` est le defaut, donc absent de l'URL. */
+export type Vue = 'carte' | 'matrice' | 'liste';
+
+const VUES: readonly Vue[] = ['carte', 'matrice', 'liste'];
+
 export interface EtatPartage {
   filtres: Filters;
   selection: string | null;
-  vueListe: boolean;
+  vue: Vue;
 }
 
 /** Filtres textuels multivalues : cle d'etat -> nom du parametre. */
@@ -54,7 +59,7 @@ export function encoder(etat: EtatPartage): string {
   if (etat.filtres.recherche) p.set('q', etat.filtres.recherche);
   if (etat.filtres.anneeProtection) p.set('annees', etat.filtres.anneeProtection.join('-'));
   if (etat.filtres.nbPalissy > 0) p.set('objets', String(etat.filtres.nbPalissy));
-  if (etat.vueListe) p.set('vue', 'liste');
+  if (etat.vue !== 'carte') p.set('vue', etat.vue);
   if (etat.selection) p.set('ref', etat.selection);
   const chaine = p.toString();
   return chaine ? `?${chaine}` : '';
@@ -105,9 +110,10 @@ export function decoder(chaine: string): EtatPartage {
   if (objets !== null && objets > 0) filtres.nbPalissy = objets;
 
   const ref = p.get('ref');
+  const vue = p.get('vue') as Vue | null;
   return {
     filtres,
     selection: ref && REFERENCE.test(ref) ? ref : null,
-    vueListe: p.get('vue') === 'liste'
+    vue: vue && VUES.includes(vue) ? vue : 'carte'
   };
 }

@@ -1,6 +1,7 @@
 <script lang="ts">
   import DetailPanel from '$lib/components/DetailPanel.svelte';
   import FacetPanel from '$lib/components/FacetPanel.svelte';
+  import Matrice from '$lib/components/Matrice.svelte';
   import MonumentMap from '$lib/components/MonumentMap.svelte';
   import Timeline from '$lib/components/Timeline.svelte';
   import {
@@ -9,16 +10,19 @@
     histogrammeProtections,
     histogrammeSiecles,
     liste,
+    matrice,
     points,
     totaux,
     type BarreAnnee,
     type BarreSiecle,
     type Compte,
     type Ligne,
+    type Matrice as DonneesMatrice,
     type Point,
     type Totaux
   } from '$lib/db/queries';
   import {
+    ANNEE_MAX,
     countActive,
     filters,
     replier,
@@ -26,7 +30,7 @@
     toggleSiecle,
     type FacetKey
   } from '$lib/state/filters.svelte';
-  import { decoder, encoder } from '$lib/state/permalien';
+  import { decoder, encoder, type Vue } from '$lib/state/permalien';
   import { browser } from '$app/environment';
   import { pushState, replaceState } from '$app/navigation';
   import { page } from '$app/state';
@@ -50,7 +54,8 @@
   let selection = $state<string | null>(initial.selection);
   let chargement = $state(true);
   let erreur = $state<string | null>(null);
-  let vueListe = $state(initial.vueListe);
+  let vue = $state<Vue>(initial.vue);
+  let croisement = $state<DonneesMatrice>({ cellules: [], ecartees: 0 });
   let terme = $state(initial.filtres.recherche);
 
   // La recherche interroge une colonne pre-normalisee (minuscules, sans
@@ -72,6 +77,9 @@
 
   $effect(() => {
     signature;
+    // La matrice croise monuments et protections : elle ne se calcule que
+    // lorsqu'elle est a l'ecran.
+    const veutMatrice = vue === 'matrice';
     const mien = ++jeton;
     chargement = true;
     Promise.all([
@@ -80,9 +88,10 @@
       histogrammeSiecles(filters),
       histogrammeProtections(filters),
       liste(filters),
-      Promise.all(FACETTES.map((cle) => facette(filters, cle)))
+      Promise.all(FACETTES.map((cle) => facette(filters, cle))),
+      veutMatrice ? matrice(filters) : Promise.resolve(croisement)
     ])
-      .then(([pts, tot, sie, ann, lst, fac]) => {
+      .then(([pts, tot, sie, ann, lst, fac, mat]) => {
         // Une requete lente ne doit jamais ecraser un resultat plus recent.
         if (mien !== jeton) return;
         pointsCarte = pts;
@@ -91,6 +100,7 @@
         barresAnnees = ann;
         resultats = lst;
         facettes = Object.fromEntries(FACETTES.map((cle, i) => [cle, fac[i]]));
+        croisement = mat;
         erreur = null;
         chargement = false;
       })
@@ -110,7 +120,7 @@
   let derniereSelection = initial.selection;
 
   $effect(() => {
-    const requete = encoder({ filtres: filters, selection, vueListe });
+    const requete = encoder({ filtres: filters, selection, vue });
     if (requete === derniereRequete) return;
     const fiche = selection !== derniereSelection;
     derniereRequete = requete;
@@ -130,7 +140,7 @@
     derniereSelection = etat.selection;
     Object.assign(filters, etat.filtres);
     selection = etat.selection;
-    vueListe = etat.vueListe;
+    vue = etat.vue;
     terme = etat.filtres.recherche;
   });
 
@@ -147,6 +157,19 @@
     } catch {
       window.prompt('Copier ce lien :', lien);
     }
+  }
+
+  const VUES: { cle: Vue; titre: string }[] = [
+    { cle: 'carte', titre: 'Carte' },
+    { cle: 'matrice', titre: 'Matrice' },
+    { cle: 'liste', titre: 'Liste' }
+  ];
+
+  // Un clic dans la matrice pose les deux axes d'un coup. La decennie devient
+  // une plage d'annees pleine, pas une annee unique.
+  function choisirCellule(siecle: number, decennie: number) {
+    filters.siecles = [siecle];
+    filters.anneeProtection = [decennie, Math.min(ANNEE_MAX, decennie + 9)];
   }
 
   async function hasard() {
@@ -199,7 +222,17 @@
           onbbox={(bbox) => (filters.bbox = bbox)}
         />
 
-        {#if vueListe}
+        {#if vue === 'matrice'}
+          <Matrice
+            cellules={croisement.cellules}
+            ecartees={croisement.ecartees}
+            siecleSelection={filters.siecles}
+            plage={filters.anneeProtection}
+            oncellule={choisirCellule}
+          />
+        {/if}
+
+        {#if vue === 'liste'}
           <div class="liste">
             <header>
               <h3>
@@ -234,9 +267,15 @@
           </div>
         {/if}
 
-        <button class="bascule" onclick={() => (vueListe = !vueListe)}>
-          {vueListe ? 'Carte' : 'Liste'}
-        </button>
+        <nav class="bascule">
+          {#each VUES as choix (choix.cle)}
+            <button
+              class:actif={vue === choix.cle}
+              aria-pressed={vue === choix.cle}
+              onclick={() => (vue = choix.cle)}
+            >{choix.titre}</button>
+          {/each}
+        </nav>
 
         {#if erreur}
           <div class="erreur"><b>Erreur DuckDB</b><p>{erreur}</p></div>
@@ -373,21 +412,37 @@
     position: absolute;
     top: 12px;
     left: 12px;
-    z-index: 2;
+    z-index: 4;
+    display: flex;
+    gap: 1px;
+    padding: 1px;
     border: 1px solid var(--bord);
     background: color-mix(in srgb, var(--fond) 88%, transparent);
     backdrop-filter: blur(8px);
-    color: var(--texte);
+    border-radius: 7px;
+  }
+
+  .bascule button {
+    border: none;
+    background: transparent;
+    color: var(--texte-faible);
     border-radius: 6px;
-    padding: 5px 12px;
+    padding: 4px 11px;
     font-size: 11px;
     cursor: pointer;
   }
 
+  .bascule button.actif {
+    background: var(--fond-creux);
+    color: var(--accent);
+  }
+
+  /* Les controles MapLibre sont a z-index 2 et la carte reste montee sous les
+     autres vues : sans cela le zoom et l'attribution traversent le calque. */
   .liste {
     position: absolute;
     inset: 0;
-    z-index: 1;
+    z-index: 3;
     overflow-y: auto;
     background: var(--fond);
   }
@@ -395,7 +450,8 @@
   .liste header {
     position: sticky;
     top: 0;
-    padding: 12px 16px 10px 78px;
+    /* Degage le selecteur de vue, pose en absolu au-dessus. */
+    padding: 12px 16px 10px 200px;
     border-bottom: 1px solid var(--bord);
     background: var(--fond);
   }

@@ -141,6 +141,54 @@ export async function histogrammeProtections(f: Filters): Promise<BarreAnnee[]> 
   `);
 }
 
+export interface Cellule {
+  siecle: number;
+  decennie: number;
+  n: number;
+}
+
+export interface Matrice {
+  cellules: Cellule[];
+  /** Occurrences anterieures au 10e siecle, hors des axes. Signalees, pas tues. */
+  ecartees: number;
+}
+
+/** En deca, les effectifs sont anecdotiques (341 occurrences pour neuf siecles)
+ *  et neuf lignes presque vides ecraseraient la partie lisible. */
+export const SIECLE_MATRICE_MIN = 10;
+
+/**
+ * Croisement epoque de construction x decennie de protection : ce que les deux
+ * frises suggerent cote a cote sans jamais le montrer ensemble.
+ *
+ * Les couples sont dedoublonnes. Sans `DISTINCT`, une notice portant deux actes
+ * dans la meme decennie compterait deux fois dans la meme cellule.
+ *
+ * Les deux filtres d'axe sont retires du predicat, comme une facette est
+ * comptee sans elle-meme : la matrice reste explorable une fois une cellule
+ * choisie.
+ */
+export async function matrice(f: Filters): Promise<Matrice> {
+  const where = buildWhere(f, ['siecles', 'anneeProtection']);
+  const couples = `
+    SELECT DISTINCT s.reference, s.siecle, (p.annee // 10) * 10 AS decennie
+    FROM (SELECT reference, unnest(siecles) AS siecle FROM monuments WHERE ${where}) s
+    JOIN protections p USING (reference)
+    WHERE p.annee IS NOT NULL
+  `;
+  const [cellules, [reste]] = await Promise.all([
+    query<Cellule>(`
+      SELECT siecle::INT AS siecle, decennie::INT AS decennie, count(*)::INT AS n
+      FROM (${couples}) WHERE siecle >= ${SIECLE_MATRICE_MIN}
+      GROUP BY 1, 2 ORDER BY 1, 2
+    `),
+    query<{ n: number }>(`
+      SELECT count(*)::INT AS n FROM (${couples}) WHERE siecle < ${SIECLE_MATRICE_MIN}
+    `)
+  ]);
+  return { cellules, ecartees: reste?.n ?? 0 };
+}
+
 export interface Ligne {
   reference: string;
   titre: string;

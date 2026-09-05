@@ -1,5 +1,6 @@
 <script lang="ts">
   import { detail, type Detail } from '$lib/db/queries';
+  import { nf, romain } from '$lib/format';
 
   interface Props {
     reference: string | null;
@@ -31,9 +32,6 @@
     };
   });
 
-  const ROMAINS = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X',
-    'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX', 'XXI'];
-
   function dateActe(acte: Detail['actes'][number]): string {
     if (acte.annee === null) return 'date inconnue';
     if (acte.mois === null) return String(acte.annee);
@@ -46,7 +44,6 @@
     });
   }
 
-  const nf = new Intl.NumberFormat('fr-FR');
   const popUrl = (ref: string) => `https://www.pop.culture.gouv.fr/notice/merimee/${ref}`;
 
   // Les identifiants stockes disent leur base par leur prefixe. Attestes dans
@@ -99,7 +96,7 @@
           {fiche.statut}{fiche.partiel ? ' (partiellement)' : ''}
         </span>
         {#if fiche.siecles.length}
-          <span class="badge sourd">{fiche.siecles.map((s) => ROMAINS[s] ?? s).join(' · ')}</span>
+          <span class="badge sourd">{fiche.siecles.map(romain).join(' · ')}</span>
         {/if}
         {#each fiche.periodes as periode}<span class="badge sourd">{periode}</span>{/each}
       </p>

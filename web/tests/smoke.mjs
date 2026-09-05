@@ -165,7 +165,7 @@ try {
     [...octets].filter(([c]) => c.startsWith('/data/details/'))
                .reduce((somme, [, n]) => somme + n, 0);
   const avantFiche = cumulDetails();
-  await page.click('.bascule');
+  await page.locator('.bascule button', { hasText: 'Liste' }).click();
   await attendre(page, '.liste button');
   await page.locator('.liste button').first().click();
   await attendre(page, '.fiche .fermer');
@@ -212,7 +212,7 @@ try {
   }
 
   // --- Densite --------------------------------------------------------------
-  await page.click('.bascule');
+  await page.locator('.bascule button', { hasText: 'Carte' }).click();
   await page.getByRole('button', { name: 'densité' }).click();
   await page.waitForTimeout(500);
   const etatDensite = await page.evaluate(() => {
@@ -221,7 +221,7 @@ try {
   });
   verifier('bascule densite active', etatDensite === 'true', String(etatDensite));
   await page.getByRole('button', { name: 'densité' }).click();
-  await page.click('.bascule');
+  await page.locator('.bascule button', { hasText: 'Liste' }).click();
 
   // --- Notices sans coordonnees, absentes de la carte ----------------------
   const mention = await page.textContent('.liste header p');
@@ -268,10 +268,52 @@ try {
   await page.waitForFunction(() => !/[?&]domaine=/.test(location.search), null, { timeout: 20_000 });
   verifier('remise a zero nettoie l URL', page.url().split('?')[1] === undefined || !/domaine/.test(page.url()));
 
+  // --- Matrice siecle x decennie --------------------------------------------
+  await page.locator('.bascule button', { hasText: 'Matrice' }).click();
+  await attendre(page, '.matrice svg rect');
+  const cellules = await page.locator('.matrice svg rect').count();
+  verifier('matrice rendue', cellules > 100, `${cellules} cellules`);
+
+  // Les siecles anterieurs au 10e sont ecartes de l'axe : ils doivent etre
+  // annonces, pas tus.
+  const note = await page.locator('.matrice .note').textContent();
+  verifier('occurrences ecartees signalees', /\d/.test(note ?? ''), (note ?? 'absente').trim());
+
+  // Un clic pose les deux axes d'un coup, et le permalien les transporte.
+  await page.locator('.matrice svg rect').nth(60).click();
+  await page.waitForFunction(
+    () => /siecle=/.test(location.search) && /annees=/.test(location.search),
+    null,
+    { timeout: 20_000 }
+  );
+  verifier(
+    'un clic dans la matrice pose siecle et plage d annees',
+    /siecle=/.test(page.url()) && /annees=/.test(page.url()),
+    page.url().split('?')[1] ?? ''
+  );
+  // L'URL est ecrite des le changement de filtre, bien avant que les requetes
+  // aient repondu : attendre le compteur, pas l'adresse.
+  await page.waitForFunction(
+    () => {
+      const el = document.querySelector('.chiffres span b');
+      return el && Number.parseInt(el.textContent.replace(/\D/g, ''), 10) < 46760;
+    },
+    null,
+    { timeout: 20_000 }
+  );
+  const croise2 = await total(page);
+  verifier('la matrice restreint le corpus', croise2 > 0 && croise2 < 46760, `obtenu ${croise2}`);
+
+  await page.getByRole('button', { name: /effacer \d+ filtres?/ }).click();
+  await page.waitForFunction(() => {
+    const el = document.querySelector('.chiffres span b');
+    return el && el.textContent.replace(/\D/g, '') === '46760';
+  }, null, { timeout: 20_000 });
+
   verifier('aucune erreur console', erreursConsole.length === 0, erreursConsole.slice(0, 3).join(' | '));
 
   // Capture en vue carte, l'ecran par defaut de l'application.
-  await page.click('.bascule');
+  await page.locator('.bascule button', { hasText: 'Carte' }).click();
   await page.waitForTimeout(600);
   await page.screenshot({ path: 'tests/apercu.png', fullPage: false });
 } catch (e) {

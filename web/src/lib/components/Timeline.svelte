@@ -2,6 +2,7 @@
   import * as Plot from '@observablehq/plot';
   import type { BarreAnnee, BarreSiecle } from '$lib/db/queries';
   import { ANNEE_MAX, ANNEE_MIN } from '$lib/state/filters.svelte';
+  import { compact, romain } from '$lib/format';
 
   interface Props {
     siecles: BarreSiecle[];
@@ -15,7 +16,6 @@
   let { siecles, protections, siecleSelection, plage, onsiecle, onplage }: Props = $props();
 
   const HAUTEUR = 104;
-  const compact = new Intl.NumberFormat('fr-FR', { notation: 'compact' });
 
   let boiteSiecles: HTMLDivElement;
   let boiteAnnees: HTMLDivElement;
@@ -23,20 +23,6 @@
   let echelleX: ((valeur: number) => number) | null = null;
   let inverseX: ((pixel: number) => number) | null = null;
 
-  function romain(siecle: number): string {
-    const table: [number, string][] = [
-      [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']
-    ];
-    let reste = siecle;
-    let sortie = '';
-    for (const [valeur, signe] of table) {
-      while (reste >= valeur) {
-        sortie += signe;
-        reste -= valeur;
-      }
-    }
-    return sortie;
-  }
 
   $effect(() => {
     const observateur = new ResizeObserver(([entree]) => {

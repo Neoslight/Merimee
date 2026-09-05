@@ -116,12 +116,14 @@ const CLAUSES: Record<FacetKey, (f: Filters) => string | null> = {
 };
 
 /**
- * Predicat SQL courant. `except` retire une cle : c'est ce qui permet a une
- * facette de continuer a montrer ses options alternatives.
+ * Predicat SQL courant. `except` retire une ou plusieurs cles : c'est ce qui
+ * permet a une facette de continuer a montrer ses options alternatives. La
+ * matrice en retire deux, une par axe.
  */
-export function buildWhere(f: Filters, except?: FacetKey): string {
+export function buildWhere(f: Filters, except?: FacetKey | readonly FacetKey[]): string {
+  const exclues = except === undefined ? [] : typeof except === 'string' ? [except] : except;
   const clauses = (Object.keys(CLAUSES) as FacetKey[])
-    .filter((key) => key !== except)
+    .filter((key) => !exclues.includes(key))
     .map((key) => CLAUSES[key](f))
     .filter((clause): clause is string => clause !== null);
   return clauses.length ? clauses.join(' AND ') : 'TRUE';
