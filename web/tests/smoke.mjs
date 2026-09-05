@@ -310,6 +310,42 @@ try {
     return el && el.textContent.replace(/\D/g, '') === '46760';
   }, null, { timeout: 20_000 });
 
+  // --- Gabarit telephone ----------------------------------------------------
+  // Un lien partage s'ouvre le plus souvent sur un telephone : la grille a
+  // trois colonnes doit y ceder la place a des calques.
+  await page.locator('.bascule button', { hasText: 'Carte' }).click();
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.waitForTimeout(600);
+
+  verifier('carte visible sur gabarit etroit', await page.locator('.maplibregl-canvas').isVisible());
+  const debordement = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+  );
+  verifier('aucun debordement horizontal', debordement <= 0, `${debordement} px`);
+
+  await page.getByRole('button', { name: /^Filtres/ }).click();
+  await page.waitForTimeout(400);
+  verifier('tiroir des filtres ouvert', await page.locator('.facettes.ouvert').count() === 1);
+  await page.locator('.fermer-tiroir').click();
+  await page.waitForTimeout(400);
+  verifier('tiroir des filtres referme', await page.locator('.facettes.ouvert').count() === 0);
+
+  await page.locator('.bascule button', { hasText: 'Liste' }).click();
+  await attendre(page, '.liste button');
+  await page.locator('.liste button').first().click();
+  await attendre(page, '.fiche .fermer');
+  verifier('fiche en feuille remontante', await page.locator('.fiche-hote.ouvert').count() === 1);
+  await page.goBack();
+  await page.waitForTimeout(900);
+  verifier(
+    'retour arriere referme la feuille',
+    (await page.locator('.fiche-hote.ouvert').count()) === 0,
+    page.url().slice(-40)
+  );
+
+  await page.setViewportSize({ width: 1600, height: 950 });
+  await page.waitForTimeout(500);
+
   verifier('aucune erreur console', erreursConsole.length === 0, erreursConsole.slice(0, 3).join(' | '));
 
   // Capture en vue carte, l'ecran par defaut de l'application.

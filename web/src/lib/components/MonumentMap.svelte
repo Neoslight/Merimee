@@ -55,7 +55,12 @@
       style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
       center: [2.6, 46.6],
       zoom: 4.7,
-      attributionControl: { compact: true }
+      attributionControl: { compact: true },
+      // La rotation n'apporte rien a une carte de points et transforme le
+      // moindre glissement a deux doigts en desorientation sur telephone.
+      dragRotate: false,
+      pitchWithRotate: false,
+      touchPitch: false
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
 
@@ -246,5 +251,19 @@
   .legende button.actif {
     color: var(--accent);
     border-color: var(--accent);
+  }
+
+  /* Sur un telephone la legende deborde et vient buter sur l'attribution
+     CARTO, qui a sa propre position imposee en bas a droite. */
+  @media (max-width: 900px) {
+    .legende {
+      left: 8px;
+      right: 8px;
+      bottom: 34px;
+      flex-wrap: wrap;
+      gap: 8px 10px;
+      border-radius: 10px;
+      font-size: 10px;
+    }
   }
 </style>

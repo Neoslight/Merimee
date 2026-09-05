@@ -159,6 +159,33 @@
     }
   }
 
+  // Sous 900 px la grille a trois colonnes ne tient pas : les deux panneaux
+  // deviennent des calques, et la frise se replie. L'etat d'ouverture depend
+  // du gabarit, il est donc lu au montage plutot que devine.
+  const ETROIT = '(max-width: 900px)';
+  let etroit = $state(false);
+  let facettesOuvertes = $state(false);
+  let friseOuverte = $state(true);
+
+  $effect(() => {
+    if (!browser) return;
+    const requete = window.matchMedia(ETROIT);
+    const appliquer = () => {
+      etroit = requete.matches;
+      friseOuverte = !requete.matches;
+      if (!requete.matches) facettesOuvertes = false;
+    };
+    appliquer();
+    requete.addEventListener('change', appliquer);
+    return () => requete.removeEventListener('change', appliquer);
+  });
+
+  // Ouvrir une fiche au telephone doit refermer le tiroir des filtres, sinon
+  // la fiche s'ouvre derriere lui.
+  $effect(() => {
+    if (selection) facettesOuvertes = false;
+  });
+
   const VUES: { cle: Vue; titre: string }[] = [
     { cle: 'carte', titre: 'Carte' },
     { cle: 'matrice', titre: 'Matrice' },
@@ -205,13 +232,32 @@
       {#if actifs > 0}
         <button class="raz" onclick={reset}>effacer {actifs} filtre{actifs > 1 ? 's' : ''}</button>
       {/if}
+      <button class="filtres" aria-expanded={facettesOuvertes}
+              onclick={() => (facettesOuvertes = !facettesOuvertes)}>
+        Filtres{#if actifs > 0} <em>{actifs}</em>{/if}
+      </button>
       <button class="hasard" onclick={hasard}>Au hasard</button>
       <button class="lien" onclick={copierLien}>{copie ? 'Lien copié' : 'Copier le lien'}</button>
     </div>
   </header>
 
   <main>
-    <FacetPanel {facettes} {chargement} />
+    <div class="colonne facettes" class:ouvert={facettesOuvertes}>
+      {#if etroit}
+        <!-- Le voile ne laisse qu'une bande de 60 px a cote du tiroir : trop
+             etroit pour etre la seule maniere de le refermer. -->
+        <button class="fermer-tiroir" onclick={() => (facettesOuvertes = false)}>
+          Fermer les filtres
+        </button>
+      {/if}
+      <FacetPanel {facettes} {chargement} />
+    </div>
+
+    {#if etroit && facettesOuvertes}
+      <!-- Fermer en touchant a cote : le geste attendu sur un tiroir. -->
+      <button class="voile" aria-label="Fermer les filtres"
+              onclick={() => (facettesOuvertes = false)}></button>
+    {/if}
 
     <div class="centre">
       <div class="scene">
@@ -284,6 +330,14 @@
         {/if}
       </div>
 
+      {#if etroit}
+        <button class="replier" aria-expanded={friseOuverte}
+                onclick={() => (friseOuverte = !friseOuverte)}>
+          {friseOuverte ? 'Masquer les frises' : 'Afficher les frises'}
+        </button>
+      {/if}
+
+      {#if friseOuverte}
       <Timeline
         siecles={barresSiecles}
         protections={barresAnnees}
@@ -292,9 +346,12 @@
         onsiecle={toggleSiecle}
         onplage={(p) => (filters.anneeProtection = p)}
       />
+      {/if}
     </div>
 
-    <DetailPanel reference={selection} onclose={() => (selection = null)} />
+    <div class="colonne fiche-hote" class:ouvert={selection !== null}>
+      <DetailPanel reference={selection} onclose={() => (selection = null)} />
+    </div>
   </main>
 </div>
 
@@ -393,6 +450,21 @@
     display: grid;
     grid-template-columns: 246px 1fr 340px;
     min-height: 0;
+    position: relative;
+  }
+
+  /* Les enveloppes existent pour que la page pilote la mise en page des deux
+     panneaux sans reaching dans leur CSS interne. */
+  .colonne {
+    display: grid;
+    min-height: 0;
+  }
+
+  .filtres,
+  .replier,
+  .voile,
+  .fermer-tiroir {
+    display: none;
   }
 
   .centre {
@@ -543,6 +615,147 @@
   @media (max-width: 1200px) {
     main {
       grid-template-columns: 220px 1fr 300px;
+    }
+  }
+
+  /* --- Gabarit etroit -----------------------------------------------------
+     Une seule colonne : la scene occupe l'ecran, les deux panneaux passent
+     en calques. Un lien partage s'ouvre le plus souvent sur un telephone. */
+  @media (max-width: 900px) {
+    .barre {
+      grid-template-columns: 1fr auto;
+      grid-template-rows: auto auto;
+      height: auto;
+      padding: 8px 12px;
+      gap: 8px 12px;
+    }
+
+    .marque span {
+      display: none;
+    }
+
+    .recherche {
+      grid-column: 1 / -1;
+      grid-row: 2;
+    }
+
+    .chiffres {
+      gap: 8px;
+      font-size: 11px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    /* Sur un ecran etroit, seul le total tient : le detail par statut reste
+       lisible dans la fiche et la liste. « Copier le lien » disparait au
+       profit du partage natif du navigateur. */
+    .chiffres .or,
+    .chiffres .bleu,
+    .chiffres .faible,
+    .lien {
+      display: none;
+    }
+
+    .chiffres {
+      flex-wrap: nowrap;
+    }
+
+    .filtres {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      border: 1px solid var(--accent);
+      background: transparent;
+      color: var(--accent);
+      border-radius: 999px;
+      padding: 4px 12px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .filtres em {
+      font-style: normal;
+      font-variant-numeric: tabular-nums;
+    }
+
+    main {
+      grid-template-columns: 1fr;
+    }
+
+    .facettes {
+      position: absolute;
+      inset: 0 auto 0 0;
+      z-index: 6;
+      grid-template-rows: auto 1fr;
+      width: min(84vw, 320px);
+      transform: translateX(-100%);
+      transition: transform 160ms ease;
+      box-shadow: 0 0 32px rgb(0 0 0 / 55%);
+    }
+
+    .facettes.ouvert {
+      transform: translateX(0);
+    }
+
+    .fermer-tiroir {
+      display: block;
+      border: none;
+      border-bottom: 1px solid var(--bord);
+      background: var(--fond-creux);
+      color: var(--accent);
+      padding: 10px;
+      font-size: 12px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .voile {
+      display: block;
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      border: none;
+      padding: 0;
+      background: rgb(0 0 0 / 45%);
+      cursor: pointer;
+    }
+
+    /* La fiche remonte du bas et n'occupe l'ecran que si une notice est
+       choisie : l'invite « selectionnez un point » n'a pas de place ici. */
+    .fiche-hote {
+      position: absolute;
+      inset: auto 0 0 0;
+      z-index: 7;
+      max-height: 82%;
+      transform: translateY(101%);
+      transition: transform 200ms ease;
+      box-shadow: 0 -8px 32px rgb(0 0 0 / 55%);
+    }
+
+    .fiche-hote.ouvert {
+      transform: translateY(0);
+    }
+
+    .replier {
+      display: block;
+      width: 100%;
+      border: none;
+      border-top: 1px solid var(--bord);
+      background: var(--fond);
+      color: var(--texte-faible);
+      padding: 7px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .liste header {
+      padding-left: 16px;
+      padding-top: 44px;
+    }
+
+    .bascule {
+      top: 8px;
+      left: 8px;
     }
   }
 </style>
