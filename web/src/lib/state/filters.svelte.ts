@@ -42,7 +42,9 @@ export interface Filters {
 export const ANNEE_MIN = 1840;
 export const ANNEE_MAX = 2026;
 
-function vide(): Filters {
+/** Etat neutre. Exporte pour que la lecture d'un permalien parte d'une base
+ *  propre plutot que de fusionner avec les filtres deja poses. */
+export function filtresVides(): Filters {
   return {
     statut: [],
     siecles: [],
@@ -60,7 +62,7 @@ function vide(): Filters {
   };
 }
 
-export const filters = $state<Filters>(vide());
+export const filters = $state<Filters>(filtresVides());
 
 /** Colonne `LIST` -> `list_has_any`, sans jointure ni table de liaison. */
 function listeClause(colonne: string, valeurs: readonly string[]): string | null {
@@ -132,7 +134,7 @@ export function toggleSiecle(siecle: number): void {
 }
 
 export function reset(): void {
-  Object.assign(filters, vide());
+  Object.assign(filters, filtresVides());
 }
 
 /** Nombre de filtres actifs, pour l'affichage du bouton de remise a zero. */

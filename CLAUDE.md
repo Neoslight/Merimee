@@ -28,6 +28,7 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `etl/out/rejets.csv` | segments hors-format rencontrés, jamais supprimés silencieusement |
 | `web/src/lib/db/` | `duckdb.ts` (bootstrap, fragments), `queries.ts` (requêtes), `shards.ts` (hachage) |
 | `web/src/lib/state/filters.svelte.ts` | état des filtres + construction du prédicat SQL |
+| `web/src/lib/state/permalien.ts` | sérialisation de l'état dans l'URL (`encoder` / `decoder`) |
 | `web/src/lib/components/` | `MonumentMap`, `FacetPanel`, `Timeline`, `DetailPanel` |
 | `web/tests/smoke.mjs` | 14 vérifications en Chromium réel, avec `serveur.mjs` instrumenté |
 
@@ -87,6 +88,13 @@ sur un hébergement statique.
 le site à Jekyll, qui ignore les dossiers commençant par un tiret bas : tout `_app/`
 renvoie 404. Ne pas le supprimer en croyant à un fichier vide oublié.
 
+**GitHub Pages compresse bien le `.wasm` mais ne le met presque pas en cache.**
+Mesuré en ligne : `duckdb-eh.*.wasm` sort à 7,5 Mo gzip (32,7 Mo bruts), mais avec
+`Cache-Control: max-age=600` — dix minutes, non configurable sur Pages. Le hash du
+nom de fichier ne sert donc à rien au-delà : une visite espacée repaie les 7,5 Mo.
+Si cela devient gênant, la seule sortie est un service worker qui met le wasm en
+cache lui-même. Amorçage mesuré en ligne : 3,9 s.
+
 **Sous Git Bash, MSYS réécrit toute variable d'environnement commençant par `/`**
 en chemin Windows. `BASE_PATH` est donc normalisée dans `svelte.config.js` et se
 passe sans slash initial.
@@ -104,6 +112,15 @@ auteurs, propriétaires sont des listes dans `monuments`. Filtrage par
 **Les facettes s'évaluent sans leur propre filtre.** `buildWhere(filtres, except)` —
 retirer ce mécanisme fait tomber à zéro toutes les options non cochées et tue le
 filtrage croisé. `queries.facette()` passe systématiquement la clé en `except`.
+
+**L'URL porte l'état d'exploration.** `permalien.ts` encode filtres, vue et notice
+sélectionnée. Trois points non négociables : les valeurs multiples passent par un
+**paramètre répété** (`?domaine=x&domaine=y`) — 63 libellés du corpus contiennent
+déjà une virgule, tout séparateur imprimable serait ambigu ; `bbox` est **exclue**,
+sinon chaque pan de carte réécrirait l'URL ; l'écriture se fait par `replaceState`,
+sauf l'ouverture d'une fiche qui empile (`pushState`) pour que le retour arrière la
+referme. `decoder` valide toute valeur : l'URL est éditable à la main et ses chaînes
+finissent dans `lit()`.
 
 **Un jeton monotone annule les résultats obsolètes** dans `+page.svelte` : une
 requête lente ne doit jamais écraser une plus récente.

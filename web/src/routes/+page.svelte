@@ -25,6 +25,10 @@
     toggleSiecle,
     type FacetKey
   } from '$lib/state/filters.svelte';
+  import { decoder, encoder } from '$lib/state/permalien';
+  import { browser } from '$app/environment';
+  import { pushState, replaceState } from '$app/navigation';
+  import { page } from '$app/state';
 
   const FACETTES: FacetKey[] = [
     'statut', 'domaines', 'denominations', 'regions',
@@ -37,11 +41,16 @@
   let barresAnnees = $state<BarreAnnee[]>([]);
   let compteurs = $state<Totaux | null>(null);
   let resultats = $state<Ligne[]>([]);
-  let selection = $state<string | null>(null);
+  // L'URL est lue avant le premier cycle de requetes : un lien partage ne doit
+  // pas provoquer un aller-retour « corpus complet puis filtre ».
+  const initial = decoder(browser ? location.search : '');
+  Object.assign(filters, initial.filtres);
+
+  let selection = $state<string | null>(initial.selection);
   let chargement = $state(true);
   let erreur = $state<string | null>(null);
-  let vueListe = $state(false);
-  let terme = $state('');
+  let vueListe = $state(initial.vueListe);
+  let terme = $state(initial.filtres.recherche);
 
   // La recherche interroge une colonne pre-normalisee (minuscules, sans
   // accents) : un LIKE sur 46 760 lignes repond en quelques ms, aucun index
@@ -95,6 +104,54 @@
       });
   });
 
+  // --- Permalien -----------------------------------------------------------
+  // L'URL est la seule memoire partageable de l'exploration. On y ecrit par
+  // remplacement : chaque clic de facette empilerait sinon une entree
+  // d'historique. Seule l'ouverture d'une fiche empile, parce que refermer la
+  // fiche est precisement ce que le bouton retour doit faire.
+  let derniereRequete = encoder(initial);
+  let derniereSelection = initial.selection;
+
+  $effect(() => {
+    const requete = encoder({ filtres: filters, selection, vueListe });
+    if (requete === derniereRequete) return;
+    const fiche = selection !== derniereSelection;
+    derniereRequete = requete;
+    derniereSelection = selection;
+    // Une chaine vide serait resolue comme « URL courante » : viser le chemin.
+    const cible = requete || location.pathname;
+    if (fiche) pushState(cible, {});
+    else replaceState(cible, {});
+  });
+
+  // Sens inverse : apres un retour arriere, l'URL fait foi.
+  $effect(() => {
+    const requete = page.url.search;
+    if (requete === derniereRequete) return;
+    derniereRequete = requete;
+    const etat = decoder(requete);
+    derniereSelection = etat.selection;
+    Object.assign(filters, etat.filtres);
+    selection = etat.selection;
+    vueListe = etat.vueListe;
+    terme = etat.filtres.recherche;
+  });
+
+  // Le presse-papier peut etre refuse (contexte non securise, permission) :
+  // l'echec bascule sur une selection manuelle plutot que de ne rien faire.
+  let copie = $state(false);
+
+  async function copierLien() {
+    const lien = location.origin + location.pathname + derniereRequete;
+    try {
+      await navigator.clipboard.writeText(lien);
+      copie = true;
+      setTimeout(() => (copie = false), 1600);
+    } catch {
+      window.prompt('Copier ce lien :', lien);
+    }
+  }
+
   async function hasard() {
     const ref = await auHasard(filters);
     if (ref) selection = ref;
@@ -129,6 +186,7 @@
         <button class="raz" onclick={reset}>effacer {actifs} filtre{actifs > 1 ? 's' : ''}</button>
       {/if}
       <button class="hasard" onclick={hasard}>Au hasard</button>
+      <button class="lien" onclick={copierLien}>{copie ? 'Lien copié' : 'Copier le lien'}</button>
     </div>
   </header>
 
@@ -273,7 +331,8 @@
   .faible { opacity: 0.7; }
 
   .raz,
-  .hasard {
+  .hasard,
+  .lien {
     border: 1px solid var(--bord);
     background: transparent;
     color: var(--texte-faible);
@@ -283,9 +342,15 @@
     cursor: pointer;
   }
 
+  /* L'action principale reste « Au hasard » ; le permalien s'efface derriere. */
   .hasard {
     border-color: var(--accent);
     color: var(--accent);
+  }
+
+  .lien:hover {
+    color: var(--texte);
+    border-color: var(--texte-faible);
   }
 
   main {

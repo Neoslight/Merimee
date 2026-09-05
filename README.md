@@ -8,6 +8,9 @@ douzaine de facettes, et double frise temporelle : époque de construction d'un 
 année de l'arrêté de protection de l'autre — de la première liste Mérimée de 1840
 jusqu'aux arrêtés de 2026.
 
+Tout état d'exploration vit dans l'URL : un croisement trouvé se partage par simple
+copie du lien, et le retour arrière referme la fiche ouverte.
+
 Aucun serveur applicatif : un pipeline Python produit des fichiers Parquet, que le
 navigateur interroge en SQL via DuckDB-Wasm.
 
@@ -58,6 +61,12 @@ cd web && npm run deploy
 
 Le site est publié sur <https://neoslight.github.io/Merimee/>.
 
+Poids du premier chargement, mesuré en ligne : **≈ 10,5 Mo**, dont 7,5 Mo pour le
+seul binaire `duckdb-eh.wasm` (32,7 Mo bruts, servis gzip par Pages). Les Parquet
+sont la moitié la moins chère. Amorçage : 3,9 s. Pages plafonne le cache à
+`max-age=600`, donc ce coût se repaie à chaque visite espacée de plus de dix
+minutes.
+
 Les artefacts Parquet n'étant pas versionnés, la CI ne peut pas les régénérer :
 le déploiement compile **en local** puis pousse `web/build` sur la branche
 `gh-pages`. Refaire tourner l'ETL avant, si les données ont changé.
@@ -103,6 +112,14 @@ la seule granularité de chargement disponible. Le fragment d'une notice se déd
 d'un hachage FNV-1a de sa référence, implémenté à l'identique dans
 [etl/merimee_etl/build.py](etl/merimee_etl/build.py) et
 [web/src/lib/db/shards.ts](web/src/lib/db/shards.ts), donc sans index à télécharger.
+
+**L'état d'exploration est dans l'URL.** Les valeurs multiples passent par un
+paramètre répété (`?domaine=architecture+militaire&siecle=16`) plutôt que jointes
+par un séparateur : 63 libellés du corpus contiennent déjà une virgule. L'emprise
+de la carte en est volontairement absente — la réécrire à chaque déplacement
+noierait l'URL, et le destinataire d'un lien recalcule la sienne. Les filtres
+s'écrivent par remplacement d'entrée d'historique ; seule l'ouverture d'une fiche
+en empile une, pour que le retour arrière la referme.
 
 **Facettes évaluées sans leur propre filtre.** `buildWhere(filtres, except)` retire
 la clause de la facette qu'on est en train de compter. Sans cela, dès la première

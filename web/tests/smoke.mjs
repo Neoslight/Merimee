@@ -116,9 +116,9 @@ try {
   await page.click('.bascule');
   await attendre(page, '.liste button');
   await page.locator('.liste button').first().click();
-  await attendre(page, '.fiche h2');
+  await attendre(page, '.fiche .fermer');
   const titre = await page.textContent('.fiche h2');
-  verifier('fiche ouverte', Boolean(titre && titre.trim().length), titre ?? '');
+  verifier('fiche ouverte', titre !== 'Fiche du monument', titre ?? '');
   const actes = await page.locator('.actes li').count();
   verifier('actes de protection affiches', actes > 0, `${actes} actes`);
 
@@ -138,6 +138,47 @@ try {
   // --- Notices sans coordonnees, absentes de la carte ----------------------
   const mention = await page.textContent('.liste header p');
   verifier('notices sans coordonnees signalees', /2\s?276/.test(mention ?? ''), mention ?? '');
+
+  // --- Permalien -----------------------------------------------------------
+  // L'ouverture d'une fiche empile une entree d'historique : le retour arriere
+  // doit la refermer, pas quitter l'application.
+  const urlFiche = page.url();
+  verifier('reference portee par l URL', /[?&]ref=/.test(urlFiche), urlFiche.slice(-60));
+  verifier('vue liste portee par l URL', /[?&]vue=liste/.test(urlFiche));
+
+  await page.goBack();
+  await page.waitForTimeout(900);
+  verifier(
+    'retour arriere referme la fiche',
+    (await page.locator('.fiche .fermer').count()) === 0 && !/[?&]ref=/.test(page.url()),
+    page.url().slice(-60)
+  );
+
+  // Un filtre s'ecrit par remplacement : l'historique ne doit pas gonfler.
+  await page.getByRole('button', { name: 'architecture militaire' }).click();
+  await page.waitForFunction(
+    () => {
+      const el = document.querySelector('.chiffres span b');
+      return el && Number.parseInt(el.textContent.replace(/\D/g, ''), 10) === 1688;
+    },
+    null,
+    { timeout: 20_000 }
+  );
+  const urlFiltre = page.url();
+  verifier('filtre porte par l URL', /domaine=architecture\+militaire/.test(urlFiltre), urlFiltre.slice(-60));
+
+  await page.goto(urlFiltre, { waitUntil: 'domcontentloaded' });
+  await attendre(page, '.chiffres b');
+  const restaure = await total(page);
+  verifier('permalien restaure le filtre', restaure === 1688, `obtenu ${restaure}`);
+  const facetteCochee = await page
+    .locator('section:has(button.titre:text("Domaine")) .option.choisi')
+    .count();
+  verifier('facette rouverte cochee', facetteCochee === 1, `${facetteCochee} option(s)`);
+
+  await page.getByRole('button', { name: /effacer \d+ filtres?/ }).click();
+  await page.waitForFunction(() => !/[?&]domaine=/.test(location.search), null, { timeout: 20_000 });
+  verifier('remise a zero nettoie l URL', page.url().split('?')[1] === undefined || !/domaine/.test(page.url()));
 
   verifier('aucune erreur console', erreursConsole.length === 0, erreursConsole.slice(0, 3).join(' | '));
 
