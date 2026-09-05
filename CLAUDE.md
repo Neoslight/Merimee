@@ -39,6 +39,7 @@ cd etl  && python -m pytest tests -q    # 52 tests
 cd web  && npm run dev                  # http://localhost:5173
 cd web  && npm run check                # svelte-check, doit rester à 0/0
 cd web  && npm run build && npm run test # build statique + smoke navigateur
+cd web  && npm run deploy               # build /Merimee + push sur gh-pages
 ```
 
 Le smoke test démarre son propre serveur statique et écrit `web/tests/apercu.png`.
@@ -81,6 +82,14 @@ fragment redevient inutile — mais le vérifier par la mesure, pas par la doc.
 
 **Bundle DuckDB `eh`, jamais `coi`.** Le multi-thread exige COOP/COEP, impossibles
 sur un hébergement statique.
+
+**`web/static/.nojekyll` conditionne le déploiement.** Sans lui, GitHub Pages passe
+le site à Jekyll, qui ignore les dossiers commençant par un tiret bas : tout `_app/`
+renvoie 404. Ne pas le supprimer en croyant à un fichier vide oublié.
+
+**Sous Git Bash, MSYS réécrit toute variable d'environnement commençant par `/`**
+en chemin Windows. `BASE_PATH` est donc normalisée dans `svelte.config.js` et se
+passe sans slash initial.
 
 **`plot.value` d'Observable Plot reste nul** sur une marque non interactive. Pour
 rendre une barre cliquable, retrouver la bande via `graphe.scale('x')`, pas via la

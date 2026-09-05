@@ -50,6 +50,27 @@ npm run build && npm run test  # build statique + 14 vérifications en navigateu
 que le filtrage croisé répond, et qu'ouvrir une fiche ne télécharge qu'un fragment
 de ~320 Ko. Nécessite `npx playwright install chromium` une fois.
 
+### 4. Déploiement (GitHub Pages)
+
+```bash
+cd web && npm run deploy
+```
+
+Le site est publié sur <https://neoslight.github.io/Merimee/>.
+
+Les artefacts Parquet n'étant pas versionnés, la CI ne peut pas les régénérer :
+le déploiement compile **en local** puis pousse `web/build` sur la branche
+`gh-pages`. Refaire tourner l'ETL avant, si les données ont changé.
+
+Trois détails que GitHub Pages impose :
+
+- **`static/.nojekyll`** — sans ce fichier, Jekyll ignore les dossiers commençant
+  par un tiret bas et tout `_app/` (JS et CSS) renvoie 404.
+- **`BASE_PATH=Merimee`** — le site est servi sous `/<dépôt>/`, chemin qui doit être
+  connu à la compilation. `npm run build` sans cette variable reste destiné au local.
+- **`--no-history`** sur `gh-pages` — la branche est recréée à chaque déploiement,
+  sinon les 13 Mo de Parquet s'empilent dans l'historique.
+
 ## Artefacts produits
 
 | Fichier | Contenu | Taille |

@@ -8,12 +8,16 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "test": "node tests/smoke.mjs"
+    "test": "node tests/smoke.mjs",
+    "build:pages": "cross-env BASE_PATH=Merimee vite build",
+    "deploy": "npm run build:pages && gh-pages -d build -t --no-history -m \"deploy: build statique\""
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.6",
     "@sveltejs/kit": "^2.8.0",
     "@sveltejs/vite-plugin-svelte": "^5.0.0",
+    "cross-env": "^10.1.0",
+    "gh-pages": "^6.3.0",
     "playwright": "^1.62.1",
     "svelte": "^5.2.0",
     "svelte-check": "^4.0.0",
