@@ -1,5 +1,5 @@
 /**
- * Theme de lecture : sombre par defaut, clair au choix.
+ * Theme de lecture : clair par defaut, sombre au choix.
  *
  * C'est une **preference de lecture, pas un etat d'exploration** : elle ne va
  * pas dans l'URL, au meme titre que l'ouverture des tiroirs. Un lien partage
@@ -9,7 +9,12 @@
  * Les deux palettes vivent dans `app.css`. MapLibre et Observable Plot ne
  * savent pas lire une `var()` : leurs couleurs sont donc **relues ici par
  * `getComputedStyle`**, une fois par bascule et non par image. Une couleur
- * ajoutee ailleurs qu'en CSS resterait muette au passage en clair.
+ * ajoutee ailleurs qu'en CSS resterait muette au changement de theme.
+ *
+ * Le theme ne pilote que l'interface : **le fond de carte reste sombre dans
+ * les deux cas**. Les points portent un lisere clair et la rampe de densite
+ * monte vers le blanc — les deux supposent une carte sombre, et l'identite
+ * pose des panneaux calcaire sur une carte ardoise, pas l'inverse.
  */
 import { browser } from '$app/environment';
 
@@ -17,11 +22,9 @@ export type Theme = 'sombre' | 'clair';
 
 export const CLE = 'merimee-theme';
 
-/** Le fond vectoriel change avec le theme. Servis sans cle d'API. */
-export const FONDS: Record<Theme, string> = {
-  sombre: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
-  clair: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json'
-};
+/** Fond vectoriel sobre servi sans cle d'API. Un seul, quel que soit le
+ *  theme : cf. l'en-tete. */
+export const FOND = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 
 /** Jeton JavaScript -> propriete personnalisee CSS. */
 const NOMS = {
@@ -42,6 +45,7 @@ const NOMS = {
   chaleur3: '--chaleur-3',
   chaleur4: '--chaleur-4',
   barreSourde: '--barre-sourde',
+  friseTexteFaible: '--frise-texte-faible',
   matrice0: '--matrice-0',
   matrice1: '--matrice-1',
   matrice2: '--matrice-2',
@@ -50,28 +54,30 @@ const NOMS = {
   matriceTexte: '--matrice-texte',
   matriceCerclee: '--matrice-cerclee',
   accent: '--accent',
+  accentPlein: '--accent-plein',
   bord: '--bord'
 } as const;
 
 export type Palette = Record<keyof typeof NOMS, string>;
 
-/** Repli identique aux valeurs sombres d'`app.css` : le rendu prealable n'a
- *  pas de document a interroger, et un graphe sans couleur serait invisible. */
-const SOMBRE: Palette = {
-  classe: '#e0a458', inscrit: '#4ea8de', mixte: '#b07bd4', statutNul: '#7d8597',
-  epoque1: '#7b5ea7', epoque2: '#4ea8de', epoque3: '#4bb89a', epoque4: '#e0a458',
-  epoque5: '#e0715e',
-  carteLiseret: '#0b0e14', carteSelection: '#f4f1ea',
-  chaleur0: 'rgba(11, 14, 20, 0)', chaleur1: '#1d3b57', chaleur2: '#4ea8de',
-  chaleur3: '#e0a458', chaleur4: '#f4f1ea',
-  barreSourde: '#3a4150',
-  matrice0: '#161b26', matrice1: '#2f5d7c', matrice2: '#4ea8de', matrice3: '#e0a458',
-  matrice4: '#f4f1ea', matriceTexte: '#0b0e14', matriceCerclee: '#f4f1ea',
-  accent: '#e0a458', bord: '#232a38'
+/** Repli identique aux valeurs claires d'`app.css`, qui sont celles de
+ *  `:root` : le rendu prealable n'a pas de document a interroger, et un graphe
+ *  sans couleur serait invisible. */
+const REPLI: Palette = {
+  classe: '#c85a32', inscrit: '#c9933b', mixte: '#7a5c7e', statutNul: '#9a958a',
+  epoque1: '#7a5c7e', epoque2: '#4d6b74', epoque3: '#6f7f52', epoque4: '#c9933b',
+  epoque5: '#c85a32',
+  carteLiseret: '#fdfcfa', carteSelection: '#f8f7f4',
+  chaleur0: 'rgba(26, 29, 32, 0)', chaleur1: '#4a3a24', chaleur2: '#c9933b',
+  chaleur3: '#c85a32', chaleur4: '#f6e3cf',
+  barreSourde: '#5a5347', friseTexteFaible: '#9c978c',
+  matrice0: '#f4efe4', matrice1: '#e6d0a8', matrice2: '#c9933b', matrice3: '#a9531f',
+  matrice4: '#431b09', matriceTexte: '#f8f7f4', matriceCerclee: '#1a1d20',
+  accent: '#b94723', accentPlein: '#c85a32', bord: '#eae6dc'
 };
 
 function choixInitial(): Theme {
-  if (!browser) return 'sombre';
+  if (!browser) return 'clair';
   try {
     const garde = localStorage.getItem(CLE);
     if (garde === 'clair' || garde === 'sombre') return garde;
@@ -82,7 +88,7 @@ function choixInitial(): Theme {
 }
 
 export const theme = $state({ courant: choixInitial() });
-export const palette = $state<Palette>({ ...SOMBRE });
+export const palette = $state<Palette>({ ...REPLI });
 
 /**
  * Pose le theme puis relit les jetons. L'ordre compte : interroger le style

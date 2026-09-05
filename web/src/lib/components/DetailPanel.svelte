@@ -160,8 +160,76 @@
   {:else if !fiche}
     <div class="attente"><p>Chargement de la notice {reference}…</p></div>
   {:else}
+    <!-- L'image passe en tete de fiche : c'est elle qui identifie l'edifice
+         avant son nom. Les deux commandes s'y posent en pastilles, faute de
+         place au-dessus. -->
+    <div class="hero">
+      {#if courante}
+        <figure class="photo">
+          <img
+            src={vignette(courante, 640)}
+            alt="Photographie de {fiche.titre}"
+            loading="lazy"
+            onerror={() => signalerCassee(courante)}
+          />
+          {#if images.length > 1}
+            <div class="bande">
+              {#each images as nom, i (nom)}
+                <button class:choisi={nom === courante} onclick={() => (imageChoisie = i)}
+                        aria-label="Photographie {i + 1}">
+                  <img src={vignette(nom, 120)} alt="" loading="lazy"
+                       onerror={() => signalerCassee(nom)} />
+                </button>
+              {/each}
+            </div>
+          {/if}
+          <figcaption>
+            {#if credit?.auteur}<span class="auteur">{credit.auteur}</span>{/if}
+            <a href={pageFichier(courante)} target="_blank" rel="noreferrer">
+              {credit?.licence || 'Wikimedia Commons'}
+            </a>
+          </figcaption>
+        </figure>
+      {:else}
+        <!-- Une notice sur six n'a pas d'image. La plaque la nomme au lieu de
+             laisser un trou, mais elle **dit** l'absence : ni animation, ni
+             icone brisee, ni degrade, rien qui puisse passer pour un
+             chargement en cours. -->
+        <div class="plaque">
+          <strong>{fiche.denominations[0] ?? fiche.titre}</strong>
+          {#if fiche.domaines.length}<span>{fiche.domaines.join(', ')}</span>{/if}
+          <em>aucune photographie sur Wikimedia Commons</em>
+        </div>
+      {/if}
+
+      <button class="pastille fermer" onclick={onclose} aria-label="Fermer la fiche">
+        <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <polyline points="8.5,2.5 4,7 8.5,11.5" stroke="currentColor" stroke-width="1.5"
+                    stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </button>
+      <!-- Le nom accessible differe du libelle de la barre : deux boutons de
+           meme nom seraient indiscernables, pour un lecteur d'ecran comme pour
+           un test. -->
+      <button class="pastille copier" onclick={oncopier}
+              aria-label="Copier le lien de la notice">
+        {#if copie}
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <polyline points="2.5,7.5 5.5,10.5 11.5,3.5" stroke="currentColor"
+                      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        {:else}
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <rect x="1.75" y="1.75" width="7.5" height="7.5" rx="1.6"
+                  stroke="currentColor" stroke-width="1.3" />
+            <rect x="4.75" y="4.75" width="7.5" height="7.5" rx="1.6"
+                  stroke="currentColor" stroke-width="1.3" fill="var(--fond-carte)" />
+          </svg>
+        {/if}
+      </button>
+    </div>
+
     <header>
-      <button class="fermer" onclick={onclose} aria-label="Fermer la fiche">×</button>
       <p class="lieu">{fiche.commune} · {fiche.departement_nom}</p>
       <h2>{fiche.titre}</h2>
       <p class="badges">
@@ -174,55 +242,11 @@
         {#each fiche.periodes as periode}<span class="badge sourd">{periode}</span>{/each}
       </p>
       <p class="actions">
-        <!-- Le nom accessible differe du libelle : la barre porte deja un
-             bouton « Copier le lien », et deux boutons de meme nom sont
-             indiscernables pour un lecteur d'ecran comme pour un test. -->
-        <button aria-label="Copier le lien de la notice" onclick={oncopier}>
-          {copie ? 'Lien copié' : 'Copier le lien'}
-        </button>
         <a href={popUrl(fiche.reference)} target="_blank" rel="noreferrer">
           Notice POP {fiche.reference} ↗
         </a>
       </p>
     </header>
-
-    {#if courante}
-      <figure class="photo">
-        <img
-          src={vignette(courante, 640)}
-          alt="Photographie de {fiche.titre}"
-          loading="lazy"
-          onerror={() => signalerCassee(courante)}
-        />
-        {#if images.length > 1}
-          <div class="bande">
-            {#each images as nom, i (nom)}
-              <button class:choisi={nom === courante} onclick={() => (imageChoisie = i)}
-                      aria-label="Photographie {i + 1}">
-                <img src={vignette(nom, 120)} alt="" loading="lazy"
-                     onerror={() => signalerCassee(nom)} />
-              </button>
-            {/each}
-          </div>
-        {/if}
-        <figcaption>
-          {#if credit?.auteur}<span class="auteur">{credit.auteur}</span>{/if}
-          <a href={pageFichier(courante)} target="_blank" rel="noreferrer">
-            {credit?.licence || 'Wikimedia Commons'}
-          </a>
-        </figcaption>
-      </figure>
-    {:else}
-      <!-- Une notice sur six n'a pas d'image. La plaque la nomme au lieu de
-           laisser un trou, mais elle **dit** l'absence : ni animation, ni
-           icone brisee, ni degrade, rien qui puisse passer pour un
-           chargement en cours. -->
-      <div class="plaque">
-        <strong>{fiche.denominations[0] ?? fiche.titre}</strong>
-        {#if fiche.domaines.length}<span>{fiche.domaines.join(', ')}</span>{/if}
-        <em>aucune photographie sur Wikimedia Commons</em>
-      </div>
-    {/if}
 
     <dl>
       {#if fiche.adresse || fiche.lieudit}
@@ -334,9 +358,8 @@
 <style>
   .fiche {
     overflow-y: auto;
-    border-left: 1px solid var(--bord);
-    background: var(--fond);
-    padding: 0 0 32px;
+    background: var(--fond-carte);
+    padding: 0 0 8px;
   }
 
   .attente {
@@ -358,90 +381,150 @@
     color: var(--erreur);
   }
 
-  header {
+  .hero {
     position: relative;
-    padding: 18px 18px 14px;
-    border-bottom: 1px solid var(--bord);
+  }
+
+  /* Pastilles posees sur l'image : il n'y a pas de place au-dessus, et une
+     barre d'outils dediee couterait une rangee pour deux commandes. */
+  .pastille {
+    position: absolute;
+    top: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--fond-carte) 92%, transparent);
+    color: var(--texte);
+    cursor: pointer;
+    box-shadow: 0 6px 18px -6px rgb(var(--voile) / 35%);
+    transition: background var(--t-rapide);
+  }
+
+  .pastille:hover {
+    background: var(--fond-carte);
   }
 
   .fermer {
-    position: absolute;
-    top: 10px;
-    right: 12px;
-    background: none;
-    border: none;
-    color: var(--texte-faible);
-    font-size: 20px;
-    line-height: 1;
-    cursor: pointer;
+    left: 20px;
+  }
+
+  .copier {
+    right: 20px;
+  }
+
+  header {
+    padding: 18px 22px 22px;
+    border-bottom: 1px solid color-mix(in srgb, var(--bord) 70%, transparent);
   }
 
   .lieu {
-    margin: 0 0 4px;
-    font-size: 11px;
-    letter-spacing: 0.05em;
+    margin: 0 0 6px;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: var(--texte-faible);
+    color: var(--texte-tenu);
   }
 
   /* Le serif s'arrete au titre et au texte d'archive. Applique aux libelles de
      facette ou aux nombres a 10 px, il les rendrait illisibles. */
   h2 {
-    margin: 0 26px 10px 0;
+    margin: 0 0 14px;
     font-family: var(--police-titre);
-    font-size: 22px;
-    font-weight: 600;
-    line-height: 1.2;
+    font-size: 32px;
+    font-weight: 500;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
     color: var(--texte);
+    text-wrap: pretty;
   }
 
   .badges {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 7px;
     margin: 0;
   }
 
   .badge {
-    padding: 2px 8px;
-    border-radius: 999px;
-    font-size: 10px;
-    letter-spacing: 0.04em;
-    border: 1px solid currentColor;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 12px;
+    border: 1px solid var(--bord);
+    border-radius: var(--r-pilule);
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
   }
 
-  .or { color: var(--classe); }
-  .bleu { color: var(--inscrit); }
-  .violet { color: var(--mixte); }
-  .sourd { color: var(--texte-faible); }
+  /* Statut classe : pastille terracotta pleine, la seule de la fiche. */
+  .or {
+    border-color: var(--classe);
+    background: var(--classe);
+    color: var(--texte-sur-plein);
+  }
+
+  .or::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--texte-sur-plein) 85%, transparent);
+  }
+
+  .bleu {
+    border-color: var(--inscrit);
+    background: color-mix(in srgb, var(--inscrit) 14%, transparent);
+    color: var(--inscrit-texte);
+  }
+
+  .violet {
+    border-color: var(--mixte);
+    background: color-mix(in srgb, var(--mixte) 12%, transparent);
+    color: var(--mixte);
+  }
+
+  .sourd {
+    border-color: var(--bord);
+    color: var(--texte-faible);
+    font-weight: 500;
+  }
 
   .actions {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 6px 12px;
-    margin: 10px 0 0;
-    font-size: 11px;
+    gap: 8px;
+    margin: 18px 0 0;
   }
 
-  .actions button {
+  .actions a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     border: 1px solid var(--bord);
-    background: transparent;
-    color: var(--texte-faible);
-    border-radius: 999px;
-    padding: 3px 11px;
-    font-size: 11px;
-    cursor: pointer;
+    border-radius: var(--r-pilule);
+    padding: 9px 17px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--texte-moyen);
+    transition: all var(--t-rapide);
   }
 
-  .actions button:hover {
-    color: var(--texte);
-    border-color: var(--texte-faible);
+  .actions a:hover {
+    border-color: var(--inscrit);
+    color: var(--inscrit-texte);
+    text-decoration: none;
   }
 
   .photo {
     margin: 0;
-    border-bottom: 1px solid var(--bord);
+    padding: 10px 10px 0;
   }
 
   /* Meme rapport que la photo qu'elle remplace : passer d'une notice illustree
@@ -453,16 +536,23 @@
     justify-content: center;
     gap: 6px;
     aspect-ratio: 4 / 3;
+    margin: 10px 10px 0;
     padding: 18px;
-    border-bottom: 1px solid var(--bord);
+    border-radius: var(--r-m);
     background: var(--fond-creux);
+    /* La hachure dit que la surface est vide par nature, pas en attente. */
+    background-image: repeating-linear-gradient(
+      135deg,
+      rgb(var(--voile) / 5%) 0 1px,
+      transparent 1px 10px
+    );
     text-align: center;
   }
 
   .plaque strong {
     font-family: var(--police-titre);
-    font-size: 19px;
-    font-weight: 600;
+    font-size: 20px;
+    font-weight: 500;
     line-height: 1.25;
     color: var(--texte);
   }
@@ -477,8 +567,7 @@
     font-style: normal;
     font-size: 10px;
     letter-spacing: 0.04em;
-    color: var(--texte-faible);
-    opacity: 0.8;
+    color: var(--texte-tenu);
   }
 
   /* Rapport fixe : sans lui, chaque image qui arrive pousse la fiche entiere
@@ -488,32 +577,34 @@
     width: 100%;
     aspect-ratio: 4 / 3;
     object-fit: cover;
+    border-radius: var(--r-m);
     background: var(--fond-creux);
   }
 
   .bande {
     display: flex;
-    gap: 4px;
-    padding: 6px 6px 0;
+    gap: 6px;
+    padding: 8px 0 0;
   }
 
   .bande button {
     padding: 0;
     border: 1px solid transparent;
-    border-radius: 4px;
+    border-radius: var(--r-s);
     background: none;
     cursor: pointer;
     overflow: hidden;
     line-height: 0;
+    transition: border-color var(--t-rapide);
   }
 
   .bande button.choisi {
-    border-color: var(--accent);
+    border-color: var(--classe);
   }
 
   .bande img {
-    width: 52px;
-    height: 38px;
+    width: 54px;
+    height: 40px;
     object-fit: cover;
   }
 
@@ -521,9 +612,9 @@
     display: flex;
     flex-wrap: wrap;
     gap: 4px 8px;
-    padding: 6px 18px 10px;
+    padding: 8px 12px 0;
     font-size: 10px;
-    color: var(--texte-faible);
+    color: var(--texte-tenu);
   }
 
   .auteur {
@@ -533,22 +624,31 @@
     white-space: nowrap;
   }
 
+  /* Deux colonnes, pas trois : la pastille flotte dans le `dt`, une colonne
+     dediee ne ferait que perdre 24 px de largeur de texte. */
   dl {
     display: grid;
-    grid-template-columns: 88px 1fr;
-    gap: 5px 12px;
+    grid-template-columns: 104px 1fr;
+    gap: 9px 10px;
     margin: 0;
-    padding: 14px 18px;
-    border-bottom: 1px solid var(--bord);
-    font-size: 12px;
+    padding: 18px 22px;
+    border-bottom: 1px solid color-mix(in srgb, var(--bord) 70%, transparent);
+    font-size: 12.5px;
   }
 
   dt {
     color: var(--texte-faible);
-    font-size: 10px;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    padding-top: 1px;
+  }
+
+  dt::before {
+    content: '';
+    display: block;
+    float: left;
+    width: 5px;
+    height: 5px;
+    margin: 6px 9px 0 0;
+    border-radius: 50%;
+    background: var(--inscrit);
   }
 
   dd {
@@ -558,17 +658,22 @@
   }
 
   section {
-    padding: 14px 18px;
-    border-bottom: 1px solid var(--bord);
+    padding: 18px 22px;
+    border-bottom: 1px solid color-mix(in srgb, var(--bord) 70%, transparent);
+  }
+
+  section:last-child {
+    border-bottom: none;
+    padding-bottom: 26px;
   }
 
   h3 {
-    margin: 0 0 8px;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.07em;
+    margin: 0 0 11px;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: var(--texte-faible);
+    color: var(--texte-tenu);
   }
 
   .actes {
@@ -576,18 +681,19 @@
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 5px;
-    font-size: 12px;
+    gap: 8px;
+    font-size: 12.5px;
   }
 
   .actes li {
     display: flex;
-    gap: 10px;
+    gap: 12px;
   }
 
   .actes time {
     flex: 0 0 118px;
-    color: var(--accent);
+    color: var(--classe-texte);
+    font-weight: 600;
     font-variant-numeric: tabular-nums;
   }
 
@@ -607,12 +713,12 @@
      mesure et l'interligne d'un texte suivi, et un filet de citation. */
   .texte {
     max-width: 62ch;
-    padding-left: 11px;
-    border-left: 2px solid var(--bord);
+    padding-left: 14px;
+    border-left: 2px solid var(--bord-appuye);
     font-family: var(--police-titre);
-    font-size: 14px;
-    line-height: 1.6;
-    color: var(--texte);
+    font-size: 15px;
+    line-height: 1.65;
+    color: var(--texte-moyen);
   }
 
   .liens {
@@ -620,8 +726,8 @@
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 5px;
-    font-size: 12px;
+    gap: 7px;
+    font-size: 12.5px;
   }
 
   h3 em {
@@ -643,9 +749,10 @@
 
   .jetons a {
     display: block;
-    padding: 2px 7px;
+    padding: 3px 8px;
     border: 1px solid var(--bord);
-    border-radius: 4px;
+    border-radius: var(--r-s);
+    transition: all var(--t-rapide);
     background: var(--fond-creux);
     font-size: 11px;
     font-variant-numeric: tabular-nums;
@@ -653,8 +760,9 @@
   }
 
   .jetons a:hover {
-    color: var(--accent);
-    border-color: var(--accent);
+    color: var(--inscrit-texte);
+    border-color: var(--inscrit);
+    text-decoration: none;
   }
 
   .plus {
@@ -662,10 +770,16 @@
     border: 1px solid var(--bord);
     background: transparent;
     color: var(--accent);
-    border-radius: 999px;
-    padding: 3px 12px;
+    border-radius: var(--r-pilule);
+    padding: 6px 14px;
     font-size: 11px;
+    font-weight: 600;
     cursor: pointer;
+    transition: border-color var(--t-rapide);
+  }
+
+  .plus:hover {
+    border-color: var(--accent);
   }
 
   .plus em {

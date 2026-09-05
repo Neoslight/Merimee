@@ -86,11 +86,7 @@ export async function facette(
   limite = 40,
   terme = ''
 ): Promise<Compte[]> {
-  const where = buildWhere(f, cle);
-  const liste = LISTES[cle];
-  const source = liste
-    ? `(SELECT unnest(${liste}) AS valeur FROM monuments WHERE ${where})`
-    : `(SELECT ${SCALAIRES[cle]} AS valeur FROM monuments WHERE ${where})`;
+  const source = sourceFacette(cle, buildWhere(f, cle));
 
   // Une valeur cochee reste listee meme hors resultat, sinon saisir un terme
   // rendrait impossible de la decocher.
@@ -111,6 +107,42 @@ export async function facette(
     ORDER BY (${epinglee}) DESC, n DESC, valeur ASC
     LIMIT ${limite}
   `);
+}
+
+/** Cles facettables, dans l'ordre d'affichage du panneau. */
+const FACETTABLES: FacetKey[] = [
+  'statut', 'domaines', 'denominations', 'regions',
+  'departements', 'auteurs', 'proprietaires', 'periodes'
+];
+
+/** Source d'une facette : la colonne scalaire, ou la colonne `LIST` deroulee. */
+function sourceFacette(cle: FacetKey, where: string): string {
+  const liste = LISTES[cle];
+  return liste
+    ? `(SELECT unnest(${liste}) AS valeur FROM monuments WHERE ${where})`
+    : `(SELECT ${SCALAIRES[cle]} AS valeur FROM monuments WHERE ${where})`;
+}
+
+/**
+ * Nombre de valeurs distinctes par facette, filtres courants appliques —
+ * **chacune sans le sien**, comme `facette()` : sinon cocher une valeur ferait
+ * tomber la cardinalite a 1 et le nombre ne dirait plus rien.
+ *
+ * C'est ce qui rend visible le plafond des 40 valeurs : « 40 sur 7 040 » dit
+ * ce que la liste cache, la liste seule ne le disait pas.
+ *
+ * Huit balayages de 46 760 lignes en un seul aller-retour : DuckDB les enchaine
+ * en quelques millisecondes, et une requete par facette couterait huit
+ * allers-retours pour le meme travail.
+ */
+export async function cardinalites(f: Filters): Promise<Partial<Record<FacetKey, number>>> {
+  const morceaux = FACETTABLES.map(
+    (cle) => `SELECT ${lit(cle)} AS cle, count(DISTINCT valeur)::INT AS n
+              FROM ${sourceFacette(cle, buildWhere(f, cle))}
+              WHERE valeur IS NOT NULL AND valeur <> ''`
+  );
+  const lignes = await query<{ cle: FacetKey; n: number }>(morceaux.join(' UNION ALL '));
+  return Object.fromEntries(lignes.map((l) => [l.cle, l.n]));
 }
 
 export interface BarreSiecle {

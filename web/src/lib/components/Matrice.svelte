@@ -138,7 +138,7 @@
     z-index: 3;
     display: grid;
     grid-template-rows: auto 1fr auto;
-    padding: 14px 18px 10px;
+    padding: 16px 22px 10px;
     background: var(--fond);
     overflow: hidden;
   }
@@ -149,16 +149,17 @@
 
   h3 {
     margin: 0;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    font-family: var(--police-titre);
+    font-size: 17px;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
     color: var(--texte);
   }
 
   header p {
     margin: 3px 0 0;
-    font-size: 11px;
+    font-size: 11.5px;
     color: var(--texte-faible);
   }
 
@@ -169,7 +170,7 @@
 
   .note {
     margin: 4px 0 0;
-    font-size: 10px;
-    color: var(--texte-faible);
+    font-size: 10.5px;
+    color: var(--texte-tenu);
   }
 </style>

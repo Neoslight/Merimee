@@ -36,7 +36,7 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `web/src/lib/format.ts` | `romain`, formats de nombres — étaient recopiés dans trois composants |
 | `web/src/service-worker.ts` | cache des actifs hachés uniquement |
 | `web/src/lib/components/` | `MonumentMap`, `FacetPanel`, `Jetons`, `Timeline`, `Matrice`, `DetailPanel` |
-| `web/tests/smoke.mjs` | 70 vérifications en Chromium réel, avec `serveur.mjs` instrumenté |
+| `web/tests/smoke.mjs` | 77 vérifications en Chromium réel, avec `serveur.mjs` instrumenté |
 | `web/tests/apercu-social.mjs` | régénère la vignette Open Graph depuis l'application |
 
 ## Commandes
@@ -47,7 +47,7 @@ cd etl  && python -m merimee_etl.wikidata  # rafraîchit l'instantané des photo
 cd etl  && python -m pytest tests -q    # 55 tests
 cd web  && npm run dev                  # http://localhost:5173
 cd web  && npm run check                # svelte-check, doit rester à 0/0
-cd web  && npm run build && npm run test # build statique + 70 vérifications navigateur
+cd web  && npm run build && npm run test # build statique + 77 vérifications navigateur
 cd web  && npm run apercu               # régénère static/apercu-social.png
 cd web  && npm run deploy               # build /Merimee + push sur gh-pages
 ```
@@ -144,14 +144,14 @@ pas à celle qu'il touche : `barY` laisse un intervalle entre les barres, et un
 brossage qui démarre dans un intervalle serait perdu. Hors de la zone des barres —
 la marge de l'axe — rien n'est visé.
 
-**`map.setStyle()` détruit toutes les sources et couches ajoutées.** Changer de fond
-avec le thème veut dire les reposer entièrement : d'où `poserCouches()` dans
-`MonumentMap.svelte`, branchée sur `style.load` — le seul événement qui couvre le
-montage **et** chaque changement de style — et non sur `load`, qui ne se déclenche
-qu'une fois. `pret` retombe pendant la bascule pour que les effets qui repeuplent la
-carte n'écrivent pas dans le vide. Le test `les couches survivent au changement de
-fond` verrouille ce point : un `setPaintProperty` sur une couche disparue lève, donc
-c'est le compteur d'erreurs console qui fait foi.
+**`map.setStyle()` détruit toutes les sources et couches ajoutées.** D'où
+`poserCouches()` dans `MonumentMap.svelte`, branchée sur `style.load` — le seul
+événement qui couvre le montage **et** chaque changement de style — et non sur `load`,
+qui ne se déclenche qu'une fois. Le fond ne suivant plus le thème, `setStyle` n'est
+plus appelé aujourd'hui ; la fonction reste, et le test `les couches survivent au
+changement de fond` vérifie désormais que la bascule de thème repeint les couches sans
+écrire dans le vide — un `setPaintProperty` sur une couche disparue lève, donc c'est le
+compteur d'erreurs console qui fait foi.
 
 **Chromium sans tête annonce `prefers-color-scheme: light`.** Les deux scripts
 Playwright forcent donc `colorScheme` : `smoke.mjs` démarre en sombre pour avoir
@@ -163,6 +163,12 @@ d'une machine à l'autre.
 **Colonnes `LIST` plutôt que tables de liaison.** Domaines, siècles, dénominations,
 auteurs, propriétaires sont des listes dans `monuments`. Filtrage par
 `list_has_any`, facettage par `UNNEST`. Seuls les actes de protection ont leur table.
+
+**Une facette annonce ce qu'elle cache.** `cardinalites()` compte les valeurs
+distinctes de chaque facette **sous les filtres courants et sans le sien**, comme
+`facette()` — sinon cocher une valeur ferait tomber le nombre à 1. Les huit comptes
+partent en une seule requête (`UNION ALL`), donc un seul aller-retour. C'est ce qui
+transforme « 40 valeurs » en « 40 sur 714 » : la liste n'avait plus l'air complète.
 
 **Une facette ne montre que ses 40 valeurs les plus fréquentes ; sa recherche,
 elle, fouille tout.** Filtrer en JavaScript la liste déjà rapatriée laissait
@@ -215,7 +221,33 @@ site est prérendu en sombre puis bascule à l'hydratation.
 **Toute couleur vit dans `app.css`.** MapLibre et Plot ne savent pas lire une `var()` :
 `theme.svelte.ts` relit les jetons par `getComputedStyle` à chaque bascule et les
 expose dans `palette`. Une couleur écrite en dur dans un composant resterait muette
-au passage en clair — il n'en reste aucune, c'est vérifiable d'un `grep '#[0-9a-f]\{6\}' src`.
+au changement de thème — il n'en reste aucune, et **le smoke test relit les sources
+pour le vérifier** (`aucune couleur en dur hors app.css`). Seule exception, assumée et
+commentée : la palette de repli de `theme.svelte.ts`, que le rendu préalable exige
+puisqu'il n'a pas de document à interroger.
+
+Deux conséquences moins évidentes du même principe :
+
+- **la loupe des champs de recherche est un jeton**, `--icone-recherche`. Un `<input>`
+  n'accepte pas de pseudo-élément : l'image de fond est le seul chemin, et le trait du
+  SVG est une couleur — laissée dans le composant, elle serait restée gris sombre sur
+  fond sombre ;
+- **l'aplat plein s'inverse avec le thème** (`--plein-fond` / `--plein-texte`). En clair
+  c'est l'ardoise sur calcaire ; en sombre l'ardoise **est** le fond, et le bouton
+  « Filtres » disparaissait purement et simplement.
+
+**Le thème ne pilote que l'interface : le fond de carte reste sombre dans les deux
+cas.** `FOND` est une constante unique. Les points portent un liseré clair
+(`--carte-liseret` vaut `#fdfcfa` en thème clair) et la rampe de densité monte vers le
+blanc : les deux supposent une carte sombre. L'identité pose des panneaux calcaire sur
+une carte ardoise, pas l'inverse. `setStyle` n'est donc plus appelé — mais
+`poserCouches()` **reste** branchée sur `style.load`, qui couvre le montage et
+désamorce le piège si un fond historique s'ajoute un jour.
+
+**Le liseré des points ne s'ouvre qu'au zoom** (`6 → 0`, `9 → 0,5`, `13 → 1,8`). La
+maquette le donnait épais dès le départ, ce qui vaut pour dix pastilles : sur 44 484
+points à z4,7, les anneaux se touchent et la France devient un aplat clair. Vérifié à
+la capture, pas au raisonnement.
 
 **L'URL porte l'état d'exploration.** `permalien.ts` encode filtres, vue et notice
 sélectionnée. Trois points non négociables : les valeurs multiples passent par un
@@ -269,6 +301,13 @@ passe par `certifi` quand il est installé.
 
 **Les rejets sont signalés, pas supprimés.** Un segment de date illisible produit
 quand même un événement (année nulle) et une ligne dans `etl/out/rejets.csv`.
+
+**Le libellé d'une section de facette vit dans `.nom-section`.** Un nœud de plus, pour
+une raison de mise en page : `.titre` est un flex à quatre enfants, et deux
+`margin-left: auto` concurrents (badge de sélection, cardinalité) se partageraient
+l'espace au lieu de tout pousser à droite. Conséquence à connaître : le `:text()` de
+Playwright vise le **plus petit** élément contenant le texte, donc les sélecteurs du
+smoke test ciblent `.nom-section`, plus `button.titre`.
 
 **La langue du code est le français** : identifiants, commentaires, libellés. Les
 commentaires expliquent le *pourquoi* (une anomalie du corpus, une contrainte

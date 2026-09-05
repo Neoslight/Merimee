@@ -8,6 +8,7 @@
  *
  * Usage : node tests/smoke.mjs [url]   (defaut http://localhost:4173)
  */
+import { readdirSync, readFileSync } from 'node:fs';
 import { chromium } from 'playwright';
 import { demarrer } from './serveur.mjs';
 
@@ -37,6 +38,14 @@ const page = await navigateur.newPage({
 });
 
 const erreursConsole = [];
+// Le fond de carte ne suit plus le theme : une seule feuille de style doit
+// partir sur le reseau, quel que soit le nombre de bascules.
+const fondsDemandes = [];
+page.on('request', (r) => {
+  if (r.url().includes('basemaps.cartocdn.com') && r.url().endsWith('style.json')) {
+    fondsDemandes.push(r.url());
+  }
+});
 page.on('console', (msg) => msg.type() === 'error' && erreursConsole.push(msg.text()));
 page.on('pageerror', (e) => erreursConsole.push(String(e)));
 
@@ -70,6 +79,22 @@ try {
     return src ? 1 : 0;
   });
   verifier('canvas MapLibre rendu', points === 1);
+
+  // --- Typographie ----------------------------------------------------------
+  // `Inter` avait ete declaree pendant des mois sans qu'aucun `@font-face` ne
+  // la serve : le site tournait dans la police du systeme, et rien ne le
+  // disait. On verifie donc que les fichiers arrivent, pas que le nom est ecrit.
+  await page.evaluate(() => document.fonts.ready);
+  const polices = await page.evaluate(() => ({
+    interface: document.fonts.check('400 14px "Plus Jakarta Sans Variable"'),
+    titre: document.fonts.check('500 32px "Newsreader Variable"'),
+    marque: getComputedStyle(document.querySelector('.marque strong')).fontFamily
+  }));
+  verifier(
+    'les deux polices sont reellement servies',
+    polices.interface && polices.titre && /Newsreader/.test(polices.marque),
+    `${polices.interface ? 'Jakarta' : 'JAKARTA MANQUANTE'} · ${polices.titre ? 'Newsreader' : 'NEWSREADER MANQUANTE'}`
+  );
 
   // --- Le tiroir des filtres est un calque ---------------------------------
   // Ouvert par defaut des qu'il y a la place de le poser a cote de la carte,
@@ -111,9 +136,47 @@ try {
   // La facette conserve ses autres options : preuve que son propre filtre est
   // exclu de son propre comptage.
   const autresDomaines = await page
-    .locator('section:has(button.titre:text("Domaine")) .option')
+    .locator('section:has(.nom-section:text("Domaine")) .option')
     .count();
   verifier('facette domaine garde ses alternatives', autresDomaines > 5, `${autresDomaines} options`);
+
+  // --- Cardinalites ---------------------------------------------------------
+  // Le panneau plafonne a 40 valeurs. Sans ce nombre, rien ne disait que
+  // « architecte » en cache 7 040 : la liste avait l'air complete.
+  const cardinalAuteurs = await page
+    .locator('section:has(.nom-section:text("Architecte")) .cardinal')
+    .textContent();
+  const combienAuteurs = Number.parseInt((cardinalAuteurs ?? '').replace(/\D/g, ''), 10);
+  verifier(
+    'la cardinalite dit ce que les 40 valeurs cachent',
+    combienAuteurs > 40,
+    `${cardinalAuteurs?.trim()} auteurs distincts sous le filtre courant`
+  );
+
+  // --- Pastille de statut ---------------------------------------------------
+  // Le statut est la seule facette au code couleur : la pilule « classe » prend
+  // l'aplat terracotta plein, les autres restent neutres.
+  const sectionStatut = page.locator('section:has(.nom-section:text("Statut"))');
+  await sectionStatut.getByRole('button', { name: /^classé / }).first().click();
+  await page.waitForFunction(() => document.querySelectorAll('.jetons button:not(.raz)').length === 2, null, { timeout: 20_000 });
+  const pastille = await page.evaluate(() => {
+    const el = document.querySelector('.option.choisi.statut-classe');
+    if (!el) return null;
+    const fond = getComputedStyle(el).backgroundColor;
+    // Un aplat plein, pas un voile : une pilule translucide dirait « survolee »,
+    // pas « posee ».
+    return { fond, opaque: !/^rgba\(.*,\s*0?\.\d+\)$/.test(fond) };
+  });
+  verifier(
+    'la pilule du statut classe est un aplat plein',
+    Boolean(pastille?.opaque),
+    pastille ? pastille.fond : 'aucune pilule statut-classe'
+  );
+  await sectionStatut.locator('.option.choisi').first().click();
+  await page.waitForFunction((attendu) => {
+    const el = document.querySelector('.chiffres span b');
+    return el && Number.parseInt(el.textContent.replace(/\D/g, ''), 10) === attendu;
+  }, militaire, { timeout: 20_000 });
 
   // --- Puces de filtres actifs ---------------------------------------------
   // Le nom accessible d'une puce porte l'action, pas la seule valeur : sans
@@ -182,7 +245,7 @@ try {
   // `Baltard Victor` (5 notices) est hors des 40 valeurs les plus frequentes
   // parmi 7 040 auteurs : le trouver prouve que la recherche descend dans
   // DuckDB au lieu de trier la liste deja rapatriee.
-  const sectionAuteurs = page.locator('section:has(button.titre:text("Architecte"))');
+  const sectionAuteurs = page.locator('section:has(.nom-section:text("Architecte"))');
   await sectionAuteurs.locator('button.titre').click();
   await sectionAuteurs.locator('input.filtre').fill('baltard');
   await page.waitForTimeout(1000);
@@ -350,6 +413,12 @@ try {
   // risque le plus. Un `setPaintProperty` sur une couche disparue leve, donc
   // le compteur d'erreurs console fait foi.
   const avantTheme = erreursConsole.length;
+
+  const sombre = await page.evaluate(() => ({
+    fond: getComputedStyle(document.body).backgroundColor,
+    texte: getComputedStyle(document.body).color
+  }));
+
   await page.getByRole('button', { name: 'Clair' }).click();
   await page.waitForTimeout(1500);
 
@@ -371,7 +440,35 @@ try {
   const lt = luminance(clair.texte);
   const contraste = (Math.max(lf, lt) + 0.05) / (Math.min(lf, lt) + 0.05);
   verifier('fond effectivement clair', lf > 0.5, clair.fond);
-  verifier('contraste du texte au moins 4,5:1', contraste >= 4.5, `${contraste.toFixed(2)}:1`);
+  verifier('contraste du texte au moins 4,5:1 en clair', contraste >= 4.5, `${contraste.toFixed(2)}:1`);
+
+  // Les deux themes sont des livrables, pas un seul : le sombre etait jusqu'ici
+  // le seul a n'avoir jamais ete mesure.
+  const lfs = luminance(sombre.fond);
+  const lts = luminance(sombre.texte);
+  const contrasteSombre = (Math.max(lfs, lts) + 0.05) / (Math.min(lfs, lts) + 0.05);
+  verifier(
+    'contraste du texte au moins 4,5:1 en sombre',
+    lfs < 0.5 && contrasteSombre >= 4.5,
+    `${sombre.fond} -> ${contrasteSombre.toFixed(2)}:1`
+  );
+
+  // Le theme ne pilote que l'interface : le fond de carte reste ardoise dans
+  // les deux cas. Les points portent un lisere clair et la rampe de densite
+  // monte vers le blanc — les deux supposent une carte sombre.
+  const sceneClaire = await page.evaluate(
+    () => getComputedStyle(document.querySelector('.scene')).backgroundColor
+  );
+  verifier(
+    'la scene reste ardoise en theme clair',
+    luminance(sceneClaire) < 0.1,
+    sceneClaire
+  );
+  verifier(
+    'aucun fond de carte clair demande',
+    fondsDemandes.length > 0 && fondsDemandes.every((u) => u.includes('dark-matter')),
+    `${fondsDemandes.length} requete(s), ${new Set(fondsDemandes.map((u) => u.split('/gl/')[1]?.split('/')[0])).size} style(s)`
+  );
 
   // La carte a recharge son fond : si les couches n'avaient pas ete reposees,
   // basculer la densite leverait.
@@ -566,7 +663,7 @@ try {
   const restaure = await total(page);
   verifier('permalien restaure le filtre', restaure === 1688, `obtenu ${restaure}`);
   const facetteCochee = await page
-    .locator('section:has(button.titre:text("Domaine")) .option.choisi')
+    .locator('section:has(.nom-section:text("Domaine")) .option.choisi')
     .count();
   verifier('facette rouverte cochee', facetteCochee === 1, `${facetteCochee} option(s)`);
 
@@ -678,6 +775,34 @@ try {
       `${(troisieme / 1024).toFixed(0)} Ko retelecharges`
     );
   }
+
+  // --- Aucune couleur en dur hors d'`app.css` --------------------------------
+  // MapLibre et Plot lisent la palette par `getComputedStyle` : une couleur
+  // ecrite dans un composant ne serait relue par personne et resterait muette
+  // au changement de theme. C'est une lecture de source, pas de navigateur —
+  // mais c'est ici qu'elle est jouee a chaque passe.
+  //
+  // `theme.svelte.ts` en est exclu : sa palette de repli **doit** porter des
+  // valeurs, le rendu prealable n'ayant pas de document a interroger. C'est le
+  // seul miroir volontaire d'`app.css`, et le commentaire du fichier le dit.
+  const racine = new URL('../src/', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
+  const fichiers = [];
+  const parcourir = (dossier) => {
+    for (const entree of readdirSync(dossier, { withFileTypes: true })) {
+      const chemin = `${dossier}/${entree.name}`;
+      if (entree.isDirectory()) parcourir(chemin);
+      else if (/\.(svelte|ts)$/.test(entree.name) && entree.name !== 'theme.svelte.ts') {
+        fichiers.push(chemin);
+      }
+    }
+  };
+  parcourir(racine);
+  const fautifs = fichiers.filter((f) => /#[0-9a-fA-F]{6}/.test(readFileSync(f, 'utf8')));
+  verifier(
+    'aucune couleur en dur hors app.css',
+    fautifs.length === 0,
+    fautifs.map((f) => f.split('/src/')[1]).join(', ') || `${fichiers.length} fichiers relus`
+  );
 
   verifier('aucune erreur console', erreursConsole.length === 0, erreursConsole.slice(0, 3).join(' | '));
 

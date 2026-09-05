@@ -6,7 +6,7 @@
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { untrack } from 'svelte';
   import type { Point } from '$lib/db/queries';
-  import { FONDS, palette, theme } from '$lib/state/theme.svelte';
+  import { FOND, palette } from '$lib/state/theme.svelte';
   import type { VueCarte } from '$lib/state/permalien';
 
   interface Props {
@@ -107,9 +107,12 @@
   }
 
   /**
-   * `setStyle` detruit toutes les sources et couches ajoutees : changer de fond
-   * de carte veut dire les reposer entierement. D'ou cette fonction, appelee a
-   * chaque `style.load` et non une seule fois au montage.
+   * Toutes les sources et couches ajoutees, en un seul endroit.
+   *
+   * Le fond ne change plus avec le theme, donc `setStyle` n'est plus appele —
+   * mais `style.load` reste le bon point d'accroche : c'est l'evenement du
+   * montage, et le jour ou un fond historique s'ajoutera, le piege sera deja
+   * desamorce. `setStyle` **detruit** tout ce qui a ete ajoute.
    */
   function poserCouches(map: MapLibreMap, donnees: Point[]) {
     map.addSource('monuments', { type: 'geojson', data: geojson(donnees) });
@@ -160,7 +163,7 @@
         'circle-color': couleurs(),
         'circle-opacity': densite ? 0.12 : 0.82,
         'circle-stroke-color': palette.carteLiseret,
-        'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 6, 0, 10, 0.6],
+        'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 6, 0, 9, 0.5, 13, 1.8],
         'circle-radius': [
           'interpolate', ['linear'], ['zoom'],
           4, ['case', ['>', ['get', 'nb'], 200], 4, 1.9],
@@ -184,14 +187,12 @@
   }
 
   $effect(() => {
-    // Le theme et la vue de depart sont lus sans dependance : ce sont des
-    // conditions initiales. Les suivre ici detruirait et recreerait la carte a
-    // chaque bascule, au lieu de lui changer son fond.
+    // La vue de depart est lue sans dependance : c'est une condition initiale.
+    // La suivre ici detruirait et recreerait la carte a chaque deplacement.
     const depart = untrack(() => vueInitiale ?? DEPART);
     const map = new maplibregl.Map({
       container: conteneur,
-      // Fond vectoriel sobre servi sans cle d'API.
-      style: untrack(() => FONDS[theme.courant]),
+      style: FOND,
       center: [depart.lon, depart.lat],
       zoom: depart.zoom,
       // L'attribution est posee a la main, en bas a **gauche** : a droite, le
@@ -248,18 +249,6 @@
     };
   });
 
-  // Bascule de fond. `pret` retombe : les effets qui repeuplent la carte
-  // attendent que les couches soient reposees plutot que d'ecrire dans le vide.
-  let fondPose = untrack(() => theme.courant);
-
-  $effect(() => {
-    const choix = theme.courant;
-    if (!carte || choix === fondPose) return;
-    fondPose = choix;
-    pret = false;
-    carte.setStyle(FONDS[choix]);
-  });
-
   // Les points arrivent apres chaque changement de filtre : `setData` suffit,
   // la couche et son style restent en place.
   $effect(() => {
@@ -281,9 +270,9 @@
     carte.setPaintProperty('monuments-halo', 'circle-opacity', densite ? 0 : 0.14);
   });
 
-  // Semiologie et palette. Les couches sont deja posees avec les bonnes
-  // couleurs apres un changement de fond ; cet effet couvre le changement de
-  // mode, qui lui ne repose pas les couches.
+  // Semiologie et palette. Les teintes de statut et le lisere changent avec le
+  // theme meme si le fond de carte, lui, ne bouge pas : cet effet couvre les
+  // deux, la bascule de theme comme le changement de mode.
   $effect(() => {
     if (!pret || !carte) return;
     const expression = couleurs();
@@ -312,6 +301,7 @@
       <span><i style="background:{palette[tranche.cle]}"></i>{tranche.titre}</span>
     {/each}
   {/if}
+  <i class="separateur" aria-hidden="true"></i>
   <button class="mode" class:actif={mode === 'epoque'}
           onclick={() => (mode = mode === 'statut' ? 'epoque' : 'statut')}
           aria-pressed={mode === 'epoque'} title="Colorer les points par époque de construction">
@@ -341,17 +331,20 @@
     position: absolute;
     left: calc(var(--marge-gauche, 0px) + 12px);
     bottom: 34px;
-    transition: left 160ms ease;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 14px;
-    padding: 7px 12px;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--fond) 82%, transparent);
-    border: 1px solid var(--bord);
-    backdrop-filter: blur(8px);
-    font-size: 11px;
+    gap: 8px 16px;
+    padding: 9px 14px;
+    border: 1px solid rgb(var(--voile) / 6%);
+    border-radius: var(--r-l);
+    background: color-mix(in srgb, var(--fond) 94%, transparent);
+    box-shadow: var(--ombre-carte);
+    /* Pas de flou au-dessus d'un canevas WebGL : il se paie a chaque image. */
+    backdrop-filter: none;
+    font-size: 11.5px;
     color: var(--texte-faible);
+    transition: left var(--t-tiroir);
   }
 
   .legende span {
@@ -362,24 +355,43 @@
   }
 
   .legende i {
-    width: 8px;
-    height: 8px;
+    width: 9px;
+    height: 9px;
     border-radius: 50%;
+  }
+
+  /* Filet de separation entre la lecture de la legende et ses commandes. Un
+     `<i>` et non un `<span>` : le test qui verifie que la legende suit le mode
+     de coloration compte `.legende span` — trois entrees par statut, cinq par
+     epoque. */
+  .separateur {
+    width: 1px;
+    height: 16px;
+    border-radius: 0;
+    background: var(--bord);
   }
 
   .legende button {
     border: 1px solid var(--bord);
-    background: transparent;
+    background: var(--fond-carte);
     color: var(--texte-faible);
-    border-radius: 999px;
-    padding: 3px 10px;
-    font-size: 11px;
+    border-radius: var(--r-pilule);
+    padding: 4px 11px;
+    font-size: 11.5px;
     cursor: pointer;
+    transition: all var(--t-rapide);
+  }
+
+  .legende button:hover {
+    border-color: var(--inscrit);
+    color: var(--inscrit-texte);
   }
 
   .legende button.actif {
-    color: var(--accent);
-    border-color: var(--accent);
+    border-color: var(--inscrit);
+    background: color-mix(in srgb, var(--inscrit) 14%, transparent);
+    color: var(--inscrit-texte);
+    font-weight: 600;
   }
 
   /* Les commandes MapLibre s'ecartent des deux calques, comme la legende : la
@@ -402,9 +414,8 @@
       left: 8px;
       right: 8px;
       bottom: 34px;
-      flex-wrap: wrap;
       gap: 8px 10px;
-      border-radius: 10px;
+      border-radius: var(--r-m);
       font-size: 10px;
     }
   }

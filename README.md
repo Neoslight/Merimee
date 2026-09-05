@@ -20,6 +20,11 @@ Tout état d'exploration vit dans l'URL : un croisement trouvé se partage par s
 copie du lien, et le retour arrière referme la fiche ouverte. Sombre ou clair, au
 choix — le thème reste hors de l'URL, un lien s'ouvre dans celui de son destinataire.
 
+Blanc calcaire, ardoise, terracotta pour le classé et ocre doré pour l'inscrit ;
+Newsreader pour les titres d'édifices et le texte d'archive, Plus Jakarta Sans pour
+l'interface. Le thème ne pilote que l'interface : la carte reste sombre dans les deux
+cas, les panneaux calcaire se posant sur une carte ardoise et non l'inverse.
+
 Aucun serveur applicatif : un pipeline Python produit des fichiers Parquet, que le
 navigateur interroge en SQL via DuckDB-Wasm.
 
@@ -55,15 +60,15 @@ rencontrés sont listés dans `etl/out/rejets.csv`.
 cd web
 npm install
 npm run dev                    # http://localhost:5173
-npm run build && npm run test  # build statique + 70 vérifications en navigateur
+npm run build && npm run test  # build statique + 77 vérifications en navigateur
 ```
 
-`npm run test` lance Chromium sur le build : **70 vérifications** couvrant le
+`npm run test` lance Chromium sur le build : **77 vérifications** couvrant le
 démarrage de DuckDB-Wasm, le filtrage croisé, la recherche dans une facette au-delà
-des 40 valeurs affichées, la matrice, les permaliens, le gabarit téléphone, la bascule
-de thème — y compris le contraste calculé, et la survie des couches de carte à
-`setStyle` —, les puces de filtres actifs, le brossage des siècles, et le fait
-qu'ouvrir une fiche ne télécharge qu'un fragment de ~320 Ko. Une mesure en pixels
+des 40 valeurs affichées, la matrice, les permaliens, le gabarit téléphone, les deux
+thèmes — contraste calculé dans chacun, polices réellement servies, aucune couleur en
+dur hors d'`app.css` —, les puces de filtres actifs, le brossage des siècles, et le
+fait qu'ouvrir une fiche ne télécharge qu'un fragment de ~320 Ko. Une mesure en pixels
 vérifie que le tiroir ne prend **aucune** largeur à la carte : c'est la régression que
 le passage en calques risque le plus. Nécessite `npx playwright install chromium` une
 fois.

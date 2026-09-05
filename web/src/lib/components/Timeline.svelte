@@ -53,7 +53,7 @@
       marginRight: 8,
       marginTop: 8,
       marginBottom: 20,
-      style: { background: 'transparent', color: 'var(--texte-faible)', fontSize: '10px' },
+      style: { background: 'transparent', color: 'var(--frise-texte-faible)', fontSize: '10.5px' },
       x: { label: null, tickFormat: (d: number) => romain(d) },
       y: { label: null, grid: true, ticks: 2, tickFormat: (d: number) => compact.format(d) },
       marks: [
@@ -62,11 +62,11 @@
           y: 'n',
           fill: (d: BarreSiecle) =>
             selection.length === 0 || selection.includes(d.siecle)
-              ? palette.accent
+              ? palette.accentPlein
               : palette.barreSourde,
           title: (d: BarreSiecle) => `${romain(d.siecle)}e siècle — ${d.n.toLocaleString('fr-FR')}`
         }),
-        Plot.ruleY([0], { stroke: 'var(--bord)' })
+        Plot.ruleY([0], { stroke: 'var(--frise-graduation)' })
       ]
     });
     // `graphe.value` n'est renseigne que par les marques interactives de Plot
@@ -113,7 +113,7 @@
       marginRight: 8,
       marginTop: 8,
       marginBottom: 20,
-      style: { background: 'transparent', color: 'var(--texte-faible)', fontSize: '10px' },
+      style: { background: 'transparent', color: 'var(--frise-texte-faible)', fontSize: '10.5px' },
       x: { label: null, domain: [ANNEE_MIN, ANNEE_MAX + 1], tickFormat: 'd' },
       y: { label: null, grid: true, ticks: 2, tickFormat: (d: number) => compact.format(d) },
       marks: [
@@ -126,7 +126,7 @@
           insetRight: 0.2,
           title: (d: BarreAnnee) => `${d.annee} — ${d.n.toLocaleString('fr-FR')} actes`
         }),
-        Plot.ruleY([0], { stroke: 'var(--bord)' })
+        Plot.ruleY([0], { stroke: 'var(--frise-graduation)' })
       ]
     });
     const echelle = graphe.scale('x');
@@ -288,13 +288,16 @@
 </section>
 
 <style>
+  /* La frise passe sur un bandeau ardoise **dans les deux themes** : les
+     graduations y sont plus lisibles qu'en gris clair sur blanc, et
+     l'histogramme ambre y gagne son contraste. */
   .frise {
     display: grid;
     grid-template-columns: 1fr 1.6fr;
-    gap: 20px;
-    padding: 10px 16px 6px;
-    border-top: 1px solid var(--bord);
-    background: var(--fond);
+    gap: 36px;
+    padding: 20px 26px 18px;
+    border-top: 1px solid var(--frise-graduation);
+    background: var(--frise-fond);
   }
 
   header {
@@ -302,21 +305,21 @@
     align-items: baseline;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 2px;
+    margin-bottom: 12px;
   }
 
   h3 {
     margin: 0;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: var(--texte);
+    color: var(--frise-texte);
   }
 
   header span {
-    font-size: 10px;
-    color: var(--texte-faible);
+    font-size: 10.5px;
+    color: var(--frise-texte-faible);
   }
 
   .bornes {
@@ -331,29 +334,47 @@
     gap: 3px;
   }
 
+  /* Champs creux sur l'ardoise : un fond clair y ferait deux taches. */
   .bornes input {
-    width: 52px;
-    padding: 1px 4px;
-    background: var(--fond-creux);
-    border: 1px solid var(--bord);
-    border-radius: 4px;
-    color: var(--texte);
-    font-size: 10px;
+    width: 58px;
+    padding: 3px 8px;
+    background: color-mix(in srgb, var(--frise-texte) 8%, transparent);
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--frise-texte);
+    font-size: 10.5px;
+    font-weight: 600;
     font-variant-numeric: tabular-nums;
+    transition: border-color var(--t-rapide);
+  }
+
+  .bornes input:focus {
+    outline: none;
+    border-color: var(--inscrit);
   }
 
   header button {
     background: none;
     border: none;
     padding: 0;
-    color: var(--accent);
+    color: var(--inscrit-texte);
     cursor: pointer;
-    font-size: 10px;
+    font-size: 10.5px;
     text-decoration: underline;
+    transition: color var(--t-rapide);
+  }
+
+  header button:hover {
+    color: var(--frise-texte);
   }
 
   .graphe {
     position: relative;
+    color: var(--frise-texte-faible);
+  }
+
+  .graphe :global(svg) {
+    overflow: visible;
   }
 
   .brossable {
@@ -367,14 +388,38 @@
     cursor: pointer;
   }
 
+  /* Voile terracotta, et deux poignees en pseudo-elements : aucun noeud de
+     plus pour dire ou se prend la plage. */
   .brosse {
     position: absolute;
     top: 8px;
     bottom: 20px;
-    background: color-mix(in srgb, var(--accent) 22%, transparent);
-    border-left: 1px solid var(--accent);
-    border-right: 1px solid var(--accent);
+    background: color-mix(in srgb, var(--accent-plein) 20%, transparent);
+    border-left: 1px solid var(--accent-plein);
+    border-right: 1px solid var(--accent-plein);
     pointer-events: none;
+  }
+
+  .brosse::before,
+  .brosse::after {
+    content: '';
+    position: absolute;
+    bottom: -7px;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: var(--fond-carte);
+    box-shadow:
+      0 0 0 5px color-mix(in srgb, var(--accent-plein) 22%, transparent),
+      0 4px 12px -3px rgb(var(--voile) / 50%);
+  }
+
+  .brosse::before {
+    left: -8px;
+  }
+
+  .brosse::after {
+    right: -8px;
   }
 
   @media (max-width: 900px) {

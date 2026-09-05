@@ -7,6 +7,7 @@
   import Timeline from '$lib/components/Timeline.svelte';
   import {
     auHasard,
+    cardinalites,
     facette,
     histogrammeProtections,
     histogrammeSiecles,
@@ -50,6 +51,7 @@
   let facettes = $state<Partial<Record<FacetKey, Compte[]>>>({});
   let barresSiecles = $state<BarreSiecle[]>([]);
   let barresAnnees = $state<BarreAnnee[]>([]);
+  let cardinaux = $state<Partial<Record<FacetKey, number>>>({});
   let compteurs = $state<Totaux | null>(null);
   let resultats = $state<Ligne[]>([]);
   // L'URL est lue avant le premier cycle de requetes : un lien partage ne doit
@@ -109,9 +111,10 @@
       histogrammeProtections(filters),
       liste(filters),
       Promise.all(FACETTES.map((cle) => facette(filters, cle))),
+      cardinalites(filters),
       veutMatrice ? matrice(filters) : Promise.resolve(croisement)
     ])
-      .then(([pts, tot, sie, ann, lst, fac, mat]) => {
+      .then(([pts, tot, sie, ann, lst, fac, card, mat]) => {
         // Une requete lente ne doit jamais ecraser un resultat plus recent.
         if (mien !== jeton) return;
         pointsCarte = pts;
@@ -120,6 +123,7 @@
         barresAnnees = ann;
         resultats = lst;
         facettes = Object.fromEntries(FACETTES.map((cle, i) => [cle, fac[i]]));
+        cardinaux = card;
         croisement = mat;
         erreur = null;
         chargement = false;
@@ -256,16 +260,21 @@
   const actifs = $derived(countActive(filters));
   const puces = $derived(jetonsActifs(filters));
   // Le tiroir ne se pose a cote de la carte qu'au large : c'est le seul cas ou
-  // la legende, ancree en bas a gauche, doit s'ecarter pour ne pas passer
-  // dessous.
-  const margeGauche = $derived(facettesOuvertes && !etroit ? '246px' : '0px');
+  // la legende et l'attribution, ancrees en bas a gauche, doivent s'ecarter
+  // pour ne pas passer dessous. Une classe plutot qu'une chaine de pixels : la
+  // largeur n'est ecrite qu'une fois, dans `--largeur-tiroir`.
+  const tiroirPose = $derived(facettesOuvertes && !etroit);
 </script>
 
 <div class="app">
   <header class="barre">
     <div class="marque">
-      <strong>MÉRIMÉE</strong>
-      <span>monuments historiques · 1840 – 2026</span>
+      <strong>Mérimée</strong>
+      <i class="filet" aria-hidden="true"></i>
+      <span class="sous">
+        <span>Monuments historiques</span>
+        <span class="dates">1840 — 2026</span>
+      </span>
     </div>
 
     <nav class="bascule">
@@ -309,7 +318,7 @@
     <Jetons jetons={puces} {actifs} onretirer={retirerJeton} onreset={toutEffacer} />
   {/if}
 
-  <main class:fiche-ouverte={selection !== null} style="--marge-gauche: {margeGauche}">
+  <main class:fiche-ouverte={selection !== null} class:tiroir-pose={tiroirPose}>
     <div class="centre">
       <div class="scene">
         <MonumentMap
@@ -377,10 +386,12 @@
              canevas WebGL. Ils vivent dans la scene, pas dans `main`, pour
              laisser la frise entierement visible sous eux. -->
         <div class="colonne facettes" class:ouvert={facettesOuvertes}>
-          <button class="fermer-tiroir" onclick={() => (facettesOuvertes = false)}>
-            Fermer les filtres
-          </button>
-          <FacetPanel {facettes} {chargement} />
+          <div class="entete-tiroir">
+            <h2>Filtres</h2>
+            <button class="fermer-tiroir" aria-label="Fermer les filtres"
+                    onclick={() => (facettesOuvertes = false)}>×</button>
+          </div>
+          <FacetPanel {facettes} {cardinaux} {chargement} />
         </div>
 
         {#if etroit && facettesOuvertes}
@@ -425,66 +436,127 @@
     height: 100vh;
   }
 
+  /* Une rangee qui s'enroule, pas une grille a colonnes fixes : les compteurs
+     et les actions occupent une largeur qui depend des donnees, et une piste
+     `1fr` leur cedait tout — le champ de recherche tombait a trois
+     caracteres. */
   .barre {
-    display: grid;
-    grid-template-columns: auto auto 1fr auto;
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 18px;
-    padding: 0 16px;
-    height: 52px;
+    gap: 12px 24px;
+    padding: 12px 24px;
+    min-height: 72px;
+    background: var(--fond-carte);
     border-bottom: 1px solid var(--bord);
   }
 
+  /* La marque passe en serif editorial et en casse normale : les capitales
+     espacees la faisaient lire comme une etiquette, pas comme un titre. */
   .marque {
     display: flex;
-    flex-direction: column;
-    line-height: 1.25;
+    align-items: center;
+    gap: 14px;
   }
 
   .marque strong {
-    font-size: 13px;
-    letter-spacing: 0.22em;
-    color: var(--accent);
+    font-family: var(--police-titre);
+    font-size: 27px;
+    font-weight: 500;
+    letter-spacing: -0.005em;
+    line-height: 1;
+    color: var(--texte);
   }
 
-  .marque span {
-    font-size: 10px;
-    letter-spacing: 0.04em;
-    color: var(--texte-faible);
+  .filet {
+    width: 1px;
+    height: 34px;
+    background: linear-gradient(var(--bord), var(--bord-appuye), var(--bord));
+  }
+
+  .sous {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    line-height: 1.2;
+    text-transform: uppercase;
+    color: var(--texte-tenu);
+    white-space: nowrap;
+  }
+
+  .dates {
+    color: var(--inscrit-texte);
+    font-variant-numeric: tabular-nums;
   }
 
   .recherche {
-    width: 100%;
-    max-width: 460px;
-    padding: 7px 12px;
-    background: var(--fond-creux);
+    flex: 1 1 220px;
+    min-width: 0;
+    max-width: 420px;
+    height: 40px;
+    padding: 0 16px 0 38px;
+    background:
+      var(--icone-recherche) no-repeat 14px 50% / 15px 15px,
+      color-mix(in srgb, var(--fond-creux) 72%, transparent);
     border: 1px solid var(--bord);
-    border-radius: 6px;
+    border-radius: var(--r-pilule);
     color: var(--texte);
     font-size: 13px;
+    transition:
+      border-color var(--t-rapide),
+      background-color var(--t-rapide);
+  }
+
+  .recherche::placeholder {
+    color: var(--texte-tenu);
   }
 
   .recherche:focus {
     outline: none;
-    border-color: var(--accent);
+    border-color: var(--inscrit);
+    background-color: var(--fond-carte);
+  }
+
+  .recherche::-webkit-search-cancel-button {
+    filter: grayscale(1);
+    opacity: 0.5;
   }
 
   .chiffres {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 14px;
-    font-size: 11px;
-    color: var(--texte-faible);
+    justify-content: flex-end;
+    gap: 10px 14px;
+    margin-left: auto;
+    font-size: 11.5px;
+    color: var(--texte-tenu);
   }
 
   .chiffres b {
+    font-family: var(--police-titre);
+    font-size: 16px;
+    font-weight: 500;
     color: var(--texte);
     font-variant-numeric: tabular-nums;
   }
 
-  .or { color: var(--classe); }
-  .bleu { color: var(--inscrit); }
-  .faible { opacity: 0.7; }
+  /* Noms de classes conserves, teintes patrimoniales : le classe est
+     terracotta, l'inscrit ocre dore. */
+  .or {
+    color: var(--classe-texte);
+    font-weight: 600;
+  }
+
+  .bleu {
+    color: var(--inscrit-texte);
+    font-weight: 600;
+  }
+
+  .faible { opacity: 0.85; }
 
   .hasard,
   .lien,
@@ -492,66 +564,100 @@
     border: 1px solid var(--bord);
     background: transparent;
     color: var(--texte-faible);
-    border-radius: 999px;
-    padding: 4px 12px;
-    font-size: 11px;
+    border-radius: var(--r-pilule);
+    padding: 8px 15px;
+    font-size: 12px;
+    font-weight: 500;
     cursor: pointer;
+    transition: all var(--t-rapide);
   }
 
   /* L'action principale reste « Au hasard » ; le permalien s'efface derriere. */
   .hasard {
-    border-color: var(--accent);
-    color: var(--accent);
+    border-color: var(--bord-appuye);
+    background: var(--fond-carte);
+    color: var(--inscrit-texte);
+    font-weight: 600;
+  }
+
+  .hasard:hover {
+    border-color: var(--inscrit);
+    background: color-mix(in srgb, var(--inscrit) 10%, var(--fond-carte));
   }
 
   .lien:hover,
   .theme:hover {
     color: var(--texte);
-    border-color: var(--texte-faible);
+    border-color: var(--bord-appuye);
   }
 
   /* Le tiroir se commande a toutes les largeurs, avec le compte des criteres
-     poses : c'est tout ce qui en reste visible une fois referme. */
+     poses : c'est tout ce qui en reste visible une fois referme. C'est aussi
+     la seule action pleine de la barre. */
   .filtres {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    border: 1px solid var(--accent);
-    background: transparent;
-    color: var(--accent);
-    border-radius: 999px;
-    padding: 4px 12px;
-    font-size: 11px;
+    gap: 7px;
+    border: none;
+    background: var(--plein-fond);
+    color: var(--plein-texte);
+    border-radius: var(--r-pilule);
+    padding: 8px 15px;
+    font-size: 12px;
+    font-weight: 600;
     cursor: pointer;
     white-space: nowrap;
+    box-shadow: var(--ombre-bouton);
+    transition: opacity var(--t-rapide);
+  }
+
+  .filtres:hover {
+    opacity: 0.85;
   }
 
   .filtres em {
     font-style: normal;
     font-variant-numeric: tabular-nums;
+    min-width: 17px;
+    padding: 1px 5px;
+    border-radius: var(--r-pilule);
+    background: var(--accent-plein);
+    color: var(--texte-sur-plein);
+    font-size: 10.5px;
+    text-align: center;
   }
 
+  /* Selecteur de vue : un rail creux, la vue active est une pastille posee. */
   .bascule {
     display: flex;
-    gap: 1px;
-    padding: 1px;
-    border: 1px solid var(--bord);
-    border-radius: 7px;
+    gap: 2px;
+    padding: 3px;
+    background: var(--fond-creux);
+    border-radius: var(--r-pilule);
   }
 
   .bascule button {
     border: none;
     background: transparent;
     color: var(--texte-faible);
-    border-radius: 6px;
-    padding: 4px 11px;
-    font-size: 11px;
+    border-radius: var(--r-pilule);
+    padding: 7px 16px;
+    font-size: 12.5px;
+    font-weight: 500;
     cursor: pointer;
+    transition: all var(--t-rapide);
+  }
+
+  .bascule button:hover {
+    background: color-mix(in srgb, var(--bord) 60%, transparent);
+    color: var(--texte);
   }
 
   .bascule button.actif {
-    background: var(--fond-creux);
-    color: var(--accent);
+    background: var(--fond-carte);
+    color: var(--texte);
+    font-weight: 600;
+    box-shadow: 0 2px 6px -2px rgb(var(--voile) / 18%);
   }
 
   main {
@@ -559,14 +665,19 @@
     flex: 1;
     min-height: 0;
     position: relative;
-    --largeur-fiche: 340px;
+    --largeur-fiche: 392px;
   }
 
-  /* Les commandes de zoom de MapLibre s'ecartent quand la fiche est posee
-     par-dessus. La largeur vit dans une variable pour que la marge la suive
-     sans que la page ait a connaitre le point de rupture. */
+  /* Les commandes MapLibre s'ecartent des deux calques. Les largeurs vivent
+     dans des variables pour que les marges les suivent sans que la page ait a
+     connaitre le point de rupture — et la fiche flottant a 12 px du bord, sa
+     marge les compte. */
   main.fiche-ouverte {
-    --marge-droite: var(--largeur-fiche);
+    --marge-droite: calc(var(--largeur-fiche) + 12px);
+  }
+
+  main.tiroir-pose {
+    --marge-gauche: var(--largeur-tiroir);
   }
 
   .centre {
@@ -576,11 +687,13 @@
     min-height: 0;
   }
 
+  /* La scene est en ardoise dans les deux themes : le fond de carte s'y pose
+     sans filet, et le theme ne pilote que l'interface. */
   .scene {
     position: relative;
     min-height: 0;
     overflow: hidden;
-    background: var(--fond-creux);
+    background: var(--ardoise);
   }
 
   /* Les controles MapLibre sont a z-index 2 et la carte reste montee sous les
@@ -598,15 +711,16 @@
   .liste header {
     position: sticky;
     top: 0;
-    padding: 12px 16px 10px;
+    padding: 14px 20px 12px;
     border-bottom: 1px solid var(--bord);
-    background: var(--fond);
+    background: var(--fond-carte);
   }
 
   .liste h3 {
     margin: 0;
-    font-size: 12px;
-    font-weight: 600;
+    font-family: var(--police-titre);
+    font-size: 17px;
+    font-weight: 500;
     color: var(--texte);
   }
 
@@ -625,7 +739,7 @@
   .liste ul {
     list-style: none;
     margin: 0;
-    padding: 6px;
+    padding: 8px;
   }
 
   .liste button {
@@ -633,12 +747,13 @@
     flex-direction: column;
     gap: 2px;
     width: 100%;
-    padding: 7px 10px;
+    padding: 8px 12px;
     background: none;
     border: none;
-    border-radius: 5px;
+    border-radius: var(--r-s);
     text-align: left;
     cursor: pointer;
+    transition: background var(--t-rapide);
   }
 
   .liste button:hover {
@@ -646,11 +761,12 @@
   }
 
   .liste button.choisi {
-    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    background: var(--accent-doux);
   }
 
   .nom {
-    font-size: 13px;
+    font-size: 13.5px;
+    font-weight: 500;
     color: var(--texte);
   }
 
@@ -666,10 +782,11 @@
     top: 50%;
     transform: translate(-50%, -50%);
     z-index: 3;
-    padding: 14px 22px;
-    border: 1px solid var(--bord);
-    border-radius: 8px;
-    background: var(--fond);
+    padding: 16px 24px;
+    border: none;
+    border-radius: var(--r-m);
+    background: var(--fond-carte);
+    box-shadow: var(--ombre-carte);
     font-size: 12px;
     color: var(--texte-faible);
     text-align: center;
@@ -694,42 +811,73 @@
     position: absolute;
     display: grid;
     min-height: 0;
-    transition: transform 160ms ease;
+    transition: transform var(--t-tiroir);
   }
 
   .facettes {
     inset: 0 auto 0 0;
     z-index: 6;
     grid-template-rows: auto 1fr;
-    width: 246px;
+    width: var(--largeur-tiroir);
     transform: translateX(-100%);
-    box-shadow: 0 0 24px rgb(var(--voile) / 35%);
+    box-shadow: var(--ombre-tiroir);
   }
 
   .facettes.ouvert {
     transform: translateX(0);
   }
 
-  .fermer-tiroir {
-    border: none;
-    border-bottom: 1px solid var(--bord);
-    background: var(--fond-creux);
-    color: var(--accent);
-    padding: 9px 14px;
-    font-size: 11px;
-    text-align: left;
-    cursor: pointer;
+  /* En-tete du tiroir : le titre nomme ce qu'on ouvre, la pastille le referme.
+     Un bandeau texte pleine largeur disait la meme chose en moins clair. */
+  .entete-tiroir {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 22px 14px;
+    background: var(--fond-carte);
   }
 
-  /* La fiche ne compresse plus la carte : elle glisse par-dessus, et seulement
+  .entete-tiroir h2 {
+    margin: 0;
+    font-family: var(--police-titre);
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--texte);
+  }
+
+  .fermer-tiroir {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--texte-faible);
+    font-size: 17px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background var(--t-rapide);
+  }
+
+  .fermer-tiroir:hover {
+    background: var(--fond-creux);
+    color: var(--texte);
+  }
+
+  /* La fiche ne compresse plus la carte : elle flotte par-dessus, et seulement
      quand une notice est choisie. L'invite « selectionnez un point » n'a donc
-     plus 340 px a occuper en permanence. */
+     plus 392 px a occuper en permanence. Le decalage de sortie compte la marge,
+     sinon l'ombre reste visible sur le bord. */
   .fiche-hote {
-    inset: 0 0 0 auto;
+    inset: 12px 12px 12px auto;
     z-index: 7;
     width: var(--largeur-fiche);
-    transform: translateX(101%);
-    box-shadow: 0 0 28px rgb(var(--voile) / 40%);
+    border-radius: var(--r-l);
+    overflow: hidden;
+    transform: translateX(calc(100% + 16px));
+    box-shadow: var(--ombre-fiche);
   }
 
   .fiche-hote.ouvert {
@@ -743,7 +891,7 @@
 
   @media (max-width: 1320px) {
     main {
-      --largeur-fiche: 320px;
+      --largeur-fiche: 352px;
     }
 
     /* Le selecteur de vue occupe desormais la barre : quelque chose doit
@@ -755,25 +903,17 @@
     }
   }
 
-  /* Plus tot que le gabarit etroit : sans cette rangee le champ de recherche
-     se reduisait a trois caracteres. */
+  /* Sous 1150 px le champ prend sa propre rangee plutot que de se reduire :
+     `flex-basis: 100%` suffit, la barre s'enroulant deja. */
   @media (max-width: 1150px) {
     .barre {
-      grid-template-columns: auto auto 1fr;
-      grid-template-rows: auto auto;
-      height: auto;
-      padding: 8px 16px;
-      gap: 8px 14px;
-    }
-
-    .chiffres {
-      grid-column: 3;
-      justify-self: end;
+      padding: 10px 16px;
+      gap: 10px 16px;
     }
 
     .recherche {
-      grid-column: 1 / -1;
-      grid-row: 2;
+      order: 3;
+      flex-basis: 100%;
       max-width: none;
     }
   }
@@ -783,34 +923,27 @@
      Il se ferme donc en touchant a cote, et la frise se replie. */
   @media (max-width: 900px) {
     .barre {
-      grid-template-columns: 1fr auto;
-      grid-template-rows: auto auto auto;
-      height: auto;
-      padding: 8px 12px;
-      gap: 8px 12px;
+      padding: 10px 12px;
+      gap: 10px 12px;
     }
 
-    .marque span {
+    .marque .sous,
+    .marque .filet {
       display: none;
     }
 
-    .bascule {
-      grid-column: 1 / -1;
-      grid-row: 2;
-      justify-self: start;
+    .marque strong {
+      font-size: 23px;
     }
 
-    .recherche {
-      grid-column: 1 / -1;
-      grid-row: 3;
-      max-width: none;
+    .bascule {
+      order: 2;
+      flex-basis: 100%;
     }
 
     .chiffres {
       gap: 8px;
       font-size: 11px;
-      flex-wrap: nowrap;
-      justify-content: flex-end;
     }
 
     /* Sur un ecran etroit, seul le total tient : le detail par statut reste
@@ -837,7 +970,6 @@
 
     .facettes {
       width: min(84vw, 320px);
-      box-shadow: 0 0 32px rgb(var(--voile) / 55%);
     }
 
     .replier {
@@ -866,8 +998,8 @@
       inset: auto 0 0 0;
       width: auto;
       max-height: 82%;
+      border-radius: var(--r-l) var(--r-l) 0 0;
       transform: translateY(101%);
-      box-shadow: 0 -8px 32px rgb(var(--voile) / 55%);
     }
 
     .fiche-hote.ouvert {

@@ -1,134 +1,212 @@
 /**
- * Polices. `Inter` etait declaree ici depuis le debut sans jamais etre
- * chargee : le site tournait en fait dans la police du systeme. Les fichiers
- * viennent de `@fontsource`, donc passent par Vite : ils recoivent un hachage,
- * entrent dans `build`, et sont **mis en cache par le service worker** — ce
- * qui ne serait pas le cas depuis `static/`, volontairement exclu du cache.
+ * Merimee — identite patrimoniale.
  *
- * Seul le sous-ensemble latin d'Inter est importe (2 x ~24 Ko). EB Garamond
- * est variable et n'a pas d'entree latine isolee : ses autres sous-ensembles
- * sont emis comme actifs mais jamais telecharges, leur `unicode-range` ne
- * correspondant a rien de ce corpus.
+ * Blanc calcaire, ardoise, terracotta pour le classe, ocre dore pour l'inscrit.
+ * Deux palettes, un seul endroit : MapLibre et Observable Plot recoivent des
+ * chaines, pas des `var()`, et `theme.svelte.ts` relit ces jetons par
+ * `getComputedStyle` a chaque bascule — une fois par changement, pas par image.
+ * Ajouter une couleur ailleurs qu'ici la rendrait muette au changement de theme.
+ *
+ * Polices : Newsreader (editorial, titres d'edifices, texte d'archive) et Plus
+ * Jakarta Sans (interface, compteurs, facettes). Elles viennent de
+ * `@fontsource` et non de l'import Google : elles passent donc par Vite, y
+ * recoivent un hachage, entrent dans `build`, et sont **mises en cache par le
+ * service worker** — ce qui ne serait pas le cas depuis `static/`, exclu du
+ * cache. Les deux sont variables : les sous-ensembles non latins sont emis
+ * comme actifs mais jamais telecharges, leur `unicode-range` ne correspondant
+ * a rien de ce corpus.
  */
-@import '@fontsource/inter/latin-400.css';
-@import '@fontsource/inter/latin-600.css';
-@import '@fontsource-variable/eb-garamond/wght.css';
+@import '@fontsource-variable/plus-jakarta-sans/wght.css';
+@import '@fontsource-variable/newsreader/wght.css';
 
-/**
- * Deux palettes, un seul endroit.
- *
- * Les couleurs lues par MapLibre et Observable Plot sont ici aussi : ces deux
- * bibliotheques recoivent des chaines, pas des `var()`. `theme.svelte.ts` les
- * relit par `getComputedStyle` a chaque bascule — une fois par changement de
- * theme, pas par image. Ajouter une couleur ailleurs qu'ici la rendrait muette
- * au passage en clair.
- */
+/* --- Theme clair : la reference -------------------------------------------
+   Le fond de carte, lui, reste sombre dans les deux themes : le theme ne
+   pilote que l'interface. C'est ce que dit `--carte-liseret` ci-dessous, blanc
+   casse en clair — un lisere clair autour d'un point n'a de sens que sur une
+   carte sombre. */
 :root {
-  --fond: #0b0e14;
-  --fond-creux: #141924;
-  --bord: #232a38;
-  --texte: #e8e6e1;
-  --texte-faible: #8b93a4;
-  --accent: #e0a458;
-  --erreur: #e0715e;
+  --fond: #f8f7f4;
+  --fond-carte: #fdfcfa; /* surfaces posees : panneaux, en-tete, cartes */
+  --fond-creux: #f1efe9;
+  --bord: #eae6dc;
+  --bord-appuye: #e0d8c6;
+  --texte: #1a1d20;
+  --texte-moyen: #4a463f;
+  --texte-faible: #6e6a62;
+  --texte-tenu: #9a958a;
 
-  /* Statuts de protection. Ils gardent leur teinte d'un theme a l'autre et
-     changent de clarte : un or clair sur fond blanc ne passe pas 4,5:1. */
-  --classe: #e0a458;
-  --inscrit: #4ea8de;
-  --mixte: #b07bd4;
-  --statut-nul: #7d8597;
+  --ardoise: #1a1d20;
+  --ardoise-clair: #2a2e33;
+
+  --accent: #b94723; /* texte et liens : 4,5:1 sur --fond */
+  --accent-plein: #c85a32; /* aplats, pastilles, barres de frise */
+  --accent-doux: rgba(200, 90, 50, 0.09);
+  --erreur: #b13521;
+
+  /* Blanc pose sur un aplat terracotta ou ardoise. Non livre par la maquette,
+     qui l'ecrivait en dur dans les composants : il n'y serait pas passe en
+     sombre, et aurait echappe a la relecture par jeton. */
+  --texte-sur-plein: #ffffff;
+
+  /* L'action pleine de la barre. En clair c'est l'ardoise sur fond calcaire ;
+     en sombre l'ardoise **est** le fond, et un aplat ardoise sur fond sombre ne
+     se voit pas. La paire s'inverse donc avec le theme. */
+  --plein-fond: #1a1d20;
+  --plein-texte: #f8f7f4;
+
+  /* Statuts de protection. Deux jetons par statut : l'aplat et le texte, qui
+     ne peuvent pas etre la meme valeur — un terracotta lisible en 12 px sur
+     blanc est trop sombre pour une pastille. */
+  --classe: #c85a32;
+  --classe-texte: #b94723;
+  --inscrit: #c9933b;
+  --inscrit-texte: #8a5f1e;
+  --mixte: #7a5c7e;
+  --statut-nul: #9a958a;
 
   /* Tranches d'epoque, sur la carte comme dans la legende. */
-  --epoque-1: #7b5ea7;
-  --epoque-2: #4ea8de;
-  --epoque-3: #4bb89a;
-  --epoque-4: #e0a458;
-  --epoque-5: #e0715e;
+  --epoque-1: #7a5c7e;
+  --epoque-2: #4d6b74;
+  --epoque-3: #6f7f52;
+  --epoque-4: #c9933b;
+  --epoque-5: #c85a32;
 
-  /* Carte. L'URL du fond vectoriel n'est pas ici : une valeur avec `//`
-     dans une propriete personnalisee est un piege inutile, elle vit dans
-     `theme.svelte.ts` a cote des deux palettes resolues. */
-  --carte-liseret: #0b0e14;
-  --carte-selection: #f4f1ea;
-  --chaleur-0: rgba(11, 14, 20, 0);
-  --chaleur-1: #1d3b57;
-  --chaleur-2: #4ea8de;
-  --chaleur-3: #e0a458;
-  --chaleur-4: #f4f1ea;
+  /* Carte : lisere des points, cerclage de la selection, rampe de densite.
+     L'URL du fond vectoriel n'est pas ici : une valeur avec `//` dans une
+     propriete personnalisee est un piege inutile, elle vit dans
+     `theme.svelte.ts`. */
+  --carte-liseret: #fdfcfa;
+  --carte-selection: #f8f7f4;
+  --chaleur-0: rgba(26, 29, 32, 0);
+  --chaleur-1: #4a3a24;
+  --chaleur-2: #c9933b;
+  --chaleur-3: #c85a32;
+  --chaleur-4: #f6e3cf;
 
-  /* Frise : barre hors selection. */
-  --barre-sourde: #3a4150;
+  /* Frise : bandeau ardoise dans les deux themes. Les graduations y sont plus
+     lisibles qu'en gris clair sur blanc, et l'histogramme ambre y gagne son
+     contraste. */
+  --barre-sourde: #5a5347;
+  --frise-fond: #1a1d20;
+  --frise-texte: #ede9df;
+  --frise-texte-faible: #9c978c;
+  --frise-graduation: rgba(248, 247, 244, 0.1);
 
-  /* Matrice : rampe du plus faible au plus fort effectif, puis le texte pose
-     par-dessus les cellules les plus denses, et le cerclage d'une cellule
-     retenue par les filtres. */
-  --matrice-0: #161b26;
-  --matrice-1: #2f5d7c;
-  --matrice-2: #4ea8de;
-  --matrice-3: #e0a458;
-  --matrice-4: #f4f1ea;
-  --matrice-texte: #0b0e14;
-  --matrice-cerclee: #f4f1ea;
+  /* Matrice : rampe monochrome ambre, l'effectif fort est le plus sombre.
+     Elle est posee sur `--fond`, pas sur le bandeau de frise. */
+  --matrice-0: #f4efe4;
+  --matrice-1: #e6d0a8;
+  --matrice-2: #c9933b;
+  --matrice-3: #a9531f;
+  --matrice-4: #431b09;
+  --matrice-texte: #f8f7f4;
+  --matrice-cerclee: #1a1d20;
 
   /* Composantes RVB des ombres et du voile. Une ombre noire sur fond clair
      salit le panneau qu'elle est censee detacher. */
-  --voile: 0 0 0;
+  --voile: 26 29 32;
 
-  color-scheme: dark;
-}
+  /* Loupe des champs de recherche. Un `<input>` n'accepte pas de
+     pseudo-element : une image de fond est le seul chemin, et son trait est
+     une couleur — elle doit donc vivre ici, comme les autres, sinon elle
+     resterait grise sombre en theme sombre. */
+  --icone-recherche: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Ccircle cx='7' cy='7' r='4.6' stroke='%236e6a62' stroke-width='1.4'/%3E%3Cline x1='10.6' y1='10.6' x2='14' y2='14' stroke='%236e6a62' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
 
-:root[data-theme='clair'] {
-  --fond: #faf8f4;
-  --fond-creux: #efece4;
-  --bord: #d7d1c4;
-  --texte: #1f2229;
-  --texte-faible: #5e6473;
-  --accent: #8f5a13;
-  --erreur: #b13521;
+  /* Ombres : douces, diffuses, jamais de filet gris epais. */
+  --ombre-carte: 0 10px 30px -5px rgb(var(--voile) / 8%);
+  --ombre-tiroir: 0 10px 30px -5px rgb(var(--voile) / 18%);
+  --ombre-fiche: 0 10px 30px -5px rgb(var(--voile) / 18%), 0 30px 70px -20px rgb(var(--voile) / 22%);
+  --ombre-bouton: 0 6px 16px -8px rgb(var(--voile) / 50%);
 
-  --classe: #8f5a13;
-  --inscrit: #16648f;
-  --mixte: #6a3f95;
-  --statut-nul: #767b88;
+  /* Rayons et durees : une seule echelle pour tout le produit. */
+  --r-s: 8px;
+  --r-m: 12px;
+  --r-l: 18px;
+  --r-pilule: 999px;
+  --t-rapide: 200ms ease;
+  --t-tiroir: 260ms ease;
 
-  --epoque-1: #6a4c96;
-  --epoque-2: #16648f;
-  --epoque-3: #1d7d67;
-  --epoque-4: #8f5a13;
-  --epoque-5: #a83f2c;
+  /* Largeur du tiroir de facettes. Elle est lue a deux endroits — la largeur
+     du calque et la marge dont s'ecartent la legende et l'attribution — donc
+     elle n'est ecrite qu'ici. */
+  --largeur-tiroir: 296px;
 
-  --carte-liseret: #ffffff;
-  --carte-selection: #1f2229;
-  --chaleur-0: rgba(250, 248, 244, 0);
-  --chaleur-1: #a9c8de;
-  --chaleur-2: #2f80b8;
-  --chaleur-3: #cf8c2a;
-  --chaleur-4: #5c2d0c;
-
-  --barre-sourde: #cbc5b7;
-
-  /* Rampe inversee : en clair, l'effectif fort est le plus sombre. Monochrome
-     ambre, contrairement au theme sombre : interpoler du bleu vers l'ambre
-     traverse un gris terne, que le fond sombre masque et que le fond clair
-     etale au milieu de la matrice. */
-  --matrice-0: #f4efe4;
-  --matrice-1: #e2cfa6;
-  --matrice-2: #cfa257;
-  --matrice-3: #9a6414;
-  --matrice-4: #3d2708;
-  --matrice-texte: #faf8f4;
-  --matrice-cerclee: #1f2229;
-
-  --voile: 31 34 41;
+  --police: 'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+  --police-titre: 'Newsreader Variable', 'Newsreader', Georgia, 'Times New Roman', serif;
 
   color-scheme: light;
 }
 
-/* Les deux familles ne dependent pas du theme : elles sont posees a part. */
-:root {
-  --police: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --police-titre: 'EB Garamond Variable', 'EB Garamond', Georgia, 'Times New Roman', serif;
+/* --- Theme sombre : meme identite, valeurs inversees --------------------- */
+:root[data-theme='sombre'] {
+  --fond: #15171a;
+  --fond-carte: #1d2024;
+  --fond-creux: #23262a;
+  --bord: #313539;
+  --bord-appuye: #454a4f;
+  --texte: #f2f0ea;
+  --texte-moyen: #d6d2c8;
+  --texte-faible: #a5a09a;
+  --texte-tenu: #7e7a74;
+
+  --ardoise: #101215;
+  --ardoise-clair: #23262a;
+
+  --accent: #e9906b;
+  --accent-plein: #e07a4e;
+  --accent-doux: rgba(233, 144, 107, 0.14);
+  --erreur: #e0715e;
+
+  --texte-sur-plein: #231a08;
+
+  --plein-fond: #f2f0ea;
+  --plein-texte: #15171a;
+
+  --classe: #e07a4e;
+  --classe-texte: #e9906b;
+  --inscrit: #d4a359;
+  --inscrit-texte: #e9b063;
+  --mixte: #ab8fb0;
+  --statut-nul: #7e7a74;
+
+  --epoque-1: #ab8fb0;
+  --epoque-2: #7fa3ad;
+  --epoque-3: #9db178;
+  --epoque-4: #d4a359;
+  --epoque-5: #e07a4e;
+
+  --carte-liseret: #101215;
+  --carte-selection: #f2f0ea;
+  --chaleur-0: rgba(16, 18, 21, 0);
+  --chaleur-1: #4a3a24;
+  --chaleur-2: #a9772a;
+  --chaleur-3: #e07a4e;
+  --chaleur-4: #f6e3cf;
+
+  --barre-sourde: #3d4247;
+  --frise-fond: #101215;
+  --frise-texte: #f2f0ea;
+  --frise-texte-faible: #a5a09a;
+  --frise-graduation: rgba(242, 240, 234, 0.12);
+
+  --matrice-0: #1b1e22;
+  --matrice-1: #4a3a24;
+  --matrice-2: #a9772a;
+  --matrice-3: #d4a359;
+  --matrice-4: #f6e3cf;
+  --matrice-texte: #101215;
+  --matrice-cerclee: #f2f0ea;
+
+  --voile: 0 0 0;
+
+  --icone-recherche: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Ccircle cx='7' cy='7' r='4.6' stroke='%23a5a09a' stroke-width='1.4'/%3E%3Cline x1='10.6' y1='10.6' x2='14' y2='14' stroke='%23a5a09a' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
+
+  --ombre-carte: 0 10px 30px -5px rgb(var(--voile) / 50%);
+  --ombre-tiroir: 0 10px 30px -5px rgb(var(--voile) / 60%);
+  --ombre-fiche: 0 10px 30px -5px rgb(var(--voile) / 55%), 0 30px 70px -20px rgb(var(--voile) / 60%);
+  --ombre-bouton: 0 6px 16px -8px rgb(var(--voile) / 70%);
+
+  color-scheme: dark;
 }
 
 * {
@@ -150,6 +228,16 @@ input {
   font-family: inherit;
 }
 
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--texte);
+  text-decoration: underline;
+}
+
 ::-webkit-scrollbar {
   width: 9px;
   height: 9px;
@@ -157,10 +245,22 @@ input {
 
 ::-webkit-scrollbar-thumb {
   background: var(--bord);
-  border-radius: 999px;
+  border-radius: var(--r-pilule);
 }
 
-/* Le fond de carte CartoDB impose ses propres couleurs de controle. */
+::-webkit-scrollbar-thumb:hover {
+  background: var(--bord-appuye);
+}
+
+/* Le fond de carte CartoDB impose ses propres couleurs de controle ; on ne
+   reprend que le rayon et l'ombre du produit. */
 .maplibregl-ctrl-attrib {
   font-size: 10px;
+}
+
+.maplibregl-ctrl-group {
+  border-radius: var(--r-m) !important;
+  border: 1px solid var(--bord) !important;
+  box-shadow: var(--ombre-carte) !important;
+  overflow: hidden;
 }

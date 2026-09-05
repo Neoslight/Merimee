@@ -4,10 +4,13 @@
 
   interface Props {
     facettes: Partial<Record<FacetKey, Compte[]>>;
+    /** Valeurs distinctes par facette, sous les filtres courants. Dit ce que le
+     *  plafond des 40 valeurs cache : « 40 sur 7 040 ». */
+    cardinaux: Partial<Record<FacetKey, number>>;
     chargement: boolean;
   }
 
-  let { facettes, chargement }: Props = $props();
+  let { facettes, cardinaux, chargement }: Props = $props();
 
   type Descripteur = { cle: FacetKey; titre: string; replie?: boolean; filtrable?: boolean };
 
@@ -92,19 +95,33 @@
   }
 
   const nf = new Intl.NumberFormat('fr-FR');
+
+  /** Ce qu'annonce le titre d'une section : le total des valeurs distinctes,
+   *  et, section ouverte, la part reellement affichee. */
+  function cardinal(cle: FacetKey, montrees: number, ouverte: boolean): string {
+    const total = cardinaux[cle];
+    if (total === undefined) return '';
+    if (!ouverte) return nf.format(total);
+    return montrees < total ? `${montrees} sur ${nf.format(total)}` : nf.format(total);
+  }
 </script>
 
 <aside class="panneau" class:occupe={chargement}>
   {#each SECTIONS as section (section.cle)}
     {@const actives = selection(section.cle)}
+    {@const ouverte = ouvertes.has(section.cle)}
+    {@const options = visibles(section.cle)}
     <section>
       <button class="titre" onclick={() => basculerSection(section.cle)}>
-        <span class="chevron" class:ouvert={ouvertes.has(section.cle)}>›</span>
-        {section.titre}
+        <span class="chevron" class:ouvert={ouverte}>›</span>
+        <span class="nom-section">{section.titre}</span>
         {#if actives.length}<em>{actives.length}</em>{/if}
+        {#if cardinal(section.cle, options.length, ouverte)}
+          <span class="cardinal">{cardinal(section.cle, options.length, ouverte)}</span>
+        {/if}
       </button>
 
-      {#if ouvertes.has(section.cle)}
+      {#if ouverte}
         {#if section.filtrable}
           <input
             class="filtre"
@@ -114,11 +131,14 @@
           />
         {/if}
         <ul>
-          {#each visibles(section.cle) as item (item.valeur)}
+          {#each options as item (item.valeur)}
             <li>
+              <!-- Le statut de protection est la seule facette au code couleur :
+                   la pilule cochee prend l'aplat terracotta du classe. -->
               <button
                 class="option"
                 class:choisi={actives.includes(item.valeur)}
+                class:statut-classe={section.cle === 'statut' && item.valeur === 'classé'}
                 aria-pressed={actives.includes(item.valeur)}
                 onclick={() => toggle(CIBLES[section.cle], item.valeur)}
               >
@@ -154,51 +174,78 @@
 <style>
   .panneau {
     overflow-y: auto;
-    border-right: 1px solid var(--bord);
-    background: var(--fond);
-    padding-bottom: 24px;
-    transition: opacity 120ms;
+    background: var(--fond-carte);
+    padding: 4px 22px 28px;
+    transition: opacity var(--t-rapide);
   }
 
   .panneau.occupe {
-    opacity: 0.55;
+    opacity: 0.6;
   }
 
   section {
-    border-bottom: 1px solid var(--bord);
+    padding: 18px 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--bord) 65%, transparent);
+  }
+
+  section:last-of-type {
+    border-bottom: none;
   }
 
   .titre {
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 9px;
     width: 100%;
-    padding: 11px 14px;
+    padding: 0 0 11px;
     background: none;
     border: none;
     color: var(--texte);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.05em;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
     text-align: left;
     cursor: pointer;
+    transition: color var(--t-rapide);
+  }
+
+  .titre:hover {
+    color: var(--accent);
+  }
+
+  /* Le libelle prend la place restante : c'est lui qui pousse le badge et la
+     cardinalite a droite. Deux `margin-left: auto` se partageraient l'espace
+     et poseraient le badge au milieu. */
+  .nom-section {
+    flex: 1;
   }
 
   .titre em {
-    margin-left: auto;
     font-style: normal;
-    font-size: 10px;
-    color: var(--fond);
-    background: var(--accent);
-    border-radius: 999px;
-    padding: 1px 6px;
+    font-size: 10.5px;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--texte-sur-plein);
+    background: var(--accent-plein);
+    border-radius: var(--r-pilule);
+    padding: 1px 7px;
+  }
+
+  /* Ce que la liste plafonnee a 40 valeurs ne disait pas : combien il y en a. */
+  .cardinal {
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--texte-tenu);
+    font-variant-numeric: tabular-nums;
   }
 
   .chevron {
     display: inline-block;
-    transition: transform 120ms;
-    color: var(--texte-faible);
+    color: var(--texte-tenu);
+    transition: transform var(--t-rapide);
   }
 
   .chevron.ouvert {
@@ -206,97 +253,133 @@
   }
 
   .filtre {
-    width: calc(100% - 28px);
-    margin: 0 14px 8px;
-    padding: 5px 8px;
-    background: var(--fond-creux);
+    width: 100%;
+    height: 34px;
+    margin: 0 0 10px;
+    padding: 0 12px 0 32px;
+    background:
+      var(--icone-recherche) no-repeat 11px 50% / 13px 13px,
+      var(--fond-creux);
     border: 1px solid var(--bord);
-    border-radius: 5px;
+    border-radius: var(--r-s);
     color: var(--texte);
     font-size: 12px;
+    transition: border-color var(--t-rapide);
   }
 
+  .filtre:focus {
+    outline: none;
+    border-color: var(--inscrit);
+  }
+
+  /* Les options deviennent des pilules selectionnables : une liste de lignes
+     ne dit pas qu'un critere est un objet qu'on pose et qu'on retire. */
   ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
     list-style: none;
     margin: 0;
-    padding: 0 6px 10px;
-    max-height: 260px;
+    padding: 0;
+    max-height: 268px;
     overflow-y: auto;
   }
 
   .option {
-    display: flex;
+    display: inline-flex;
     align-items: baseline;
-    gap: 10px;
-    width: 100%;
-    padding: 4px 8px;
-    background: none;
-    border: none;
-    border-radius: 4px;
-    color: var(--texte-faible);
-    font-size: 12px;
+    gap: 6px;
+    width: auto;
+    padding: 6px 13px;
+    border: 1px solid var(--bord);
+    border-radius: var(--r-pilule);
+    background: var(--fond-carte);
+    color: var(--texte-moyen);
+    font-size: 12.5px;
+    font-weight: 500;
     text-align: left;
     cursor: pointer;
+    transition: all var(--t-rapide);
   }
 
   .option:hover {
-    background: var(--fond-creux);
-    color: var(--texte);
+    border-color: var(--inscrit);
+    background: color-mix(in srgb, var(--inscrit) 10%, var(--fond-carte));
+    color: var(--inscrit-texte);
   }
 
   .option.choisi {
-    color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    border-color: var(--inscrit);
+    background: color-mix(in srgb, var(--inscrit) 14%, transparent);
+    color: var(--inscrit-texte);
+    font-weight: 600;
+  }
+
+  /* Le statut de protection est la seule facette au code couleur. */
+  .option.choisi.statut-classe {
+    border-color: var(--classe);
+    background: var(--classe);
+    color: var(--texte-sur-plein);
   }
 
   .etiquette {
-    flex: 1;
+    flex: 0 1 auto;
+    max-width: 200px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .compte {
-    font-variant-numeric: tabular-nums;
     font-size: 11px;
-    opacity: 0.75;
+    font-variant-numeric: tabular-nums;
+    color: var(--texte-tenu);
+  }
+
+  .option.choisi .compte {
+    color: inherit;
+    opacity: 0.7;
   }
 
   .vide {
-    padding: 4px 14px;
-    font-size: 11px;
-    color: var(--texte-faible);
+    padding: 4px 2px;
+    font-size: 11.5px;
+    color: var(--texte-tenu);
   }
 
   .palissy {
-    padding: 12px 14px;
+    padding: 18px 0 0;
   }
 
   .palissy label {
     display: flex;
     justify-content: space-between;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.05em;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--texte);
   }
 
   .palissy em {
     font-style: normal;
-    color: var(--accent);
+    letter-spacing: 0;
+    text-transform: none;
+    font-size: 11.5px;
+    color: var(--inscrit-texte);
   }
 
   .palissy input {
     width: 100%;
-    margin-top: 10px;
-    accent-color: var(--accent);
+    height: 16px;
+    margin-top: 12px;
+    accent-color: var(--inscrit);
   }
 
   .palissy p {
-    margin: 6px 0 0;
-    font-size: 11px;
-    line-height: 1.4;
+    margin: 8px 0 0;
+    font-size: 11.5px;
+    line-height: 1.5;
     color: var(--texte-faible);
   }
 </style>

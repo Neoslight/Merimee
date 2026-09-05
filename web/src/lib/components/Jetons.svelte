@@ -37,24 +37,26 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 6px;
-    padding: 7px 16px;
+    gap: 8px;
+    padding: 10px 24px;
     border-bottom: 1px solid var(--bord);
-    background: var(--fond);
+    background: var(--fond-carte);
   }
 
   button {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    max-width: 260px;
-    padding: 3px 6px 3px 10px;
-    border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--bord));
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--accent) 12%, transparent);
-    color: var(--accent);
-    font-size: 11px;
+    gap: 9px;
+    max-width: 300px;
+    padding: 5px 8px 5px 13px;
+    border: 1px solid color-mix(in srgb, var(--inscrit) 32%, transparent);
+    border-radius: var(--r-pilule);
+    background: color-mix(in srgb, var(--inscrit) 11%, transparent);
+    color: var(--inscrit-texte);
+    font-size: 12px;
+    font-weight: 600;
     cursor: pointer;
+    transition: all var(--t-rapide);
   }
 
   button span {
@@ -63,15 +65,23 @@
     white-space: nowrap;
   }
 
+  /* La croix est un glyphe fin dessine en CSS, pas un « x » typographique
+     epais : deux filets croises sur le caractere, masque par `font-size: 0`. */
   button i {
-    font-style: normal;
-    font-size: 13px;
-    line-height: 1;
+    display: block;
+    width: 10px;
+    height: 10px;
+    font-size: 0;
+    background:
+      linear-gradient(currentColor, currentColor) no-repeat center / 11px 1.3px,
+      linear-gradient(currentColor, currentColor) no-repeat center / 1.3px 11px;
+    transform: rotate(45deg);
     opacity: 0.7;
+    transition: opacity var(--t-rapide);
   }
 
   button:hover {
-    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    background: color-mix(in srgb, var(--inscrit) 20%, transparent);
   }
 
   button:hover i {
@@ -80,10 +90,11 @@
 
   /* La remise a zero n'est pas un critere : elle se distingue des puces. */
   .raz {
-    padding: 3px 10px;
+    padding: 5px 13px;
     border-color: var(--bord);
     background: transparent;
-    color: var(--texte-faible);
+    color: var(--texte-tenu);
+    font-weight: 500;
   }
 
   .raz:hover {
