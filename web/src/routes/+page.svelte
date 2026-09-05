@@ -21,6 +21,7 @@
   import {
     countActive,
     filters,
+    replier,
     reset,
     toggleSiecle,
     type FacetKey
@@ -58,11 +59,7 @@
   $effect(() => {
     const saisie = terme;
     const minuteur = setTimeout(() => {
-      filters.recherche = saisie
-        .normalize('NFD')
-        .replace(/[̀-ͯ]/g, '')
-        .toLowerCase()
-        .trim();
+      filters.recherche = replier(saisie);
     }, 180);
     return () => clearTimeout(minuteur);
   });

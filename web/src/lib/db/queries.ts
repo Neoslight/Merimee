@@ -2,7 +2,7 @@
  *  de materialiser des vues intermediaires, DuckDB repond en quelques ms. */
 import { fragmentDetails, query, lit } from './duckdb';
 import { fragmentDe } from './shards';
-import { buildWhere, type FacetKey, type Filters } from '$lib/state/filters.svelte';
+import { buildWhere, replier, type FacetKey, type Filters } from '$lib/state/filters.svelte';
 
 export interface Point {
   reference: string;
@@ -60,21 +60,53 @@ export async function totaux(f: Filters): Promise<Totaux> {
   return row as unknown as Totaux;
 }
 
+/** Valeurs cochees d'une facette. Les cles scalaires du filtre (`nbPalissy`,
+ *  `recherche`, `bbox`, `anneeProtection`) ne sont jamais facettees : le test
+ *  de tableau suffit a les ecarter. */
+function selectionnees(f: Filters, cle: FacetKey): string[] {
+  const valeur = (f as unknown as Record<string, unknown>)[cle];
+  return Array.isArray(valeur) ? (valeur as string[]) : [];
+}
+
 /**
  * Comptes d'une facette, evaluee sans son propre filtre : les options non
  * selectionnees gardent ainsi un compte exploitable.
+ *
+ * `terme` fouille le vocabulaire complet cote DuckDB. Le filtrer en JavaScript
+ * sur la liste renvoyee ne verrait que `limite` valeurs : 7 000 des 7 040
+ * auteurs du corpus tombent hors du plafond, et 5 607 n'ont qu'une notice.
+ * `strip_accents` evite d'avoir a stocker une colonne repliee en plus.
  */
-export async function facette(f: Filters, cle: FacetKey, limite = 40): Promise<Compte[]> {
+export async function facette(
+  f: Filters,
+  cle: FacetKey,
+  limite = 40,
+  terme = ''
+): Promise<Compte[]> {
   const where = buildWhere(f, cle);
   const liste = LISTES[cle];
   const source = liste
     ? `(SELECT unnest(${liste}) AS valeur FROM monuments WHERE ${where})`
     : `(SELECT ${SCALAIRES[cle]} AS valeur FROM monuments WHERE ${where})`;
+
+  // Une valeur cochee reste listee meme hors resultat, sinon saisir un terme
+  // rendrait impossible de la decocher.
+  const choisies = selectionnees(f, cle);
+  const epinglee = choisies.length ? `valeur IN (${choisies.map(lit).join(', ')})` : 'FALSE';
+
+  // `%` et `_` saisis par l'utilisateur sont des jokers LIKE : les neutraliser.
+  const motif = replier(terme).replace(/[\\%_]/g, (c) => `\\${c}`);
+  const cherche = motif
+    ? `strip_accents(lower(valeur)) LIKE ${lit(`%${motif}%`)} ESCAPE '\\'`
+    : 'TRUE';
+
   return query<Compte>(`
     SELECT valeur, count(*)::INT AS n
     FROM ${source}
-    WHERE valeur IS NOT NULL AND valeur <> ''
-    GROUP BY 1 ORDER BY n DESC, valeur ASC LIMIT ${limite}
+    WHERE valeur IS NOT NULL AND valeur <> '' AND (${epinglee} OR ${cherche})
+    GROUP BY 1
+    ORDER BY (${epinglee}) DESC, n DESC, valeur ASC
+    LIMIT ${limite}
   `);
 }
 

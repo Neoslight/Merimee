@@ -108,6 +108,58 @@ try {
     return el && el.textContent.replace(/\D/g, '') === '46760';
   }, null, { timeout: 20_000 });
 
+  // --- Recherche a l'interieur d'une facette --------------------------------
+  // `Baltard Victor` (5 notices) est hors des 40 valeurs les plus frequentes
+  // parmi 7 040 auteurs : le trouver prouve que la recherche descend dans
+  // DuckDB au lieu de trier la liste deja rapatriee.
+  const sectionAuteurs = page.locator('section:has(button.titre:text("Architecte"))');
+  await sectionAuteurs.locator('button.titre').click();
+  await sectionAuteurs.locator('input.filtre').fill('baltard');
+  await page.waitForTimeout(1000);
+  const trouves = await sectionAuteurs.locator('.option .etiquette').allTextContents();
+  verifier(
+    'la recherche de facette atteint la longue traine',
+    trouves.some((t) => t.startsWith('Baltard')),
+    trouves.slice(0, 3).join(' | ') || 'aucune option'
+  );
+
+  // Sans accent ni casse : `Viollet-le-Duc Eugene` porte un accent en base.
+  await sectionAuteurs.locator('input.filtre').fill('viollet');
+  await page.waitForTimeout(1000);
+  const sansAccent = await sectionAuteurs.locator('.option .etiquette').allTextContents();
+  verifier(
+    'recherche de facette insensible aux accents',
+    sansAccent.some((t) => t.startsWith('Viollet')),
+    sansAccent.slice(0, 2).join(' | ') || 'aucune option'
+  );
+
+  // Une valeur cochee doit rester listee, sinon on ne peut plus la decocher.
+  await sectionAuteurs.locator('.option', { hasText: 'Viollet-le-Duc' }).first().click();
+  await page.waitForFunction(
+    () => {
+      const el = document.querySelector('.chiffres span b');
+      return el && Number.parseInt(el.textContent.replace(/\D/g, ''), 10) < 46760;
+    },
+    null,
+    { timeout: 20_000 }
+  );
+  await sectionAuteurs.locator('input.filtre').fill('guimard');
+  await page.waitForTimeout(1000);
+  const epinglee = await sectionAuteurs.locator('.option .etiquette').allTextContents();
+  verifier(
+    'la valeur cochee reste listee malgre le terme',
+    epinglee.some((t) => t.startsWith('Viollet')) && epinglee.some((t) => t.startsWith('Guimard')),
+    epinglee.slice(0, 3).join(' | ')
+  );
+
+  await sectionAuteurs.locator('input.filtre').fill('');
+  await page.getByRole('button', { name: /effacer \d+ filtres?/ }).click();
+  await page.waitForFunction(() => {
+    const el = document.querySelector('.chiffres span b');
+    return el && el.textContent.replace(/\D/g, '') === '46760';
+  }, null, { timeout: 20_000 });
+  await sectionAuteurs.locator('button.titre').click();
+
   // --- Fiche de detail et lecture partielle de details.parquet -------------
   const cumulDetails = () =>
     [...octets].filter(([c]) => c.startsWith('/data/details/'))

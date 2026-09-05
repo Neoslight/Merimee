@@ -39,6 +39,16 @@ export interface Filters {
   bbox: [number, number, number, number] | null;
 }
 
+/** Minuscules sans accents : la forme sous laquelle `search_key` est stockee,
+ *  et celle que `strip_accents(lower(...))` produit cote DuckDB. */
+export function replier(texte: string): string {
+  return texte
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
 export const ANNEE_MIN = 1840;
 export const ANNEE_MAX = 2026;
 

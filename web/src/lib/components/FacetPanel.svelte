@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Compte } from '$lib/db/queries';
+  import { facette, type Compte } from '$lib/db/queries';
   import { filters, toggle, type FacetKey } from '$lib/state/filters.svelte';
 
   interface Props {
@@ -38,6 +38,44 @@
   let ouvertes = $state(new Set(SECTIONS.filter((s) => !s.replie).map((s) => s.cle)));
   let recherches = $state<Record<string, string>>({});
 
+  // Resultats de recherche par section, qui remplacent la liste recue en props
+  // tant qu'un terme est saisi.
+  let trouvees = $state<Partial<Record<FacetKey, Compte[]>>>({});
+  let jeton = 0;
+
+  // La liste des props est plafonnee aux 40 valeurs les plus frequentes : la
+  // filtrer en JavaScript ne verrait jamais `Baltard Victor` (5 notices) parmi
+  // 7 040 auteurs. La recherche redescend donc dans DuckDB, pour la seule
+  // section concernee — aucune requete tant qu'aucun terme n'est tape.
+  $effect(() => {
+    // Les comptes viennent d'etre recalcules : nos surcharges doivent suivre.
+    facettes;
+
+    const actifs = SECTIONS
+      .map((section) => ({ cle: section.cle, terme: (recherches[section.cle] ?? '').trim() }))
+      .filter((x) => x.terme.length > 0);
+
+    const mien = ++jeton;
+    if (!actifs.length) {
+      trouvees = {};
+      return;
+    }
+
+    const minuteur = setTimeout(() => {
+      Promise.all(actifs.map((x) => facette(filters, x.cle, 60, x.terme)))
+        .then((listes) => {
+          if (mien !== jeton) return;
+          trouvees = Object.fromEntries(actifs.map((x, i) => [x.cle, listes[i]]));
+        })
+        .catch(() => {
+          // Repli defini : la section revient a la liste des props plutot que
+          // de rester sur un resultat qui ne correspond plus au terme.
+          if (mien === jeton) trouvees = {};
+        });
+    }, 180);
+    return () => clearTimeout(minuteur);
+  });
+
   function basculerSection(cle: FacetKey) {
     const suivant = new Set(ouvertes);
     if (suivant.has(cle)) suivant.delete(cle);
@@ -50,10 +88,7 @@
   }
 
   function visibles(cle: FacetKey): Compte[] {
-    const items = facettes[cle] ?? [];
-    const terme = (recherches[cle] ?? '').trim().toLowerCase();
-    if (!terme) return items;
-    return items.filter((item) => item.valeur.toLowerCase().includes(terme));
+    return trouvees[cle] ?? facettes[cle] ?? [];
   }
 
   const nf = new Intl.NumberFormat('fr-FR');
@@ -84,6 +119,7 @@
               <button
                 class="option"
                 class:choisi={actives.includes(item.valeur)}
+                aria-pressed={actives.includes(item.valeur)}
                 onclick={() => toggle(CIBLES[section.cle], item.valeur)}
               >
                 <span class="etiquette">{item.valeur}</span>
