@@ -1,0 +1,173 @@
+/**
+ * Fumigation de bout en bout sur le build statique.
+ *
+ * Verifie ce que la compilation ne peut pas prouver : que DuckDB-Wasm demarre
+ * dans le navigateur, que les Parquet se chargent, que le filtrage croise
+ * repond, et que la fiche de detail ne rapatrie qu'une fraction du fichier
+ * `details.parquet` grace aux requetes HTTP Range.
+ *
+ * Usage : node tests/smoke.mjs [url]   (defaut http://localhost:4173)
+ */
+import { chromium } from 'playwright';
+import { demarrer } from './serveur.mjs';
+
+const { serveur, octets, url: BASE } = await demarrer(new URL('../build', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
+const resultats = [];
+let echecs = 0;
+
+function verifier(nom, condition, detail = '') {
+  resultats.push({ nom, ok: Boolean(condition), detail });
+  if (!condition) echecs += 1;
+}
+
+const attendre = (page, selecteur, timeout = 45_000) =>
+  page.waitForSelector(selecteur, { timeout });
+
+async function total(page) {
+  const texte = await page.textContent('.chiffres span b');
+  return Number.parseInt(texte.replace(/\D/g, ''), 10);
+}
+
+const navigateur = await chromium.launch();
+const page = await navigateur.newPage({ viewport: { width: 1600, height: 950 } });
+
+const erreursConsole = [];
+page.on('console', (msg) => msg.type() === 'error' && erreursConsole.push(msg.text()));
+page.on('pageerror', (e) => erreursConsole.push(String(e)));
+
+let fatale = null;
+
+try {
+  const debut = Date.now();
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+  await attendre(page, '.chiffres b');
+  const amorce = Date.now() - debut;
+
+  const initial = await total(page);
+  verifier('46 760 notices chargees', initial === 46760, `obtenu ${initial}`);
+  verifier('amorcage sous 30 s', amorce < 30_000, `${amorce} ms`);
+
+  const points = await page.evaluate(() => {
+    const src = document.querySelector('.maplibregl-canvas');
+    return src ? 1 : 0;
+  });
+  verifier('canvas MapLibre rendu', points === 1);
+
+  // --- Filtrage croise -----------------------------------------------------
+  await page.getByRole('button', { name: 'architecture militaire' }).click();
+  await page.waitForFunction(
+    (avant) => {
+      const el = document.querySelector('.chiffres span b');
+      return el && Number.parseInt(el.textContent.replace(/\D/g, ''), 10) !== avant;
+    },
+    initial,
+    { timeout: 20_000 }
+  );
+  const militaire = await total(page);
+  verifier('filtre domaine militaire', militaire === 1688, `obtenu ${militaire}`);
+
+  // La facette conserve ses autres options : preuve que son propre filtre est
+  // exclu de son propre comptage.
+  const autresDomaines = await page
+    .locator('section:has(button.titre:text("Domaine")) .option')
+    .count();
+  verifier('facette domaine garde ses alternatives', autresDomaines > 5, `${autresDomaines} options`);
+
+  // Croisement avec un siecle depuis la frise.
+  const avantSiecle = militaire;
+  await page.locator('.cliquable rect').nth(9).click();
+  await page.waitForFunction(
+    (avant) => {
+      const el = document.querySelector('.chiffres span b');
+      return el && Number.parseInt(el.textContent.replace(/\D/g, ''), 10) !== avant;
+    },
+    avantSiecle,
+    { timeout: 20_000 }
+  );
+  const croise = await total(page);
+  verifier('croisement domaine x siecle', croise > 0 && croise < militaire, `obtenu ${croise}`);
+
+  await page.getByRole('button', { name: /effacer \d+ filtres?/ }).click();
+  await page.waitForFunction(() => {
+    const el = document.querySelector('.chiffres span b');
+    return el && el.textContent.replace(/\D/g, '') === '46760';
+  }, null, { timeout: 20_000 });
+  verifier('remise a zero des filtres', (await total(page)) === 46760);
+
+  // --- Recherche sans accents ---------------------------------------------
+  await page.fill('.recherche', 'chateau bordeaux');
+  await page.waitForFunction(() => {
+    const el = document.querySelector('.chiffres span b');
+    return el && Number.parseInt(el.textContent.replace(/\D/g, ''), 10) < 46760;
+  }, null, { timeout: 20_000 });
+  const recherche = await total(page);
+  verifier('recherche sans accents ni casse', recherche > 0 && recherche < 200, `${recherche} resultats`);
+  await page.fill('.recherche', '');
+  await page.waitForFunction(() => {
+    const el = document.querySelector('.chiffres span b');
+    return el && el.textContent.replace(/\D/g, '') === '46760';
+  }, null, { timeout: 20_000 });
+
+  // --- Fiche de detail et lecture partielle de details.parquet -------------
+  const cumulDetails = () =>
+    [...octets].filter(([c]) => c.startsWith('/data/details/'))
+               .reduce((somme, [, n]) => somme + n, 0);
+  const avantFiche = cumulDetails();
+  await page.click('.bascule');
+  await attendre(page, '.liste button');
+  await page.locator('.liste button').first().click();
+  await attendre(page, '.fiche h2');
+  const titre = await page.textContent('.fiche h2');
+  verifier('fiche ouverte', Boolean(titre && titre.trim().length), titre ?? '');
+  const actes = await page.locator('.actes li').count();
+  verifier('actes de protection affiches', actes > 0, `${actes} actes`);
+
+  await page.waitForTimeout(1200);
+  const apresFiche = cumulDetails() - avantFiche;
+  verifier(
+    'un seul fragment de details telecharge',
+    apresFiche > 0 && apresFiche < 600_000,
+    `${(apresFiche / 1024).toFixed(0)} Ko transferes`
+  );
+  verifier(
+    'aucun fragment de details charge avant le premier clic',
+    avantFiche === 0,
+    `${(avantFiche / 1024).toFixed(0)} Ko`
+  );
+
+  // --- Notices sans coordonnees, absentes de la carte ----------------------
+  const mention = await page.textContent('.liste header p');
+  verifier('notices sans coordonnees signalees', /2\s?276/.test(mention ?? ''), mention ?? '');
+
+  verifier('aucune erreur console', erreursConsole.length === 0, erreursConsole.slice(0, 3).join(' | '));
+
+  // Capture en vue carte, l'ecran par defaut de l'application.
+  await page.click('.bascule');
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: 'tests/apercu.png', fullPage: false });
+} catch (e) {
+  // Une etape qui echoue ne doit pas masquer le resultat des precedentes.
+  fatale = e;
+  await page.screenshot({ path: 'tests/echec.png' }).catch(() => {});
+} finally {
+  await navigateur.close();
+  serveur.close();
+}
+
+console.log('Transferts /data (mesures cote serveur) :');
+for (const [chemin, taille] of octets) {
+  if (chemin.startsWith('/data/')) {
+    console.log(`  ${chemin.replace('/data/', '').padEnd(22)} ${(taille / 1024).toFixed(0)} Ko`);
+  }
+}
+console.log('');
+
+for (const { nom, ok, detail } of resultats) {
+  console.log(`${ok ? 'OK  ' : 'FAIL'}  ${nom}${detail ? `  (${detail})` : ''}`);
+}
+if (fatale) {
+  console.log(`\nInterrompu : ${String(fatale.message ?? fatale).split('\n')[0]}`);
+  if (erreursConsole.length) console.log(`Console : ${erreursConsole.slice(0, 5).join(' | ')}`);
+}
+console.log(`\n${resultats.length - echecs}/${resultats.length} verifications passees`);
+process.exit(echecs || fatale ? 1 : 0);

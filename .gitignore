@@ -1,0 +1,20 @@
+# Données source (100 Mo) et artefacts générés
+data/raw/
+etl/out/
+web/static/data/*.parquet
+web/static/data/details/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Node / SvelteKit
+node_modules/
+web/.svelte-kit/
+web/build/
+.DS_Store
+web/tests/apercu.png
+web/tests/echec.png

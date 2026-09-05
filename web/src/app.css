@@ -1,0 +1,43 @@
+:root {
+  --fond: #0b0e14;
+  --fond-creux: #141924;
+  --bord: #232a38;
+  --texte: #e8e6e1;
+  --texte-faible: #8b93a4;
+  --accent: #e0a458;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: var(--fond);
+  color: var(--texte);
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input {
+  font-family: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bord);
+  border-radius: 999px;
+}
+
+/* Le fond de carte CartoDB impose ses propres couleurs de controle. */
+.maplibregl-ctrl-attrib {
+  font-size: 10px;
+}
