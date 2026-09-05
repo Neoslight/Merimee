@@ -3,6 +3,7 @@
   import type { BarreAnnee, BarreSiecle } from '$lib/db/queries';
   import { ANNEE_MAX, ANNEE_MIN } from '$lib/state/filters.svelte';
   import { compact, romain } from '$lib/format';
+  import { palette } from '$lib/state/theme.svelte';
 
   interface Props {
     siecles: BarreSiecle[];
@@ -51,7 +52,9 @@
           x: 'siecle',
           y: 'n',
           fill: (d: BarreSiecle) =>
-            selection.length === 0 || selection.includes(d.siecle) ? '#e0a458' : '#3a4150',
+            selection.length === 0 || selection.includes(d.siecle)
+              ? palette.accent
+              : palette.barreSourde,
           title: (d: BarreSiecle) => `${romain(d.siecle)}e siècle — ${d.n.toLocaleString('fr-FR')}`
         }),
         Plot.ruleY([0], { stroke: 'var(--bord)' })
@@ -94,7 +97,7 @@
           x1: (d: BarreAnnee) => d.annee,
           x2: (d: BarreAnnee) => d.annee + 1,
           y: 'n',
-          fill: '#4ea8de',
+          fill: palette.inscrit,
           insetLeft: 0.2,
           insetRight: 0.2,
           title: (d: BarreAnnee) => `${d.annee} — ${d.n.toLocaleString('fr-FR')} actes`

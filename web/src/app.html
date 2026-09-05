@@ -6,6 +6,19 @@
     <meta name="description" content="Exploration cartographique et chronologique des 46 760 immeubles protégés au titre des monuments historiques (base Mérimée)." />
     <link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
 
+    <!-- Pose le theme avant le premier paint. Sans ce script la page s'affiche
+         en sombre puis bascule : le site est prerendu, aucun rendu serveur ne
+         connait la preference du visiteur. Le nom de la cle est repris dans
+         `lib/state/theme.svelte.ts`. -->
+    <script>
+      try {
+        var t = localStorage.getItem('merimee-theme');
+        if (t !== 'clair' && t !== 'sombre')
+          t = matchMedia('(prefers-color-scheme: light)').matches ? 'clair' : 'sombre';
+        document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
+
     <!-- Carte de lien. L'URL de l'image doit être absolue : les agrégateurs ne
          résolvent pas un chemin relatif, et `%sveltekit.assets%` n'en produit
          pas d'absolu. Elle est donc figée sur le domaine de publication, et

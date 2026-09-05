@@ -13,8 +13,13 @@ const { serveur, url } = await demarrer(
   new URL('../build', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')
 );
 const navigateur = await chromium.launch();
-// Format impose par les cartes de lien : 1200 x 630.
-const page = await navigateur.newPage({ viewport: { width: 1200, height: 630 } });
+// Format impose par les cartes de lien : 1200 x 630. Le theme est force en
+// sombre : Chromium sans tete annonce `prefers-color-scheme: light`, et la
+// vignette doit rester la meme d'une machine a l'autre.
+const page = await navigateur.newPage({
+  viewport: { width: 1200, height: 630 },
+  colorScheme: 'dark'
+});
 
 await page.goto(url, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('.chiffres b', { timeout: 90_000 });

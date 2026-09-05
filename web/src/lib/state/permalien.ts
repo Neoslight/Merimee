@@ -12,8 +12,13 @@
  * resterait une ambiguite en attente.
  *
  * `bbox` est volontairement absente. Elle est produite par les deplacements de
- * la carte : la reecrire noierait l'URL a chaque pan. Le destinataire d'un lien
- * recalcule la sienne depuis sa propre vue.
+ * la carte : la reecrire noierait l'URL a chaque pan.
+ *
+ * La **vue** de carte (`c=lon,lat,zoom`) suit une regle differente de tout le
+ * reste : elle n'est jamais ecrite dans l'URL vivante — un simple deplacement
+ * ne doit rien reecrire — mais elle est ajoutee au lien **produit** par
+ * « Copier le lien ». Partager un croisement sans partager l'endroit qu'on
+ * regarde revenait a renvoyer le destinataire sur la France entiere.
  */
 import { ANNEE_MAX, ANNEE_MIN, filtresVides, type Filters } from './filters.svelte';
 
@@ -26,6 +31,14 @@ export interface EtatPartage {
   filtres: Filters;
   selection: string | null;
   vue: Vue;
+}
+
+/** Position de depart de la carte. Ce n'est pas un filtre : elle ne restreint
+ *  aucun corpus, elle ne fait que cadrer le regard. */
+export interface VueCarte {
+  lon: number;
+  lat: number;
+  zoom: number;
 }
 
 /** Filtres textuels multivalues : cle d'etat -> nom du parametre. */
@@ -49,8 +62,12 @@ const SIECLE_MIN = 1;
 const SIECLE_MAX = 21;
 const REFERENCE = /^[A-Za-z0-9_-]{1,32}$/;
 
-/** Chaine de requete correspondant a l'etat, `''` si rien n'est pose. */
-export function encoder(etat: EtatPartage): string {
+/**
+ * Chaine de requete correspondant a l'etat, `''` si rien n'est pose.
+ *
+ * `cadrage` n'est passe que par « Copier le lien » : l'URL vivante s'en passe.
+ */
+export function encoder(etat: EtatPartage, cadrage?: VueCarte | null): string {
   const p = new URLSearchParams();
   for (const [cle, param] of PAIRES) {
     for (const valeur of etat.filtres[cle]) p.append(param, valeur);
@@ -61,8 +78,14 @@ export function encoder(etat: EtatPartage): string {
   if (etat.filtres.nbPalissy > 0) p.set('objets', String(etat.filtres.nbPalissy));
   if (etat.vue !== 'carte') p.set('vue', etat.vue);
   if (etat.selection) p.set('ref', etat.selection);
+  if (cadrage) p.set('c', `${cadrage.lon},${cadrage.lat},${cadrage.zoom}`);
   const chaine = p.toString();
   return chaine ? `?${chaine}` : '';
+}
+
+function reel(brut: string): number | null {
+  const n = Number.parseFloat(brut);
+  return Number.isFinite(n) ? n : null;
 }
 
 function entier(brut: string | null): number | null {
@@ -79,7 +102,7 @@ function borner(valeur: number, min: number, max: number): number {
  * silencieusement : un lien tronque doit ouvrir un tableau de bord utilisable,
  * pas une erreur.
  */
-export function decoder(chaine: string): EtatPartage {
+export function decoder(chaine: string): EtatPartage & { cadrage: VueCarte | null } {
   const p = new URLSearchParams(chaine);
   const filtres = filtresVides();
 
@@ -109,11 +132,26 @@ export function decoder(chaine: string): EtatPartage {
   const objets = entier(p.get('objets'));
   if (objets !== null && objets > 0) filtres.nbPalissy = objets;
 
-  const ref = p.get('ref');
+  // `notice=` a circule avant `ref=` : un lien deja partage ne doit pas casser
+  // sur un alias. L'encodage, lui, n'emet que `ref`.
+  const ref = p.get('ref') ?? p.get('notice');
   const vue = p.get('vue') as Vue | null;
   return {
     filtres,
     selection: ref && REFERENCE.test(ref) ? ref : null,
-    vue: vue && VUES.includes(vue) ? vue : 'carte'
+    vue: vue && VUES.includes(vue) ? vue : 'carte',
+    cadrage: decoderVue(p.get('c'))
   };
+}
+
+/** Vue de carte lisible dans `c=lon,lat,zoom`. Bornee : l'URL s'edite a la
+ *  main, et une latitude hors domaine laisse MapLibre sur un ecran vide. */
+function decoderVue(brut: string | null): VueCarte | null {
+  if (!brut) return null;
+  const parts = brut.split(',');
+  if (parts.length !== 3) return null;
+  const [lon, lat, zoom] = parts.map(reel);
+  if (lon === null || lat === null || zoom === null) return null;
+  if (Math.abs(lon) > 180 || Math.abs(lat) > 90 || zoom < 0 || zoom > 20) return null;
+  return { lon, lat, zoom };
 }

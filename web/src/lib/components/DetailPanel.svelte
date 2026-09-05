@@ -234,7 +234,7 @@
   }
 
   .erreur {
-    color: #e0715e;
+    color: var(--erreur);
   }
 
   header {
@@ -263,11 +263,14 @@
     color: var(--texte-faible);
   }
 
+  /* Le serif s'arrete au titre et au texte d'archive. Applique aux libelles de
+     facette ou aux nombres a 10 px, il les rendrait illisibles. */
   h2 {
     margin: 0 26px 10px 0;
-    font-size: 17px;
+    font-family: var(--police-titre);
+    font-size: 22px;
     font-weight: 600;
-    line-height: 1.25;
+    line-height: 1.2;
     color: var(--texte);
   }
 
@@ -286,9 +289,9 @@
     border: 1px solid currentColor;
   }
 
-  .or { color: #e0a458; }
-  .bleu { color: #4ea8de; }
-  .violet { color: #b07bd4; }
+  .or { color: var(--classe); }
+  .bleu { color: var(--inscrit); }
+  .violet { color: var(--mixte); }
   .sourd { color: var(--texte-faible); }
 
   dl {
@@ -359,6 +362,18 @@
     font-size: 12px;
     line-height: 1.55;
     color: var(--texte-faible);
+  }
+
+  /* L'historique est un texte d'archive, pas une metadonnee : il recoit la
+     mesure et l'interligne d'un texte suivi, et un filet de citation. */
+  .texte {
+    max-width: 62ch;
+    padding-left: 11px;
+    border-left: 2px solid var(--bord);
+    font-family: var(--police-titre);
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--texte);
   }
 
   .liens {

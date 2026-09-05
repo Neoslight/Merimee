@@ -2,6 +2,7 @@
   import * as Plot from '@observablehq/plot';
   import type { Cellule } from '$lib/db/queries';
   import { compact, nf, romain } from '$lib/format';
+  import { palette } from '$lib/state/theme.svelte';
 
   interface Props {
     cellules: Cellule[];
@@ -48,9 +49,16 @@
       y: { label: '↑ siècle de construction', tickFormat: (d: number) => romain(d) },
       // Racine carree : sans elle les 1 839 notices du couple 16e/1920 ecrasent
       // tout le reste de la matrice dans une seule teinte.
+      //
+      // La rampe s'inverse avec le theme : en sombre l'effectif fort est clair,
+      // en clair il est sombre. Sans cela la matrice disparaitrait dans son
+      // propre fond.
       color: {
         type: 'sqrt',
-        range: ['#161b26', '#2f5d7c', '#4ea8de', '#e0a458', '#f4f1ea'],
+        range: [
+          palette.matrice0, palette.matrice1, palette.matrice2,
+          palette.matrice3, palette.matrice4
+        ],
         label: 'notices'
       },
       marks: [
@@ -66,13 +74,13 @@
           x: 'decennie',
           y: 'siecle',
           fill: 'none',
-          stroke: '#f4f1ea',
+          stroke: palette.matriceCerclee,
           strokeWidth: 1.2,
           inset: 0.5
         }),
         Plot.text(
           donnees.filter((d) => d.n >= 900),
-          { x: 'decennie', y: 'siecle', text: (d: Cellule) => compact.format(d.n), fill: '#0b0e14', fontSize: 9 }
+          { x: 'decennie', y: 'siecle', text: (d: Cellule) => compact.format(d.n), fill: palette.matriceTexte, fontSize: 9 }
         )
       ]
     });

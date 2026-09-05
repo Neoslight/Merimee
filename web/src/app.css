@@ -1,3 +1,28 @@
+/**
+ * Polices. `Inter` etait declaree ici depuis le debut sans jamais etre
+ * chargee : le site tournait en fait dans la police du systeme. Les fichiers
+ * viennent de `@fontsource`, donc passent par Vite : ils recoivent un hachage,
+ * entrent dans `build`, et sont **mis en cache par le service worker** — ce
+ * qui ne serait pas le cas depuis `static/`, volontairement exclu du cache.
+ *
+ * Seul le sous-ensemble latin d'Inter est importe (2 x ~24 Ko). EB Garamond
+ * est variable et n'a pas d'entree latine isolee : ses autres sous-ensembles
+ * sont emis comme actifs mais jamais telecharges, leur `unicode-range` ne
+ * correspondant a rien de ce corpus.
+ */
+@import '@fontsource/inter/latin-400.css';
+@import '@fontsource/inter/latin-600.css';
+@import '@fontsource-variable/eb-garamond/wght.css';
+
+/**
+ * Deux palettes, un seul endroit.
+ *
+ * Les couleurs lues par MapLibre et Observable Plot sont ici aussi : ces deux
+ * bibliotheques recoivent des chaines, pas des `var()`. `theme.svelte.ts` les
+ * relit par `getComputedStyle` a chaque bascule — une fois par changement de
+ * theme, pas par image. Ajouter une couleur ailleurs qu'ici la rendrait muette
+ * au passage en clair.
+ */
 :root {
   --fond: #0b0e14;
   --fond-creux: #141924;
@@ -5,7 +30,102 @@
   --texte: #e8e6e1;
   --texte-faible: #8b93a4;
   --accent: #e0a458;
+  --erreur: #e0715e;
+
+  /* Statuts de protection. Ils gardent leur teinte d'un theme a l'autre et
+     changent de clarte : un or clair sur fond blanc ne passe pas 4,5:1. */
+  --classe: #e0a458;
+  --inscrit: #4ea8de;
+  --mixte: #b07bd4;
+  --statut-nul: #7d8597;
+
+  /* Tranches d'epoque, sur la carte comme dans la legende. */
+  --epoque-1: #7b5ea7;
+  --epoque-2: #4ea8de;
+  --epoque-3: #4bb89a;
+  --epoque-4: #e0a458;
+  --epoque-5: #e0715e;
+
+  /* Carte. L'URL du fond vectoriel n'est pas ici : une valeur avec `//`
+     dans une propriete personnalisee est un piege inutile, elle vit dans
+     `theme.svelte.ts` a cote des deux palettes resolues. */
+  --carte-liseret: #0b0e14;
+  --carte-selection: #f4f1ea;
+  --chaleur-0: rgba(11, 14, 20, 0);
+  --chaleur-1: #1d3b57;
+  --chaleur-2: #4ea8de;
+  --chaleur-3: #e0a458;
+  --chaleur-4: #f4f1ea;
+
+  /* Frise : barre hors selection. */
+  --barre-sourde: #3a4150;
+
+  /* Matrice : rampe du plus faible au plus fort effectif, puis le texte pose
+     par-dessus les cellules les plus denses, et le cerclage d'une cellule
+     retenue par les filtres. */
+  --matrice-0: #161b26;
+  --matrice-1: #2f5d7c;
+  --matrice-2: #4ea8de;
+  --matrice-3: #e0a458;
+  --matrice-4: #f4f1ea;
+  --matrice-texte: #0b0e14;
+  --matrice-cerclee: #f4f1ea;
+
+  /* Composantes RVB des ombres et du voile. Une ombre noire sur fond clair
+     salit le panneau qu'elle est censee detacher. */
+  --voile: 0 0 0;
+
   color-scheme: dark;
+}
+
+:root[data-theme='clair'] {
+  --fond: #faf8f4;
+  --fond-creux: #efece4;
+  --bord: #d7d1c4;
+  --texte: #1f2229;
+  --texte-faible: #5e6473;
+  --accent: #8f5a13;
+  --erreur: #b13521;
+
+  --classe: #8f5a13;
+  --inscrit: #16648f;
+  --mixte: #6a3f95;
+  --statut-nul: #767b88;
+
+  --epoque-1: #6a4c96;
+  --epoque-2: #16648f;
+  --epoque-3: #1d7d67;
+  --epoque-4: #8f5a13;
+  --epoque-5: #a83f2c;
+
+  --carte-liseret: #ffffff;
+  --carte-selection: #1f2229;
+  --chaleur-0: rgba(250, 248, 244, 0);
+  --chaleur-1: #a9c8de;
+  --chaleur-2: #2f80b8;
+  --chaleur-3: #cf8c2a;
+  --chaleur-4: #5c2d0c;
+
+  --barre-sourde: #cbc5b7;
+
+  /* Rampe inversee : en clair, l'effectif fort est le plus sombre. */
+  --matrice-0: #f1ede3;
+  --matrice-1: #cbd9e5;
+  --matrice-2: #5c9cc8;
+  --matrice-3: #c98a2e;
+  --matrice-4: #3b2c14;
+  --matrice-texte: #faf8f4;
+  --matrice-cerclee: #1f2229;
+
+  --voile: 31 34 41;
+
+  color-scheme: light;
+}
+
+/* Les deux familles ne dependent pas du theme : elles sont posees a part. */
+:root {
+  --police: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --police-titre: 'EB Garamond Variable', 'EB Garamond', Georgia, 'Times New Roman', serif;
 }
 
 * {
@@ -18,7 +138,7 @@ body {
   margin: 0;
   background: var(--fond);
   color: var(--texte);
-  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: var(--police);
   -webkit-font-smoothing: antialiased;
 }
 

@@ -13,7 +13,8 @@ quand**. Les années 1920 classent le 16e siècle, les années 1980-90 se tourne
 le 18e et le 19e — le déplacement du regard patrimonial se lit d'un coup d'œil.
 
 Tout état d'exploration vit dans l'URL : un croisement trouvé se partage par simple
-copie du lien, et le retour arrière referme la fiche ouverte.
+copie du lien, et le retour arrière referme la fiche ouverte. Sombre ou clair, au
+choix — le thème reste hors de l'URL, un lien s'ouvre dans celui de son destinataire.
 
 Aucun serveur applicatif : un pipeline Python produit des fichiers Parquet, que le
 navigateur interroge en SQL via DuckDB-Wasm.
@@ -53,10 +54,11 @@ npm run dev                    # http://localhost:5173
 npm run build && npm run test  # build statique + 14 vérifications en navigateur
 ```
 
-`npm run test` lance Chromium sur le build : **43 vérifications** couvrant le
+`npm run test` lance Chromium sur le build : **55 vérifications** couvrant le
 démarrage de DuckDB-Wasm, le filtrage croisé, la recherche dans une facette au-delà
-des 40 valeurs affichées, la matrice, les permaliens, le gabarit téléphone, et le
-fait qu'ouvrir une fiche ne télécharge qu'un fragment de ~320 Ko. Nécessite
+des 40 valeurs affichées, la matrice, les permaliens, le gabarit téléphone, la bascule
+de thème — y compris le contraste calculé, et la survie des couches de carte à
+`setStyle` — et le fait qu'ouvrir une fiche ne télécharge qu'un fragment de ~320 Ko. Nécessite
 `npx playwright install chromium` une fois.
 
 `npm run apercu` régénère `static/apercu-social.png`, la vignette des cartes de
@@ -142,6 +144,18 @@ seule notice — la longue traîne est précisément ce qu'on vient chercher. La
 recherche descend maintenant dans DuckDB, avec `strip_accents` pour ignorer les
 accents sans stocker de colonne repliée. Une valeur cochée reste listée même hors
 résultat : sans cela on ne pourrait plus la décocher.
+
+**Deux palettes, un seul endroit.** MapLibre et Observable Plot reçoivent des chaînes,
+pas des `var()` : leurs couleurs sont donc déclarées en CSS comme les autres et relues
+par `getComputedStyle` à chaque bascule de thème, une fois par changement et non par
+image. Écrire une couleur en dur dans un composant la rendrait muette au passage en
+clair. La rampe de la matrice s'inverse entre les deux thèmes : en sombre l'effectif
+fort est clair, en clair il est sombre, sinon la matrice disparaît dans son fond.
+
+**La vue de carte voyage dans le lien, pas dans l'URL.** `c=lon,lat,zoom` n'est ajouté
+que par « Copier le lien » : réécrire l'URL à chaque déplacement la noierait et
+empilerait l'historique. Elle est consommée au chargement et disparaît au premier
+changement de filtre — ce n'est pas un filtre, elle ne restreint aucun corpus.
 
 **Facettes évaluées sans leur propre filtre.** `buildWhere(filtres, except)` retire
 la clause de la facette qu'on est en train de compter. Sans cela, dès la première

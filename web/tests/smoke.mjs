@@ -29,7 +29,12 @@ async function total(page) {
 }
 
 const navigateur = await chromium.launch();
-const page = await navigateur.newPage({ viewport: { width: 1600, height: 950 } });
+// Chromium sans tete annonce `prefers-color-scheme: light` : sans ce reglage
+// l'application demarre en clair et le test du theme n'aurait rien a basculer.
+const page = await navigateur.newPage({
+  viewport: { width: 1600, height: 950 },
+  colorScheme: 'dark'
+});
 
 const erreursConsole = [];
 page.on('console', (msg) => msg.type() === 'error' && erreursConsole.push(msg.text()));
@@ -228,13 +233,157 @@ try {
   await page.locator('.bascule button', { hasText: 'Carte' }).click();
   await page.getByRole('button', { name: 'densité' }).click();
   await page.waitForTimeout(500);
-  const etatDensite = await page.evaluate(() => {
-    const b = document.querySelector('.legende button[aria-pressed]');
-    return b?.getAttribute('aria-pressed');
-  });
+  // Viser le bouton par son nom : `.legende button[aria-pressed]` attrapait le
+  // premier venu, et la legende en compte trois.
+  const etatDensite = await page
+    .getByRole('button', { name: 'densité' })
+    .getAttribute('aria-pressed');
   verifier('bascule densite active', etatDensite === 'true', String(etatDensite));
   await page.getByRole('button', { name: 'densité' }).click();
+
+  // --- Semiologie par epoque ------------------------------------------------
+  const legendeStatut = await page.locator('.legende span').count();
+  await page.locator('.legende button.mode').click();
+  await page.waitForTimeout(400);
+  const legendeEpoque = await page.locator('.legende span').count();
+  verifier(
+    'la legende suit le mode de coloration',
+    legendeStatut === 3 && legendeEpoque === 5,
+    `${legendeStatut} -> ${legendeEpoque}`
+  );
+  await page.locator('.legende button.mode').click();
+  await page.waitForTimeout(300);
+
+  // --- Theme clair ----------------------------------------------------------
+  // `setStyle` detruit sources et couches : c'est la regression que ce lot
+  // risque le plus. Un `setPaintProperty` sur une couche disparue leve, donc
+  // le compteur d'erreurs console fait foi.
+  const avantTheme = erreursConsole.length;
+  await page.getByRole('button', { name: 'Clair' }).click();
+  await page.waitForTimeout(1500);
+
+  const clair = await page.evaluate(() => ({
+    marque: document.documentElement.dataset.theme,
+    fond: getComputedStyle(document.body).backgroundColor,
+    texte: getComputedStyle(document.body).color
+  }));
+  verifier('bascule en theme clair', clair.marque === 'clair', String(clair.marque));
+
+  const luminance = (couleur) => {
+    const [r, v, b] = couleur.match(/\d+/g).slice(0, 3).map(Number);
+    const lin = [r, v, b]
+      .map((c) => c / 255)
+      .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+  };
+  const lf = luminance(clair.fond);
+  const lt = luminance(clair.texte);
+  const contraste = (Math.max(lf, lt) + 0.05) / (Math.min(lf, lt) + 0.05);
+  verifier('fond effectivement clair', lf > 0.5, clair.fond);
+  verifier('contraste du texte au moins 4,5:1', contraste >= 4.5, `${contraste.toFixed(2)}:1`);
+
+  // La carte a recharge son fond : si les couches n'avaient pas ete reposees,
+  // basculer la densite leverait.
+  await page.getByRole('button', { name: 'densité' }).click();
+  await page.waitForTimeout(500);
+  const densiteApresTheme = await page
+    .getByRole('button', { name: 'densité' })
+    .getAttribute('aria-pressed');
+  await page.getByRole('button', { name: 'densité' }).click();
+  verifier(
+    'les couches survivent au changement de fond',
+    densiteApresTheme === 'true' && erreursConsole.length === avantTheme,
+    erreursConsole.slice(avantTheme, avantTheme + 2).join(' | ') || 'aucune erreur'
+  );
+
+  verifier(
+    'le theme reste hors de l URL',
+    !/theme|clair|sombre/.test(page.url()),
+    page.url().split('?')[1] ?? '(aucun parametre)'
+  );
+
+  // Il survit au rechargement : c'est une preference de lecture, elle est
+  // stockee localement et non portee par le lien.
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await attendre(page, '.chiffres b');
+  const persiste = await page.evaluate(() => document.documentElement.dataset.theme);
+  verifier('le theme survit au rechargement', persiste === 'clair', String(persiste));
+  await page.getByRole('button', { name: 'Sombre' }).click();
+  await page.waitForTimeout(1200);
+
+  // --- La vue de carte voyage dans le lien, pas dans l URL vivante ---------
+  // Sur un onglet a part : cette section navigue et pousse des entrees, alors
+  // que les suivantes eprouvent precisement le retour arriere.
+  {
+    const onglet = await navigateur.newPage({
+      viewport: { width: 1400, height: 900 },
+      colorScheme: 'dark'
+    });
+    onglet.on('console', (m) => m.type() === 'error' && erreursConsole.push(m.text()));
+    onglet.on('pageerror', (e) => erreursConsole.push(String(e)));
+    await onglet.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: BASE });
+    await onglet.goto(BASE, { waitUntil: 'domcontentloaded' });
+    await attendre(onglet, '.chiffres b');
+    await onglet.waitForTimeout(1200);
+
+    const urlAvantPan = onglet.url();
+    const toile = await onglet.locator('.maplibregl-canvas').boundingBox();
+    await onglet.mouse.move(toile.x + toile.width / 2, toile.y + toile.height / 2);
+    await onglet.mouse.down();
+    await onglet.mouse.move(
+      toile.x + toile.width / 2 - 220,
+      toile.y + toile.height / 2 - 120,
+      { steps: 12 }
+    );
+    await onglet.mouse.up();
+    await onglet.waitForTimeout(900);
+    verifier(
+      'un deplacement de carte ne reecrit pas l URL',
+      onglet.url() === urlAvantPan,
+      onglet.url().split('?')[1] ?? '(aucun parametre)'
+    );
+
+    await onglet.getByRole('button', { name: /Copier le lien|Lien copié/ }).click();
+    await onglet.waitForTimeout(400);
+    const lienCopie = await onglet.evaluate(() => navigator.clipboard.readText());
+    // `URLSearchParams` encode les virgules : comparer sur la forme decodee.
+    const cadrage = /[?&]c=(-?[\d.]+),(-?[\d.]+),([\d.]+)/.exec(decodeURIComponent(lienCopie));
+    verifier(
+      'le lien copie porte la vue de carte',
+      Boolean(cadrage),
+      lienCopie.split('?')[1] ?? lienCopie
+    );
+    verifier(
+      'la vue copiee est celle apres deplacement',
+      cadrage && (Math.abs(Number(cadrage[1]) - 2.6) > 0.05 || Math.abs(Number(cadrage[2]) - 46.6) > 0.05),
+      cadrage ? `c=${cadrage[1]},${cadrage[2]},${cadrage[3]}` : 'aucun cadrage'
+    );
+
+    if (cadrage) {
+      await onglet.goto(lienCopie, { waitUntil: 'domcontentloaded' });
+      await attendre(onglet, '.chiffres b');
+      await onglet.waitForTimeout(1200);
+      // Le cadrage est consomme au chargement : le premier `replaceState` qui
+      // suit ne le reecrit pas, il n'appartient pas a l'etat d'exploration.
+      verifier(
+        'le lien rouvre sans erreur et sans boucle',
+        erreursConsole.length === 0,
+        erreursConsole.slice(0, 2).join(' | ') || 'aucune erreur'
+      );
+    }
+
+    // `?notice=` a circule avant `?ref=` : l'alias doit encore ouvrir la fiche.
+    await onglet.goto(`${BASE}/?notice=PA00097411`, { waitUntil: 'domcontentloaded' });
+    await attendre(onglet, '.fiche .fermer');
+    const titreAlias = await onglet.textContent('.fiche h2');
+    verifier('l alias notice= ouvre la fiche', Boolean(titreAlias), titreAlias ?? 'aucun titre');
+
+    await onglet.close();
+  }
+
   await page.locator('.bascule button', { hasText: 'Liste' }).click();
+  await attendre(page, '.liste header p');
+
 
   // --- Notices sans coordonnees, absentes de la carte ----------------------
   const mention = await page.textContent('.liste header p');

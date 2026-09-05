@@ -10,6 +10,9 @@ export interface Point {
   lon: number;
   statut: string;
   nb_palissy: number;
+  /** Dernier siecle de construction indexe, nul si la notice n'en porte aucun.
+   *  Sert la coloration par epoque de la carte, pas le filtrage. */
+  siecle_max: number | null;
 }
 
 export interface Compte {
@@ -42,7 +45,7 @@ const SCALAIRES: Partial<Record<FacetKey, string>> = {
 
 export async function points(f: Filters): Promise<Point[]> {
   return query<Point>(`
-    SELECT reference, lat, lon, statut, nb_palissy
+    SELECT reference, lat, lon, statut, nb_palissy, siecle_max
     FROM monuments
     WHERE lat IS NOT NULL AND ${buildWhere(f)}
   `);

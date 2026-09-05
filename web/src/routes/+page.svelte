@@ -30,7 +30,8 @@
     toggleSiecle,
     type FacetKey
   } from '$lib/state/filters.svelte';
-  import { decoder, encoder, type Vue } from '$lib/state/permalien';
+  import { decoder, encoder, type Vue, type VueCarte } from '$lib/state/permalien';
+  import { appliquer, basculer, theme } from '$lib/state/theme.svelte';
   import { amorcage, LIBELLES } from '$lib/state/amorcage.svelte';
   import { browser } from '$app/environment';
   import { pushState, replaceState } from '$app/navigation';
@@ -58,6 +59,18 @@
   let vue = $state<Vue>(initial.vue);
   let croisement = $state<DonneesMatrice>({ cellules: [], ecartees: 0 });
   let terme = $state(initial.filtres.recherche);
+
+  // Position de depart de la carte, portee par le lien partage et par lui seul.
+  const cadrageInitial = initial.cadrage;
+  let vueCarte = $state<{ vueCourante: () => VueCarte | null } | undefined>();
+
+  // Le script en tete d'`app.html` a deja pose `data-theme` avant le premier
+  // paint : cet effet ne change donc rien a l'ecran au montage. Il resout la
+  // palette lue par MapLibre et Plot, qui exige un document, puis rejoue a
+  // chaque bascule.
+  $effect(() => {
+    appliquer(theme.courant);
+  });
 
   // La recherche interroge une colonne pre-normalisee (minuscules, sans
   // accents) : un LIKE sur 46 760 lignes repond en quelques ms, aucun index
@@ -133,11 +146,17 @@
   });
 
   // Sens inverse : apres un retour arriere, l'URL fait foi.
+  //
+  // La comparaison se fait sur la **forme normalisee** — decodee puis reencodee
+  // — et non sur la chaine brute. Un lien partage porte `c=`, que `encoder`
+  // n'emet jamais : compare tel quel, il paraissait toujours different de
+  // l'etat, cet effet et son symetrique se renvoyaient la balle, et le
+  // `replaceState` partait avant que SvelteKit ait monte sa racine.
   $effect(() => {
-    const requete = page.url.search;
+    const etat = decoder(page.url.search);
+    const requete = encoder(etat);
     if (requete === derniereRequete) return;
     derniereRequete = requete;
-    const etat = decoder(requete);
     derniereSelection = etat.selection;
     Object.assign(filters, etat.filtres);
     selection = etat.selection;
@@ -150,7 +169,10 @@
   let copie = $state(false);
 
   async function copierLien() {
-    const lien = location.origin + location.pathname + derniereRequete;
+    // Seul endroit ou la vue de carte entre dans une URL. L'URL vivante n'en
+    // porte pas : un simple deplacement ne doit rien reecrire.
+    const requete = encoder({ filtres: filters, selection, vue }, vueCarte?.vueCourante());
+    const lien = location.origin + location.pathname + requete;
     try {
       await navigator.clipboard.writeText(lien);
       copie = true;
@@ -238,6 +260,10 @@
         Filtres{#if actifs > 0} <em>{actifs}</em>{/if}
       </button>
       <button class="hasard" onclick={hasard}>Au hasard</button>
+      <button class="theme" onclick={basculer}
+              title="Basculer entre thème sombre et thème clair">
+        {theme.courant === 'clair' ? 'Sombre' : 'Clair'}
+      </button>
       <button class="lien" onclick={copierLien}>{copie ? 'Lien copié' : 'Copier le lien'}</button>
     </div>
   </header>
@@ -263,8 +289,10 @@
     <div class="centre">
       <div class="scene">
         <MonumentMap
+          bind:this={vueCarte}
           points={pointsCarte}
           {selection}
+          vueInitiale={cadrageInitial}
           onselect={(ref) => (selection = ref)}
           onbbox={(bbox) => (filters.bbox = bbox)}
         />
@@ -420,13 +448,14 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .or { color: #e0a458; }
-  .bleu { color: #4ea8de; }
+  .or { color: var(--classe); }
+  .bleu { color: var(--inscrit); }
   .faible { opacity: 0.7; }
 
   .raz,
   .hasard,
-  .lien {
+  .lien,
+  .theme {
     border: 1px solid var(--bord);
     background: transparent;
     color: var(--texte-faible);
@@ -442,7 +471,8 @@
     color: var(--accent);
   }
 
-  .lien:hover {
+  .lien:hover,
+  .theme:hover {
     color: var(--texte);
     border-color: var(--texte-faible);
   }
@@ -603,7 +633,7 @@
   }
 
   .erreur b {
-    color: #e0715e;
+    color: var(--erreur);
   }
 
   .erreur p {
@@ -653,7 +683,8 @@
     .chiffres .or,
     .chiffres .bleu,
     .chiffres .faible,
-    .lien {
+    .lien,
+    .theme {
       display: none;
     }
 
@@ -691,7 +722,7 @@
       width: min(84vw, 320px);
       transform: translateX(-100%);
       transition: transform 160ms ease;
-      box-shadow: 0 0 32px rgb(0 0 0 / 55%);
+      box-shadow: 0 0 32px rgb(var(--voile) / 55%);
     }
 
     .facettes.ouvert {
@@ -717,7 +748,7 @@
       z-index: 5;
       border: none;
       padding: 0;
-      background: rgb(0 0 0 / 45%);
+      background: rgb(var(--voile) / 45%);
       cursor: pointer;
     }
 
@@ -730,7 +761,7 @@
       max-height: 82%;
       transform: translateY(101%);
       transition: transform 200ms ease;
-      box-shadow: 0 -8px 32px rgb(0 0 0 / 55%);
+      box-shadow: 0 -8px 32px rgb(var(--voile) / 55%);
     }
 
     .fiche-hote.ouvert {

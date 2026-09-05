@@ -30,6 +30,7 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `web/src/lib/state/filters.svelte.ts` | état des filtres + construction du prédicat SQL |
 | `web/src/lib/state/permalien.ts` | sérialisation de l'état dans l'URL (`encoder` / `decoder`) |
 | `web/src/lib/state/amorcage.svelte.ts` | phase et octets du démarrage, lus par l'écran d'attente |
+| `web/src/lib/state/theme.svelte.ts` | thème sombre/clair, et la palette résolue que lisent MapLibre et Plot |
 | `web/src/lib/format.ts` | `romain`, formats de nombres — étaient recopiés dans trois composants |
 | `web/src/service-worker.ts` | cache des actifs hachés uniquement |
 | `web/src/lib/components/` | `MonumentMap`, `FacetPanel`, `Timeline`, `Matrice`, `DetailPanel` |
@@ -136,6 +137,20 @@ passe sans slash initial.
 rendre une barre cliquable, retrouver la bande via `graphe.scale('x')`, pas via la
 cible du clic.
 
+**`map.setStyle()` détruit toutes les sources et couches ajoutées.** Changer de fond
+avec le thème veut dire les reposer entièrement : d'où `poserCouches()` dans
+`MonumentMap.svelte`, branchée sur `style.load` — le seul événement qui couvre le
+montage **et** chaque changement de style — et non sur `load`, qui ne se déclenche
+qu'une fois. `pret` retombe pendant la bascule pour que les effets qui repeuplent la
+carte n'écrivent pas dans le vide. Le test `les couches survivent au changement de
+fond` verrouille ce point : un `setPaintProperty` sur une couche disparue lève, donc
+c'est le compteur d'erreurs console qui fait foi.
+
+**Chromium sans tête annonce `prefers-color-scheme: light`.** Les deux scripts
+Playwright forcent donc `colorScheme` : `smoke.mjs` démarre en sombre pour avoir
+quelque chose à basculer, `apercu-social.mjs` aussi pour que la vignette soit la même
+d'une machine à l'autre.
+
 ## Règles de conception
 
 **Colonnes `LIST` plutôt que tables de liaison.** Domaines, siècles, dénominations,
@@ -152,11 +167,28 @@ cochées** : sans cela, saisir un terme rendrait impossible de les décocher.
 retirer ce mécanisme fait tomber à zéro toutes les options non cochées et tue le
 filtrage croisé. `queries.facette()` passe systématiquement la clé en `except`.
 
+**Le thème n'est pas dans l'URL.** C'est une préférence de lecture, pas un état
+d'exploration : elle vit dans `localStorage` et un lien partagé s'ouvre dans le thème
+de celui qui le reçoit. Même règle que les tiroirs du gabarit téléphone. Un script
+inline en tête d'`app.html` pose `data-theme` avant le premier paint — sans lui le
+site est prérendu en sombre puis bascule à l'hydratation.
+
+**Toute couleur vit dans `app.css`.** MapLibre et Plot ne savent pas lire une `var()` :
+`theme.svelte.ts` relit les jetons par `getComputedStyle` à chaque bascule et les
+expose dans `palette`. Une couleur écrite en dur dans un composant resterait muette
+au passage en clair — il n'en reste aucune, c'est vérifiable d'un `grep '#[0-9a-f]\{6\}' src`.
+
 **L'URL porte l'état d'exploration.** `permalien.ts` encode filtres, vue et notice
 sélectionnée. Trois points non négociables : les valeurs multiples passent par un
 **paramètre répété** (`?domaine=x&domaine=y`) — 63 libellés du corpus contiennent
 déjà une virgule, tout séparateur imprimable serait ambigu ; `bbox` est **exclue**,
-sinon chaque pan de carte réécrirait l'URL ; l'écriture se fait par `replaceState`,
+sinon chaque pan de carte réécrirait l'URL ; la **vue** (`c=lon,lat,zoom`) suit une
+règle à part — jamais écrite dans l'URL vivante, ajoutée seulement au lien produit par
+« Copier le lien », et consommée au chargement. Conséquence à ne pas rouvrir :
+l'effet URL → état compare des chaînes **normalisées** (`encoder(decoder(search))`) et
+non la chaîne brute, sinon `c=` paraît toujours différent de l'état, les deux effets se
+renvoient la balle et le `replaceState` part avant que SvelteKit ait monté sa racine
+(`Cannot read properties of undefined (reading '$set')`) ; l'écriture se fait par `replaceState`,
 sauf l'ouverture d'une fiche qui empile (`pushState`) pour que le retour arrière la
 referme. `decoder` valide toute valeur : l'URL est éditable à la main et ses chaînes
 finissent dans `lit()`.
