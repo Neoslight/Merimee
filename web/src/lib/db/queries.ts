@@ -236,6 +236,9 @@ export interface Detail {
   liens_externes: string[];
   palissy: string[];
   renvois: string[];
+  /** Noms de fichiers Wikimedia Commons, au plus trois. Vides si l'instantane
+   *  Wikidata n'a pas ete produit : la fiche s'en passe sans rien afficher. */
+  commons: string[];
   nb_palissy: number;
   actes: { annee: number | null; mois: number | null; jour: number | null; libelle: string }[];
 }
@@ -262,7 +265,7 @@ export async function detail(reference: string): Promise<Detail> {
            m.proprietaires, m.nb_palissy,
            d.adresse, d.lieudit, d.cadastre, d.historique, d.precision_protection,
            d.observations, d.siecle_detail, d.archiv_mh, d.liens_externes, d.palissy,
-           d.renvois, d.auteurs_detail
+           d.renvois, d.commons, d.auteurs_detail
     FROM monuments m
     JOIN read_parquet('${fragment}') d USING (reference)
     WHERE m.reference = ${ref}
@@ -282,6 +285,7 @@ export async function detail(reference: string): Promise<Detail> {
     liens_externes: toArray<string>(ligne.liens_externes),
     palissy: toArray<string>(ligne.palissy),
     renvois: toArray<string>(ligne.renvois),
+    commons: toArray<string>(ligne.commons),
     actes: actes as unknown as Detail['actes']
   };
 }

@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import csv
+from collections import defaultdict
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from .config import COMPRESSION, DETAILS_ROW_GROUP, DETAILS_SHARDS
+from .config import COMPRESSION, DETAILS_ROW_GROUP, DETAILS_SHARDS, REF_DIR
 from .normalize import normalize_text, normalize_vocab, search_key, split_multi, split_vocab
 from .parse import (classify_statut, merge_auteurs, palissy_ids, parse_auteurs,
                     parse_coords, parse_links, parse_protections, parse_siecles)
@@ -74,7 +77,30 @@ DETAILS_SCHEMA = pa.schema([
     ("liens_externes", _LIST_STR),
     ("palissy", _LIST_STR),
     ("renvois", _LIST_STR),
+    ("commons", _LIST_STR),
 ])
+
+
+@lru_cache(maxsize=1)
+def _images_commons() -> dict[str, list[str]]:
+    """Noms de fichiers Wikimedia Commons, par notice.
+
+    L'instantané est produit à part par `python -m merimee_etl.wikidata` : le
+    pipeline ne va jamais sur le réseau. Absent, la colonne vaut la liste vide
+    partout et les artefacts restent valides — c'est ce qui permet aux tests de
+    tourner hors-ligne.
+    """
+    path = Path(REF_DIR) / "wikidata_images.csv"
+    images: dict[str, list[str]] = defaultdict(list)
+    if not path.exists():
+        return images
+    with path.open(encoding="utf-8", newline="") as fh:
+        # Les lignes de tête expliquent la provenance du fichier : elles ne
+        # sont pas des données.
+        lignes = (ligne for ligne in fh if not ligne.startswith("#"))
+        for row in csv.DictReader(lignes):
+            images[row["reference"]].append(row["fichier"])
+    return images
 
 
 @dataclass(slots=True)
@@ -209,6 +235,7 @@ def transform(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFram
             "liens_externes": parse_links(row.Liens_externes),
             "palissy": palissy,
             "renvois": split_multi(row.Renvoi_vers_une_notice_de_la_base_Merimee_ou_Palissy),
+            "commons": _images_commons().get(ref, []),
         })
 
     report.protections = len(protections)

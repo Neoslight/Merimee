@@ -23,8 +23,10 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 |---|---|
 | `data/raw/merimee.csv` | source, **non versionnée** (100 Mo) |
 | `data/ref/*.csv` | décisions éditoriales, **versionnées** : alias d'auteurs, corrections de vocabulaire |
+| `data/ref/wikidata_images.csv` | instantané tiers, 2,4 Mo — pas une décision éditoriale, cf. plus bas |
+| `etl/merimee_etl/wikidata.py` | récupère cet instantané, **jamais appelé par le pipeline** |
 | `etl/merimee_etl/` | pipeline : `load` → `normalize` → `parse` → `build`, piloté par `cli` |
-| `etl/tests/test_pipeline.py` | 52 tests : unitaires sur les cas tordus + intégration sur les artefacts |
+| `etl/tests/test_pipeline.py` | 55 tests : unitaires sur les cas tordus + intégration sur les artefacts |
 | `etl/out/rejets.csv` | segments hors-format rencontrés, jamais supprimés silencieusement |
 | `web/src/lib/db/` | `duckdb.ts` (bootstrap, fragments), `queries.ts` (requêtes), `shards.ts` (hachage) |
 | `web/src/lib/state/filters.svelte.ts` | état des filtres + construction du prédicat SQL |
@@ -34,14 +36,15 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `web/src/lib/format.ts` | `romain`, formats de nombres — étaient recopiés dans trois composants |
 | `web/src/service-worker.ts` | cache des actifs hachés uniquement |
 | `web/src/lib/components/` | `MonumentMap`, `FacetPanel`, `Timeline`, `Matrice`, `DetailPanel` |
-| `web/tests/smoke.mjs` | 43 vérifications en Chromium réel, avec `serveur.mjs` instrumenté |
+| `web/tests/smoke.mjs` | 58 vérifications en Chromium réel, avec `serveur.mjs` instrumenté |
 | `web/tests/apercu-social.mjs` | régénère la vignette Open Graph depuis l'application |
 
 ## Commandes
 
 ```bash
 cd etl  && python -m merimee_etl        # ~11 s, écrit web/static/data/
-cd etl  && python -m pytest tests -q    # 52 tests
+cd etl  && python -m merimee_etl.wikidata  # rafraîchit l'instantané des photos
+cd etl  && python -m pytest tests -q    # 55 tests
 cd web  && npm run dev                  # http://localhost:5173
 cd web  && npm run check                # svelte-check, doit rester à 0/0
 cd web  && npm run build && npm run test # build statique + smoke navigateur
@@ -202,6 +205,27 @@ choisir une cellule réduirait la matrice à cette seule cellule. Les couples
 (notice, siècle, décennie) sont dédoublonnés : une notice à deux actes dans la
 même décennie compterait deux fois. Les siècles antérieurs au 10e sortent des
 axes mais leur nombre est affiché sous le graphique.
+
+**Les photographies viennent d'un instantané, pas d'une requête vivante.** La base
+Mérimée ne porte **aucun lien vers une image** : ni colonne Mémoire, ni Wikidata, ni
+fichier. Le seul pont est Wikidata (`P380` identifiant Mérimée → `P18` image), et il
+couvre **39 556 notices sur 46 760, soit 84,6 %**. `python -m merimee_etl.wikidata`
+écrit `data/ref/wikidata_images.csv` ; `python -m merimee_etl` **ne l'appelle jamais**,
+il se contente de la colonne `commons` des fragments — vide si l'instantané est absent.
+C'est ce qui garde le pipeline hors-ligne et les tests sans réseau. Trois conséquences :
+
+- le fichier est versionné dans `data/ref/` mais **ce n'est pas une décision
+  éditoriale** : c'est une base tierce datée, qui vieillit ;
+- le crédit auteur / licence est lu à la volée sur l'API Commons parce que Wikidata ne
+  le porte pas. La plupart de ces images sont sous CC-BY-SA : **le crédit est une
+  obligation**. Il n'est jamais bloquant, et son échec laisse le lien vers la page du
+  fichier, qui porte l'information complète ;
+- une notice sur six n'a pas d'image : la section **disparaît**, elle ne laisse pas un
+  cadre vide qui ferait croire à un chargement en cours.
+
+Le magasin de certificats par défaut de Python sous Windows a rendu un
+`CERTIFICATE_VERIFY_FAILED: certificate has expired` sur ce point d'entrée ; le module
+passe par `certifi` quand il est installé.
 
 **Les rejets sont signalés, pas supprimés.** Un segment de date illisible produit
 quand même un événement (année nulle) et une ligne dans `etl/out/rejets.csv`.

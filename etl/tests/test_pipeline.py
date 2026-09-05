@@ -318,3 +318,46 @@ def test_geographie(monuments):
     assert monuments.departement.nunique() == 102
     assert monuments.commune.nunique() >= 16_000
     assert monuments.search_key.str.contains("é").sum() == 0  # accents dépliés
+
+
+# --------------------------------------------------------------------------
+# Photographies Wikimedia : instantané facultatif
+# --------------------------------------------------------------------------
+
+
+@pytestmark_artifacts
+def test_colonne_commons_presente(details):
+    # La colonne existe dans tous les cas : c'est l'instantané Wikidata qui est
+    # facultatif, pas le schéma. Une colonne absente ferait échouer la requête
+    # de la fiche côté navigateur.
+    assert "commons" in details.columns
+    assert details.commons.map(lambda v: v is not None).all()
+
+
+@pytestmark_artifacts
+def test_couverture_photographique(details):
+    # Instantané du 2026-09-05 : 39 556 notices illustrées sur 46 760, soit
+    # 84,6 %. Le chiffre bouge à chaque rafraîchissement de la base tierce, la
+    # borne basse suffit donc à détecter une jointure cassée.
+    illustrees = details.commons.map(len).gt(0).sum()
+    if illustrees == 0:
+        pytest.skip("instantané `data/ref/wikidata_images.csv` absent")
+    assert illustrees > 30_000
+    # Trois images au maximum par notice, cf. `wikidata.MAX_IMAGES`.
+    assert details.commons.map(len).max() <= 3
+
+
+def test_images_absentes_ne_cassent_pas_le_build(tmp_path, monkeypatch):
+    """Sans instantané, la colonne vaut la liste vide et rien ne lève.
+
+    C'est ce qui permet au pipeline de tourner hors-ligne, et aux tests de ne
+    dépendre d'aucun réseau.
+    """
+    from merimee_etl import build
+
+    build._images_commons.cache_clear()
+    monkeypatch.setattr(build, "REF_DIR", tmp_path)
+    try:
+        assert build._images_commons() == {}
+    finally:
+        build._images_commons.cache_clear()

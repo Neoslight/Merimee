@@ -73,6 +73,65 @@
   $effect(() => {
     reference;
     montres = PAQUET;
+    imageChoisie = 0;
+    imageCassee = false;
+  });
+
+  // --- Photographie -------------------------------------------------------
+  // La base Merimee ne porte aucun lien vers une image. Les noms de fichiers
+  // viennent de l'instantane Wikidata (P380 -> P18) porte par les fragments :
+  // 84,6 % des notices en ont un, aucune requete supplementaire n'est emise.
+  const COMMONS = 'https://commons.wikimedia.org';
+
+  let imageChoisie = $state(0);
+  let imageCassee = $state(false);
+  let credit = $state<{ auteur: string; licence: string } | null>(null);
+
+  const vignette = (nom: string, largeur: number) =>
+    `${COMMONS}/wiki/Special:FilePath/${encodeURIComponent(nom)}?width=${largeur}`;
+
+  const pageFichier = (nom: string) => `${COMMONS}/wiki/File:${encodeURIComponent(nom)}`;
+
+  /** `extmetadata` renvoie du HTML (`<a>`, `<span>`) : le texte seul suffit. */
+  function texteNu(html: string): string {
+    return new DOMParser().parseFromString(html, 'text/html').body.textContent?.trim() ?? '';
+  }
+
+  /**
+   * Auteur et licence, lus a la volee sur l'API Commons.
+   *
+   * La plupart de ces photographies sont sous CC-BY-SA : le credit est une
+   * obligation, pas un ornement. Il n'est jamais bloquant — l'image s'affiche
+   * d'abord, le credit se pose quand il arrive, et un echec laisse le lien
+   * vers la page du fichier, qui porte l'information complete.
+   */
+  $effect(() => {
+    const nom = fiche?.commons?.[imageChoisie];
+    credit = null;
+    if (!nom) return;
+    let annule = false;
+    const url =
+      `${COMMONS}/w/api.php?action=query&format=json&origin=*` +
+      `&prop=imageinfo&iiprop=extmetadata&titles=${encodeURIComponent(`File:${nom}`)}`;
+    fetch(url)
+      .then((r) => r.json())
+      .then((donnees) => {
+        if (annule) return;
+        const pages = donnees?.query?.pages ?? {};
+        const meta = Object.values(pages)[0] as
+          | { imageinfo?: { extmetadata?: Record<string, { value?: string }> }[] }
+          | undefined;
+        const champs = meta?.imageinfo?.[0]?.extmetadata ?? {};
+        const auteur = texteNu(champs.Artist?.value ?? '');
+        const licence = texteNu(champs.LicenseShortName?.value ?? '');
+        if (auteur || licence) credit = { auteur, licence };
+      })
+      .catch(() => {
+        // Reseau ou API muets : le lien vers la page du fichier reste.
+      });
+    return () => {
+      annule = true;
+    };
   });
 </script>
 
@@ -101,6 +160,36 @@
         {#each fiche.periodes as periode}<span class="badge sourd">{periode}</span>{/each}
       </p>
     </header>
+
+    {#if fiche.commons.length && !imageCassee}
+      <!-- Une notice sur six n'a pas d'image : la section disparait alors
+           entierement. Un cadre gris de remplacement laisserait croire a un
+           chargement en cours. -->
+      <figure class="photo">
+        <img
+          src={vignette(fiche.commons[imageChoisie], 640)}
+          alt="Photographie de {fiche.titre}"
+          loading="lazy"
+          onerror={() => (imageCassee = true)}
+        />
+        {#if fiche.commons.length > 1}
+          <div class="bande">
+            {#each fiche.commons as nom, i (nom)}
+              <button class:choisi={i === imageChoisie} onclick={() => (imageChoisie = i)}
+                      aria-label="Photographie {i + 1}">
+                <img src={vignette(nom, 120)} alt="" loading="lazy" />
+              </button>
+            {/each}
+          </div>
+        {/if}
+        <figcaption>
+          {#if credit?.auteur}<span class="auteur">{credit.auteur}</span>{/if}
+          <a href={pageFichier(fiche.commons[imageChoisie])} target="_blank" rel="noreferrer">
+            {credit?.licence || 'Wikimedia Commons'}
+          </a>
+        </figcaption>
+      </figure>
+    {/if}
 
     <dl>
       {#if fiche.adresse || fiche.lieudit}
@@ -293,6 +382,63 @@
   .bleu { color: var(--inscrit); }
   .violet { color: var(--mixte); }
   .sourd { color: var(--texte-faible); }
+
+  .photo {
+    margin: 0;
+    border-bottom: 1px solid var(--bord);
+  }
+
+  /* Rapport fixe : sans lui, chaque image qui arrive pousse la fiche entiere
+     vers le bas au moment ou on commence a la lire. */
+  .photo > img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    background: var(--fond-creux);
+  }
+
+  .bande {
+    display: flex;
+    gap: 4px;
+    padding: 6px 6px 0;
+  }
+
+  .bande button {
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: none;
+    cursor: pointer;
+    overflow: hidden;
+    line-height: 0;
+  }
+
+  .bande button.choisi {
+    border-color: var(--accent);
+  }
+
+  .bande img {
+    width: 52px;
+    height: 38px;
+    object-fit: cover;
+  }
+
+  figcaption {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    padding: 6px 18px 10px;
+    font-size: 10px;
+    color: var(--texte-faible);
+  }
+
+  .auteur {
+    max-width: 60%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
   dl {
     display: grid;

@@ -372,6 +372,38 @@ try {
       );
     }
 
+    // --- Photographies -------------------------------------------------
+    // Les noms de fichiers viennent des fragments, pas d'une requete : seule
+    // l'image elle-meme et son credit partent sur le reseau.
+    await onglet.goto(`${BASE}/?ref=PA00097411`, { waitUntil: 'domcontentloaded' });
+    await attendre(onglet, '.fiche .fermer');
+    await onglet.waitForTimeout(600);
+    const source = await onglet.getAttribute('.photo > img', 'src');
+    verifier(
+      'la fiche illustree porte une image Commons',
+      /commons\.wikimedia\.org\/wiki\/Special:FilePath\//.test(source ?? ''),
+      source ?? 'aucune image'
+    );
+    // Le credit peut venir du reseau ou non : le lien de repli, lui, est
+    // toujours rendu. C'est lui qui rend la licence atteignable.
+    const legende = await onglet.textContent('.photo figcaption');
+    verifier(
+      'le credit ou son repli est affiche',
+      Boolean(legende && legende.trim()),
+      (legende ?? '').replace(/\s+/g, ' ').trim().slice(0, 60)
+    );
+
+    // Une notice sur six n'a pas d'image : la section disparait, elle ne
+    // laisse pas un cadre vide qui ferait croire a un chargement.
+    await onglet.goto(`${BASE}/?ref=PA67000108`, { waitUntil: 'domcontentloaded' });
+    await attendre(onglet, '.fiche .fermer');
+    await onglet.waitForTimeout(600);
+    verifier(
+      'aucune section photo sans image',
+      (await onglet.locator('.photo').count()) === 0,
+      `${await onglet.locator('.photo').count()} figure(s)`
+    );
+
     // `?notice=` a circule avant `?ref=` : l'alias doit encore ouvrir la fiche.
     await onglet.goto(`${BASE}/?notice=PA00097411`, { waitUntil: 'domcontentloaded' });
     await attendre(onglet, '.fiche .fermer');

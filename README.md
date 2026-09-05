@@ -38,7 +38,7 @@ protégés » de [POP](https://www.pop.culture.gouv.fr/).
 cd etl
 pip install -r requirements.txt
 python -m merimee_etl          # ~10 s, écrit dans web/static/data/
-pytest                         # 52 tests
+pytest                         # 55 tests
 ```
 
 Le rapport affiché doit annoncer 46 760 notices, 44 484 géolocalisées,
@@ -54,7 +54,7 @@ npm run dev                    # http://localhost:5173
 npm run build && npm run test  # build statique + 14 vérifications en navigateur
 ```
 
-`npm run test` lance Chromium sur le build : **55 vérifications** couvrant le
+`npm run test` lance Chromium sur le build : **58 vérifications** couvrant le
 démarrage de DuckDB-Wasm, le filtrage croisé, la recherche dans une facette au-delà
 des 40 valeurs affichées, la matrice, les permaliens, le gabarit téléphone, la bascule
 de thème — y compris le contraste calculé, et la survie des couches de carte à
@@ -102,7 +102,7 @@ Trois détails que GitHub Pages impose :
 |---|---|---|
 | `monuments.parquet` | 46 760 notices × 29 colonnes, dont les champs multivalués en colonnes `LIST` | 2,3 Mo |
 | `protections.parquet` | 51 640 actes de protection datés | 0,4 Mo |
-| `details/0-31.parquet` | textes longs, liens, mobilier — 32 fragments | 10,3 Mo au total |
+| `details/0-31.parquet` | textes longs, liens, mobilier, photographies — 32 fragments | 11,2 Mo au total |
 
 Les deux premiers sont matérialisés en table au démarrage. Les fragments de
 `details` sont chargés à la demande, un seul par fiche consultée.
@@ -156,6 +156,18 @@ fort est clair, en clair il est sombre, sinon la matrice disparaît dans son fon
 que par « Copier le lien » : réécrire l'URL à chaque déplacement la noierait et
 empilerait l'historique. Elle est consommée au chargement et disparaît au premier
 changement de filtre — ce n'est pas un filtre, elle ne restreint aucun corpus.
+
+**Les photographies tiennent dans les fragments déjà téléchargés.** La base Mérimée ne
+porte aucun lien vers une image. Wikidata en porte un — `P380` identifiant Mérimée vers
+`P18` image — et il couvre **84,6 % du corpus, 39 556 notices**. L'instantané est pris à
+part (`python -m merimee_etl.wikidata`), versionné, puis reporté dans la colonne
+`commons` de `details` : ouvrir une fiche ne coûte donc aucune requête de plus, seule
+l'image part sur le réseau. Le pipeline ne va jamais en ligne de lui-même, et la colonne
+vaut la liste vide si l'instantané manque.
+
+Le crédit auteur et la licence sont lus à la volée sur l'API Commons, parce que Wikidata
+ne les porte pas : ces images sont pour la plupart sous CC-BY-SA, le crédit est une
+obligation. Il n'est jamais bloquant.
 
 **Facettes évaluées sans leur propre filtre.** `buildWhere(filtres, except)` retire
 la clause de la facette qu'on est en train de compter. Sans cela, dès la première
