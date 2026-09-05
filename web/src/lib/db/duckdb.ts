@@ -25,10 +25,7 @@ const fichier = (chemin: string) => new URL(`${base}/data/${chemin}`, location.h
 async function boot(): Promise<duckdb.AsyncDuckDBConnection> {
   const worker = new Worker(ehWorker);
   const db = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), worker);
-  await db.instantiate(ehWasm, null, (etape) => {
-    amorcage.octets = etape.bytesLoaded;
-    amorcage.total = etape.bytesTotal;
-  });
+  await db.instantiate(ehWasm);
   amorcage.phase = 'corpus';
   instance = db;
 

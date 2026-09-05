@@ -113,11 +113,20 @@ bouge qu'à une montée de version de DuckDB. **Pour repartir de zéro chez un
 visiteur** : DevTools → Application → Service Workers → Unregister, puis vider
 le stockage.
 
-**La progression en octets du wasm est invisible en local.** duckdb-wasm
-n'émet un événement que si plus de 20 ms séparent deux morceaux du flux ; sur
-`localhost` ils arrivent plus vite et le rappel ne se déclenche jamais. La barre
-ne se vérifie donc que sur le site publié, réseau réel. Les libellés de phase,
-eux, sont exacts partout.
+**Le rappel de progression de duckdb-wasm ne remonte pas jusqu'à la page.**
+`instantiate()` accepte bien un gestionnaire `{ bytesLoaded, bytesTotal }`, et le
+worker poste des messages `INSTANTIATE_PROGRESS` — mais aucun n'a été observé,
+ni en local ni sur le site publié : le binaire est téléchargé par le web worker,
+qui a sa propre chronologie (il n'apparaît pas non plus dans
+`performance.getEntriesByType('resource')` de la page). Une barre de progression
+a été écrite puis retirée. Ne pas la réécrire sans mesurer d'abord que le rappel
+se déclenche. Les libellés de phase, eux, sont exacts.
+
+**Mesurer le cache du service worker : ni `page.on('response')` ni
+`performance` ne servent.** Le premier voit une paire cache/réseau indiscernable,
+le second ignore les requêtes du worker. Les deux mesures qui font foi sont le
+compteur d'octets côté serveur de `tests/serveur.mjs` (0 Ko au troisième
+chargement) et le contenu de `caches.open('merimee-actifs')` lu depuis la page.
 
 **Sous Git Bash, MSYS réécrit toute variable d'environnement commençant par `/`**
 en chemin Windows. `BASE_PATH` est donc normalisée dans `svelte.config.js` et se
