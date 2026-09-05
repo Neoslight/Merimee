@@ -13,6 +13,7 @@ import * as duckdb from '@duckdb/duckdb-wasm';
 import ehWasm from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
 import ehWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
 import { base } from '$app/paths';
+import { amorcage } from '$lib/state/amorcage.svelte';
 
 export type Row = Record<string, any>;
 
@@ -24,7 +25,11 @@ const fichier = (chemin: string) => new URL(`${base}/data/${chemin}`, location.h
 async function boot(): Promise<duckdb.AsyncDuckDBConnection> {
   const worker = new Worker(ehWorker);
   const db = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), worker);
-  await db.instantiate(ehWasm);
+  await db.instantiate(ehWasm, null, (etape) => {
+    amorcage.octets = etape.bytesLoaded;
+    amorcage.total = etape.bytesTotal;
+  });
+  amorcage.phase = 'corpus';
   instance = db;
 
   for (const nom of ['monuments.parquet', 'protections.parquet']) {
@@ -36,6 +41,7 @@ async function boot(): Promise<duckdb.AsyncDuckDBConnection> {
   // par chaque interaction.
   await conn.query(`CREATE TABLE monuments AS SELECT * FROM read_parquet('monuments.parquet')`);
   await conn.query(`CREATE TABLE protections AS SELECT * FROM read_parquet('protections.parquet')`);
+  amorcage.phase = 'pret';
   return conn;
 }
 

@@ -31,6 +31,7 @@
     type FacetKey
   } from '$lib/state/filters.svelte';
   import { decoder, encoder, type Vue } from '$lib/state/permalien';
+  import { amorcage, LIBELLES } from '$lib/state/amorcage.svelte';
   import { browser } from '$app/environment';
   import { pushState, replaceState } from '$app/navigation';
   import { page } from '$app/state';
@@ -206,6 +207,15 @@
 
   const nf = new Intl.NumberFormat('fr-FR');
   const actifs = $derived(countActive(filters));
+
+  const mo = (octets: number) => (octets / 1_048_576).toFixed(1);
+
+  // La taille annoncee est celle de la reponse compressee alors que les octets
+  // comptes sont decompresses : le rapport peut depasser 100 %. On le borne
+  // plutot que d'afficher une barre qui deborde.
+  const avancement = $derived(
+    amorcage.total > 0 ? Math.min(100, Math.round((amorcage.octets / amorcage.total) * 100)) : null
+  );
 </script>
 
 <div class="app">
@@ -326,7 +336,13 @@
         {#if erreur}
           <div class="erreur"><b>Erreur DuckDB</b><p>{erreur}</p></div>
         {:else if chargement && !compteurs}
-          <div class="amorce">Chargement de la base…</div>
+          <div class="amorce">
+            <p>{LIBELLES[amorcage.phase]}</p>
+            {#if avancement !== null}
+              <div class="jauge"><i style="width:{avancement}%"></i></div>
+              <span>{mo(amorcage.octets)} Mo sur {mo(amorcage.total)}</span>
+            {/if}
+          </div>
         {/if}
       </div>
 
@@ -582,6 +598,31 @@
   .meta {
     font-size: 11px;
     color: var(--texte-faible);
+  }
+
+  .jauge {
+    height: 3px;
+    margin: 8px 0 6px;
+    border-radius: 999px;
+    background: var(--bord);
+    overflow: hidden;
+  }
+
+  .jauge i {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+    transition: width 120ms linear;
+  }
+
+  .amorce p {
+    margin: 0;
+  }
+
+  .amorce span {
+    font-size: 10px;
+    color: var(--texte-faible);
+    font-variant-numeric: tabular-nums;
   }
 
   .amorce,

@@ -29,8 +29,12 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `web/src/lib/db/` | `duckdb.ts` (bootstrap, fragments), `queries.ts` (requêtes), `shards.ts` (hachage) |
 | `web/src/lib/state/filters.svelte.ts` | état des filtres + construction du prédicat SQL |
 | `web/src/lib/state/permalien.ts` | sérialisation de l'état dans l'URL (`encoder` / `decoder`) |
-| `web/src/lib/components/` | `MonumentMap`, `FacetPanel`, `Timeline`, `DetailPanel` |
-| `web/tests/smoke.mjs` | 14 vérifications en Chromium réel, avec `serveur.mjs` instrumenté |
+| `web/src/lib/state/amorcage.svelte.ts` | phase et octets du démarrage, lus par l'écran d'attente |
+| `web/src/lib/format.ts` | `romain`, formats de nombres — étaient recopiés dans trois composants |
+| `web/src/service-worker.ts` | cache des actifs hachés uniquement |
+| `web/src/lib/components/` | `MonumentMap`, `FacetPanel`, `Timeline`, `Matrice`, `DetailPanel` |
+| `web/tests/smoke.mjs` | 43 vérifications en Chromium réel, avec `serveur.mjs` instrumenté |
+| `web/tests/apercu-social.mjs` | régénère la vignette Open Graph depuis l'application |
 
 ## Commandes
 
@@ -40,6 +44,7 @@ cd etl  && python -m pytest tests -q    # 52 tests
 cd web  && npm run dev                  # http://localhost:5173
 cd web  && npm run check                # svelte-check, doit rester à 0/0
 cd web  && npm run build && npm run test # build statique + smoke navigateur
+cd web  && npm run apercu               # régénère static/apercu-social.png
 cd web  && npm run deploy               # build /Merimee + push sur gh-pages
 ```
 
@@ -95,6 +100,25 @@ nom de fichier ne sert donc à rien au-delà : une visite espacée repaie les 7,
 Si cela devient gênant, la seule sortie est un service worker qui met le wasm en
 cache lui-même. Amorçage mesuré en ligne : 3,9 s.
 
+**Le service worker ne met en cache que `build`.** Ces actifs portent un hachage :
+un contenu différent porte un nom différent, ils ne peuvent pas devenir périmés.
+Les Parquet de `data/` en sont volontairement exclus — leurs noms sont stables
+d'un déploiement à l'autre, les mettre en cache exposerait à servir d'anciennes
+données après une passe d'ETL. Le shell HTML n'est pas mis en cache non plus,
+et c'est ce qui évite qu'un déploiement reste collé : la page revient toujours
+du réseau, donc pointe toujours vers les derniers actifs hachés. Le cache porte
+un **nom stable**, purgé par différence à l'activation : le nommer par version
+ferait retélécharger le wasm à chaque déploiement, alors que son hachage ne
+bouge qu'à une montée de version de DuckDB. **Pour repartir de zéro chez un
+visiteur** : DevTools → Application → Service Workers → Unregister, puis vider
+le stockage.
+
+**La progression en octets du wasm est invisible en local.** duckdb-wasm
+n'émet un événement que si plus de 20 ms séparent deux morceaux du flux ; sur
+`localhost` ils arrivent plus vite et le rappel ne se déclenche jamais. La barre
+ne se vérifie donc que sur le site publié, réseau réel. Les libellés de phase,
+eux, sont exacts partout.
+
 **Sous Git Bash, MSYS réécrit toute variable d'environnement commençant par `/`**
 en chemin Windows. `BASE_PATH` est donc normalisée dans `svelte.config.js` et se
 passe sans slash initial.
@@ -108,6 +132,12 @@ cible du clic.
 **Colonnes `LIST` plutôt que tables de liaison.** Domaines, siècles, dénominations,
 auteurs, propriétaires sont des listes dans `monuments`. Filtrage par
 `list_has_any`, facettage par `UNNEST`. Seuls les actes de protection ont leur table.
+
+**Une facette ne montre que ses 40 valeurs les plus fréquentes ; sa recherche,
+elle, fouille tout.** Filtrer en JavaScript la liste déjà rapatriée laissait
+7 000 des 7 040 auteurs inatteignables. `facette(f, cle, limite, terme)` descend
+le `LIKE` dans DuckDB via `strip_accents(lower(...))`, et **épingle les valeurs
+cochées** : sans cela, saisir un terme rendrait impossible de les décocher.
 
 **Les facettes s'évaluent sans leur propre filtre.** `buildWhere(filtres, except)` —
 retirer ce mécanisme fait tomber à zéro toutes les options non cochées et tue le
@@ -124,6 +154,13 @@ finissent dans `lit()`.
 
 **Un jeton monotone annule les résultats obsolètes** dans `+page.svelte` : une
 requête lente ne doit jamais écraser une plus récente.
+
+**La matrice retire un filtre par axe.** `buildWhere` accepte une liste de clés
+à exclure ; `matrice()` en passe deux (`siecles`, `anneeProtection`), sinon
+choisir une cellule réduirait la matrice à cette seule cellule. Les couples
+(notice, siècle, décennie) sont dédoublonnés : une notice à deux actes dans la
+même décennie compterait deux fois. Les siècles antérieurs au 10e sortent des
+axes mais leur nombre est affiché sous le graphique.
 
 **Les rejets sont signalés, pas supprimés.** Un segment de date illisible produit
 quand même un événement (année nulle) et une ligne dans `etl/out/rejets.csv`.
@@ -143,14 +180,16 @@ mesurée), pas le *quoi*.
 
 ## Reste à faire
 
-Repris de l'intention initiale, non implémenté :
-
-- Vue alternative scatter plot / matrice à la place de la carte.
-- Mode heatmap ou clustering dynamique au zoom (la couche `deck.gl` reste l'échappatoire
-  si le rendu GeoJSON de 44 k points devient limitant ; l'interface de la couche est
-  isolée dans `MonumentMap.svelte` pour rendre ce remplacement local).
+- Export CSV de la sélection courante, et liste paginée au-delà des 200 lignes.
 - Filtres « figures » préréglés (Vauban, Guimard, Le Corbusier) en un clic, au-dessus
-  de la facette auteurs existante.
-- Passerelle riche vers les objets Palissy — aujourd'hui un simple lien vers la
-  recherche POP ; les identifiants `IM…` sont déjà stockés dans les fragments.
+  de la facette auteurs existante. Devenus de simples liens depuis les permaliens.
 - Exploitation NLP des 23,6 Mo de texte libre (`historique`, `precision_protection`).
+- `deck.gl` reste l'échappatoire si le rendu GeoJSON de 44 k points devient limitant ;
+  l'interface de la couche est isolée dans `MonumentMap.svelte`. La couche `heatmap`
+  native ajoutée depuis répond déjà à la saturation aux vues larges — mesurer avant
+  d'y toucher.
+- **Doublons d'auteurs rendus visibles par la recherche de facette** : le corpus
+  contient `Baltard Louis-Pierre` et `Baltard, Louis-Pierre`. La virgule sépare une
+  poignée d'identités qui devraient être fusionnées ; invisible tant que seules les
+  40 valeurs les plus fréquentes s'affichaient. Une ligne dans
+  `data/ref/auteurs_alias.csv` par cas, comme pour la dynastie Gabriel.

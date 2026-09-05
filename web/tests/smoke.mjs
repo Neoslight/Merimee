@@ -47,6 +47,19 @@ try {
   verifier('46 760 notices chargees', initial === 46760, `obtenu ${initial}`);
   verifier('amorcage sous 30 s', amorce < 30_000, `${amorce} ms`);
 
+  // --- Carte de lien --------------------------------------------------------
+  // Les permaliens n'ont d'interet que si le lien colle quelque part s'affiche.
+  const carte = await page.evaluate(() => ({
+    image: document.querySelector('meta[property="og:image"]')?.getAttribute('content') ?? '',
+    icone: document.querySelector('link[rel="icon"]')?.getAttribute('href') ?? ''
+  }));
+  verifier('vignette Open Graph declaree', /^https:\/\/.+\.png$/.test(carte.image), carte.image);
+  const iconeOk = await page.evaluate(
+    (href) => fetch(href).then((r) => r.status),
+    carte.icone
+  );
+  verifier('favicon servie', iconeOk === 200, `${carte.icone} -> ${iconeOk}`);
+
   const points = await page.evaluate(() => {
     const src = document.querySelector('.maplibregl-canvas');
     return src ? 1 : 0;
@@ -345,6 +358,33 @@ try {
 
   await page.setViewportSize({ width: 1600, height: 950 });
   await page.waitForTimeout(500);
+
+  // --- Service worker -------------------------------------------------------
+  // Trois chargements sont necessaires pour observer le cache : au premier la
+  // page n'est pas encore controlee, au deuxieme le worker intercepte et
+  // remplit son cache, au troisieme seulement il resert sans reseau.
+  const cheminWasm = [...octets.keys()].find((chemin) => chemin.endsWith('.wasm'));
+  verifier('binaire DuckDB servi', Boolean(cheminWasm), cheminWasm ?? 'aucun');
+
+  if (cheminWasm) {
+    await page.evaluate(() => navigator.serviceWorker.ready);
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await attendre(page, '.chiffres b');
+    const apresDeuxieme = octets.get(cheminWasm) ?? 0;
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await attendre(page, '.chiffres b');
+    const troisieme = (octets.get(cheminWasm) ?? 0) - apresDeuxieme;
+
+    const controle = await page.evaluate(() => Boolean(navigator.serviceWorker.controller));
+    verifier('service worker aux commandes', controle);
+    verifier(
+      'binaire DuckDB resservi sans reseau',
+      troisieme === 0,
+      `${(troisieme / 1024).toFixed(0)} Ko retelecharges`
+    );
+  }
 
   verifier('aucune erreur console', erreursConsole.length === 0, erreursConsole.slice(0, 3).join(' | '));
 

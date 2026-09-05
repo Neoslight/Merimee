@@ -8,6 +8,10 @@ douzaine de facettes, et double frise temporelle : époque de construction d'un 
 année de l'arrêté de protection de l'autre — de la première liste Mérimée de 1840
 jusqu'aux arrêtés de 2026.
 
+Une troisième vue croise les deux axes en une matrice : **ce qui a été protégé, et
+quand**. Les années 1920 classent le 16e siècle, les années 1980-90 se tournent vers
+le 18e et le 19e — le déplacement du regard patrimonial se lit d'un coup d'œil.
+
 Tout état d'exploration vit dans l'URL : un croisement trouvé se partage par simple
 copie du lien, et le retour arrière referme la fiche ouverte.
 
@@ -49,9 +53,15 @@ npm run dev                    # http://localhost:5173
 npm run build && npm run test  # build statique + 14 vérifications en navigateur
 ```
 
-`npm run test` lance Chromium sur le build : il vérifie que DuckDB-Wasm démarre,
-que le filtrage croisé répond, et qu'ouvrir une fiche ne télécharge qu'un fragment
-de ~320 Ko. Nécessite `npx playwright install chromium` une fois.
+`npm run test` lance Chromium sur le build : **43 vérifications** couvrant le
+démarrage de DuckDB-Wasm, le filtrage croisé, la recherche dans une facette au-delà
+des 40 valeurs affichées, la matrice, les permaliens, le gabarit téléphone, et le
+fait qu'ouvrir une fiche ne télécharge qu'un fragment de ~320 Ko. Nécessite
+`npx playwright install chromium` une fois.
+
+`npm run apercu` régénère `static/apercu-social.png`, la vignette des cartes de
+lien, capturée sur l'application elle-même : une image dessinée à la main cesserait
+d'être vraie au premier changement d'interface.
 
 ### 4. Déploiement (GitHub Pages)
 
@@ -63,9 +73,13 @@ Le site est publié sur <https://neoslight.github.io/Merimee/>.
 
 Poids du premier chargement, mesuré en ligne : **≈ 10,5 Mo**, dont 7,5 Mo pour le
 seul binaire `duckdb-eh.wasm` (32,7 Mo bruts, servis gzip par Pages). Les Parquet
-sont la moitié la moins chère. Amorçage : 3,9 s. Pages plafonne le cache à
-`max-age=600`, donc ce coût se repaie à chaque visite espacée de plus de dix
-minutes.
+sont la moitié la moins chère. Amorçage : 3,9 s.
+
+Pages plafonne le cache à `Cache-Control: max-age=600`, non configurable : passé
+dix minutes, le hachage des noms de fichiers ne sert plus à rien et une visite
+espacée repaie tout. Un service worker prend donc le relais et met en cache les
+seuls actifs hachés — vérifié par le test : au troisième chargement, **0 octet**
+de wasm retéléchargé.
 
 Les artefacts Parquet n'étant pas versionnés, la CI ne peut pas les régénérer :
 le déploiement compile **en local** puis pousse `web/build` sur la branche
@@ -121,6 +135,14 @@ noierait l'URL, et le destinataire d'un lien recalcule la sienne. Les filtres
 s'écrivent par remplacement d'entrée d'historique ; seule l'ouverture d'une fiche
 en empile une, pour que le retour arrière la referme.
 
+**Une facette affiche 40 valeurs, sa recherche en fouille 7 040.** Le champ
+« filtrer… » triait au départ la liste déjà rapatriée : sur 7 040 auteurs,
+7 000 étaient inatteignables, dont Baltard et Le Corbusier, et 5 607 n'ont qu'une
+seule notice — la longue traîne est précisément ce qu'on vient chercher. La
+recherche descend maintenant dans DuckDB, avec `strip_accents` pour ignorer les
+accents sans stocker de colonne repliée. Une valeur cochée reste listée même hors
+résultat : sans cela on ne pourrait plus la décocher.
+
 **Facettes évaluées sans leur propre filtre.** `buildWhere(filtres, except)` retire
 la clause de la facette qu'on est en train de compter. Sans cela, dès la première
 sélection toutes les options non cochées tomberaient à zéro et le filtrage croisé
@@ -165,6 +187,6 @@ des codes INSEE historisés avec le COG actuel. Ajouter une ligne à
 
 ## Hors périmètre
 
-Vue scatter/matrice alternative, heatmap, passerelle détaillée vers les objets
-Palissy, réconciliation du COG historisé, exploitation NLP des 23,6 Mo de texte
+Export CSV de la sélection, liste paginée au-delà de 200 lignes, filtres « figures »
+préréglés, réconciliation du COG historisé, exploitation NLP des 23,6 Mo de texte
 libre. Le modèle de données les accueille sans refonte.
