@@ -145,8 +145,6 @@
 
   header {
     margin-bottom: 6px;
-    /* Degage le selecteur de vue, pose en absolu par la page. */
-    padding-left: 186px;
   }
 
   h3 {

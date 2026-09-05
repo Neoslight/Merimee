@@ -12,6 +12,10 @@ Une troisième vue croise les deux axes en une matrice : **ce qui a été proté
 quand**. Les années 1920 classent le 16e siècle, les années 1980-90 se tournent vers
 le 18e et le 19e — le déplacement du regard patrimonial se lit d'un coup d'œil.
 
+Les filtres posés s'affichent en puces sous la barre : on voit lesquels sont actifs et
+on en retire un seul d'un clic. Les deux panneaux — facettes à gauche, fiche à droite —
+sont des tiroirs qui flottent au-dessus de la carte au lieu de la compresser.
+
 Tout état d'exploration vit dans l'URL : un croisement trouvé se partage par simple
 copie du lien, et le retour arrière referme la fiche ouverte. Sombre ou clair, au
 choix — le thème reste hors de l'URL, un lien s'ouvre dans celui de son destinataire.
@@ -51,15 +55,18 @@ rencontrés sont listés dans `etl/out/rejets.csv`.
 cd web
 npm install
 npm run dev                    # http://localhost:5173
-npm run build && npm run test  # build statique + 14 vérifications en navigateur
+npm run build && npm run test  # build statique + 70 vérifications en navigateur
 ```
 
-`npm run test` lance Chromium sur le build : **58 vérifications** couvrant le
+`npm run test` lance Chromium sur le build : **70 vérifications** couvrant le
 démarrage de DuckDB-Wasm, le filtrage croisé, la recherche dans une facette au-delà
 des 40 valeurs affichées, la matrice, les permaliens, le gabarit téléphone, la bascule
 de thème — y compris le contraste calculé, et la survie des couches de carte à
-`setStyle` — et le fait qu'ouvrir une fiche ne télécharge qu'un fragment de ~320 Ko. Nécessite
-`npx playwright install chromium` une fois.
+`setStyle` —, les puces de filtres actifs, le brossage des siècles, et le fait
+qu'ouvrir une fiche ne télécharge qu'un fragment de ~320 Ko. Une mesure en pixels
+vérifie que le tiroir ne prend **aucune** largeur à la carte : c'est la régression que
+le passage en calques risque le plus. Nécessite `npx playwright install chromium` une
+fois.
 
 `npm run apercu` régénère `static/apercu-social.png`, la vignette des cartes de
 lien, capturée sur l'application elle-même : une image dessinée à la main cesserait
@@ -168,6 +175,19 @@ vaut la liste vide si l'instantané manque.
 Le crédit auteur et la licence sont lus à la volée sur l'API Commons, parce que Wikidata
 ne les porte pas : ces images sont pour la plupart sous CC-BY-SA, le crédit est une
 obligation. Il n'est jamais bloquant.
+
+**Les panneaux flottent, ils ne compressent pas.** La grille d'origine réservait
+`246px | 1fr | 340px` en permanence — dont 340 px pour afficher « Sélectionnez un
+point ». Les deux panneaux sont devenus des calques : la carte garde sa pleine largeur,
+et les ouvrir ne provoque aucun redimensionnement du canevas WebGL. En contrepartie,
+les commandes MapLibre doivent s'écarter d'eux : l'attribution CARTO est passée en bas
+à gauche, parce qu'à droite la fiche la recouvrait — une mention de licence masquée
+n'est pas une mention.
+
+**Les puces disent l'état, et deux d'entre elles ont un miroir.** Retirer la puce de
+recherche doit aussi vider le champ de la barre, qui alimente le filtre ; retirer celle
+de la zone visible doit délier la vue de la carte, sinon le prochain déplacement la
+repose aussitôt.
 
 **Facettes évaluées sans leur propre filtre.** `buildWhere(filtres, except)` retire
 la clause de la facette qu'on est en train de compter. Sans cela, dès la première

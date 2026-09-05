@@ -35,8 +35,8 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `web/src/lib/state/theme.svelte.ts` | thème sombre/clair, et la palette résolue que lisent MapLibre et Plot |
 | `web/src/lib/format.ts` | `romain`, formats de nombres — étaient recopiés dans trois composants |
 | `web/src/service-worker.ts` | cache des actifs hachés uniquement |
-| `web/src/lib/components/` | `MonumentMap`, `FacetPanel`, `Timeline`, `Matrice`, `DetailPanel` |
-| `web/tests/smoke.mjs` | 58 vérifications en Chromium réel, avec `serveur.mjs` instrumenté |
+| `web/src/lib/components/` | `MonumentMap`, `FacetPanel`, `Jetons`, `Timeline`, `Matrice`, `DetailPanel` |
+| `web/tests/smoke.mjs` | 70 vérifications en Chromium réel, avec `serveur.mjs` instrumenté |
 | `web/tests/apercu-social.mjs` | régénère la vignette Open Graph depuis l'application |
 
 ## Commandes
@@ -47,7 +47,7 @@ cd etl  && python -m merimee_etl.wikidata  # rafraîchit l'instantané des photo
 cd etl  && python -m pytest tests -q    # 55 tests
 cd web  && npm run dev                  # http://localhost:5173
 cd web  && npm run check                # svelte-check, doit rester à 0/0
-cd web  && npm run build && npm run test # build statique + smoke navigateur
+cd web  && npm run build && npm run test # build statique + 70 vérifications navigateur
 cd web  && npm run apercu               # régénère static/apercu-social.png
 cd web  && npm run deploy               # build /Merimee + push sur gh-pages
 ```
@@ -138,7 +138,11 @@ passe sans slash initial.
 
 **`plot.value` d'Observable Plot reste nul** sur une marque non interactive. Pour
 rendre une barre cliquable, retrouver la bande via `graphe.scale('x')`, pas via la
-cible du clic.
+cible du clic. **L'axe des siècles est une échelle à bandes : `invert` n'existe pas.**
+Le pixel se retraduit en balayant les bandes, et il se rattache à la **plus proche**,
+pas à celle qu'il touche : `barY` laisse un intervalle entre les barres, et un
+brossage qui démarre dans un intervalle serait perdu. Hors de la zone des barres —
+la marge de l'axe — rien n'est visé.
 
 **`map.setStyle()` détruit toutes les sources et couches ajoutées.** Changer de fond
 avec le thème veut dire les reposer entièrement : d'où `poserCouches()` dans
@@ -169,6 +173,38 @@ cochées** : sans cela, saisir un terme rendrait impossible de les décocher.
 **Les facettes s'évaluent sans leur propre filtre.** `buildWhere(filtres, except)` —
 retirer ce mécanisme fait tomber à zéro toutes les options non cochées et tue le
 filtrage croisé. `queries.facette()` passe systématiquement la clé en `except`.
+
+**Les deux panneaux sont des calques, pas des colonnes.** Le tiroir des facettes et la
+fiche flottent au-dessus de la carte (`position: absolute` dans `.scene`), et non plus
+dans une grille `246px | 1fr | 340px` qui compressait le canevas en permanence — 340 px
+étaient réservés pour afficher « Sélectionnez un point ». Trois conséquences à ne pas
+défaire :
+
+- **les ouvrir ne redimensionne pas le canevas WebGL.** C'est la raison d'être du choix.
+  `le tiroir ne prend pas de largeur à la carte` le mesure, avant/après, en pixels ;
+- **MapLibre ne redimensionne pas son canevas tout seul.** La bande de puces qui
+  apparaît au premier filtre change la hauteur de la scène : `MonumentMap` porte donc un
+  `ResizeObserver` → `map.resize()`. Sans lui la carte reste dessinée à l'ancienne taille
+  et décalée du pointeur ;
+- **les commandes MapLibre doivent s'écarter des calques.** L'attribution CARTO est
+  passée en **bas à gauche** (`attributionControl: false` puis `addControl(...)`) parce
+  qu'à droite la fiche la recouvrait : une mention de licence masquée n'est pas une
+  mention. Elle et le zoom suivent `--marge-gauche` / `--marge-droite`, posées par la
+  page. Le composant carte n'a pas à connaître l'existence d'un panneau de facettes.
+
+Pas de `backdrop-filter` sur ces calques : un flou plein écran au-dessus d'un canevas
+WebGL se paie à chaque image.
+
+**Deux filtres ont un état miroir hors de `filters`.** `retirer()` ne suffit donc pas,
+et c'est la page qui complète : `recherche` a le champ de la barre, qui l'alimente par
+un effet retardé et garderait son texte ; `bbox` a `suivreVue` dans `MonumentMap`, qui
+la reposerait au prochain `moveend` — d'où `delierVue()`. Même chose pour `reset()`.
+
+**Le nom accessible d'une puce porte l'action, pas la valeur** (`aria-label="Retirer le
+filtre architecture militaire"`). Sinon la puce et l'option de même libellé dans le
+panneau de facettes deviennent deux boutons indiscernables, pour un lecteur d'écran
+comme pour Playwright en mode strict. Même règle pour « Copier le lien » de la fiche,
+homonyme de celui de la barre.
 
 **Le thème n'est pas dans l'URL.** C'est une préférence de lecture, pas un état
 d'exploration : elle vit dans `localStorage` et un lien partagé s'ouvre dans le thème
@@ -220,8 +256,12 @@ C'est ce qui garde le pipeline hors-ligne et les tests sans réseau. Trois cons�
   le porte pas. La plupart de ces images sont sous CC-BY-SA : **le crédit est une
   obligation**. Il n'est jamais bloquant, et son échec laisse le lien vers la page du
   fichier, qui porte l'information complète ;
-- une notice sur six n'a pas d'image : la section **disparaît**, elle ne laisse pas un
-  cadre vide qui ferait croire à un chargement en cours.
+- une notice sur six n'a pas d'image : la section montre alors une **plaque nommée** —
+  dénomination, domaine, et la mention « aucune photographie sur Wikimedia Commons » —
+  au même rapport 4/3 que la photo qu'elle remplace. Ce qu'elle ne fait pas, c'est
+  ressembler à un chargement : ni animation, ni icône brisée, ni dégradé. La règle
+  antérieure (« la section disparaît ») a été **inversée volontairement** ; le cadre
+  gris muet qu'elle interdisait, lui, reste interdit.
 
 Le magasin de certificats par défaut de Python sous Windows a rendu un
 `CERTIFICATE_VERIFY_FAILED: certificate has expired` sur ce point d'entrée ; le module

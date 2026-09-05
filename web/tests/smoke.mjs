@@ -71,6 +71,30 @@ try {
   });
   verifier('canvas MapLibre rendu', points === 1);
 
+  // --- Le tiroir des filtres est un calque ---------------------------------
+  // Ouvert par defaut des qu'il y a la place de le poser a cote de la carte,
+  // mais il ne lui prend jamais un pixel : c'est ce qui evite tout
+  // redimensionnement du canevas WebGL a chaque bascule.
+  const largeurCarte = (await page.locator('.maplibregl-canvas').boundingBox()).width;
+  verifier(
+    'tiroir ouvert par defaut au large',
+    (await page.locator('.facettes.ouvert').count()) === 1
+  );
+  await page.getByRole('button', { name: /^Filtres/ }).click();
+  await page.waitForTimeout(300);
+  verifier(
+    'le tiroir se referme au large',
+    (await page.locator('.facettes.ouvert').count()) === 0
+  );
+  const largeurRepliee = (await page.locator('.maplibregl-canvas').boundingBox()).width;
+  verifier(
+    'le tiroir ne prend pas de largeur a la carte',
+    Math.abs(largeurRepliee - largeurCarte) < 1,
+    `${largeurCarte} -> ${largeurRepliee} px`
+  );
+  await page.getByRole('button', { name: /^Filtres/ }).click();
+  await page.waitForTimeout(300);
+
   // --- Filtrage croise -----------------------------------------------------
   await page.getByRole('button', { name: 'architecture militaire' }).click();
   await page.waitForFunction(
@@ -91,6 +115,13 @@ try {
     .count();
   verifier('facette domaine garde ses alternatives', autresDomaines > 5, `${autresDomaines} options`);
 
+  // --- Puces de filtres actifs ---------------------------------------------
+  // Le nom accessible d'une puce porte l'action, pas la seule valeur : sans
+  // cela elle serait indiscernable de l'option de meme libelle dans le
+  // panneau de facettes, et le clic ci-dessus deviendrait ambigu.
+  const puces = page.locator('.jetons button:not(.raz)');
+  verifier('une puce pour le filtre pose', (await puces.count()) === 1, `${await puces.count()} puce(s)`);
+
   // Croisement avec un siecle depuis la frise.
   const avantSiecle = militaire;
   await page.locator('.cliquable rect').nth(9).click();
@@ -104,6 +135,21 @@ try {
   );
   const croise = await total(page);
   verifier('croisement domaine x siecle', croise > 0 && croise < militaire, `obtenu ${croise}`);
+
+  verifier('une puce par critere, siecle compris', (await puces.count()) === 2, `${await puces.count()} puces`);
+  // L'ordre des puces suit celui de `CLAUSES` : le siecle vient avant le
+  // domaine. Le retirer doit ramener au seul filtre restant, pas au corpus.
+  await puces.first().click();
+  await page.waitForFunction(
+    (avant) => {
+      const el = document.querySelector('.chiffres span b');
+      return el && Number.parseInt(el.textContent.replace(/\D/g, ''), 10) !== avant;
+    },
+    croise,
+    { timeout: 20_000 }
+  );
+  const apresPuce = await total(page);
+  verifier('retirer une puce ne retire qu elle', apresPuce === militaire, `obtenu ${apresPuce}`);
 
   await page.getByRole('button', { name: /effacer \d+ filtres?/ }).click();
   await page.waitForFunction(() => {
@@ -120,11 +166,17 @@ try {
   }, null, { timeout: 20_000 });
   const recherche = await total(page);
   verifier('recherche sans accents ni casse', recherche > 0 && recherche < 200, `${recherche} resultats`);
-  await page.fill('.recherche', '');
+
+  // La puce de recherche a un etat miroir hors de `filters` : le champ de la
+  // barre, qui alimente le filtre par un effet retarde. Vider l'un sans
+  // l'autre laisserait le texte affiche sur un corpus complet.
+  await page.locator('.jetons button:not(.raz)').first().click();
   await page.waitForFunction(() => {
     const el = document.querySelector('.chiffres span b');
     return el && el.textContent.replace(/\D/g, '') === '46760';
   }, null, { timeout: 20_000 });
+  const champ = await page.inputValue('.recherche');
+  verifier('la puce de recherche vide aussi le champ', champ === '', `« ${champ} »`);
 
   // --- Recherche a l'interieur d'une facette --------------------------------
   // `Baltard Victor` (5 notices) est hors des 40 valeurs les plus frequentes
@@ -253,6 +305,45 @@ try {
   );
   await page.locator('.legende button.mode').click();
   await page.waitForTimeout(300);
+
+  // --- Puce de zone visible -------------------------------------------------
+  // `bbox` a elle aussi un etat miroir hors de `filters` : le suivi de vue de
+  // la carte. Retirer la puce sans l'eteindre laisserait le prochain
+  // deplacement reposer la zone aussitot.
+  await page.getByRole('button', { name: 'lier la vue' }).click();
+  await page.waitForSelector('.jetons button:not(.raz)', { timeout: 20_000 });
+  const puceZone = page.locator('.jetons button:not(.raz)').first();
+  verifier(
+    'la zone visible a sa puce',
+    (await puceZone.textContent()).includes('zone visible'),
+    (await puceZone.textContent()).trim()
+  );
+  await puceZone.click();
+  await page.waitForTimeout(500);
+  const libelleSuivi = (await page.locator('.legende button').last().textContent()).trim();
+  verifier('la puce de zone delie la vue', libelleSuivi === 'lier la vue', libelleSuivi);
+
+  // --- Brossage de l axe construction ---------------------------------------
+  // L'echelle des siecles est **a bandes** : pas d'`invert`, le pixel se
+  // retraduit en balayant les bandes. Un glissement doit poser plusieurs
+  // siecles la ou le clic n'en bascule qu'un.
+  const piste = await page.locator('.cliquable').boundingBox();
+  await page.mouse.move(piste.x + piste.width * 0.5, piste.y + piste.height * 0.6);
+  await page.mouse.down();
+  await page.mouse.move(piste.x + piste.width * 0.8, piste.y + piste.height * 0.6, { steps: 10 });
+  await page.mouse.up();
+  await page.waitForTimeout(700);
+  const brosses = new URL(page.url()).searchParams.getAll('siecle');
+  verifier(
+    'un glissement pose une plage de siecles',
+    brosses.length >= 3,
+    brosses.join(', ') || 'aucun siecle'
+  );
+  await page.getByRole('button', { name: /effacer \d+ filtres?/ }).click();
+  await page.waitForFunction(() => {
+    const el = document.querySelector('.chiffres span b');
+    return el && el.textContent.replace(/\D/g, '') === '46760';
+  }, null, { timeout: 20_000 });
 
   // --- Theme clair ----------------------------------------------------------
   // `setStyle` detruit sources et couches : c'est la regression que ce lot
@@ -393,8 +484,23 @@ try {
       (legende ?? '').replace(/\s+/g, ' ').trim().slice(0, 60)
     );
 
-    // Une notice sur six n'a pas d'image : la section disparait, elle ne
-    // laisse pas un cadre vide qui ferait croire a un chargement.
+    // Le bouton de la fiche partage l'implementation de celui de la barre : le
+    // lien produit porte donc aussi la vue de carte. Son nom accessible en
+    // differe, sinon les deux boutons seraient indiscernables.
+    await onglet.getByRole('button', { name: 'Copier le lien de la notice' }).click();
+    await onglet.waitForTimeout(400);
+    const lienFiche = decodeURIComponent(
+      await onglet.evaluate(() => navigator.clipboard.readText())
+    );
+    verifier(
+      'copier le lien depuis la fiche',
+      /ref=PA00097411/.test(lienFiche) && /c=-?[\d.]+,-?[\d.]+,[\d.]+/.test(lienFiche),
+      lienFiche.split('?')[1] ?? lienFiche
+    );
+
+    // Une notice sur six n'a pas d'image. La plaque la nomme, mais elle **dit**
+    // l'absence : aucune image, aucune animation, rien qui puisse passer pour
+    // un chargement en cours.
     await onglet.goto(`${BASE}/?ref=PA67000108`, { waitUntil: 'domcontentloaded' });
     await attendre(onglet, '.fiche .fermer');
     await onglet.waitForTimeout(600);
@@ -402,6 +508,12 @@ try {
       'aucune section photo sans image',
       (await onglet.locator('.photo').count()) === 0,
       `${await onglet.locator('.photo').count()} figure(s)`
+    );
+    const plaque = onglet.locator('.plaque');
+    verifier(
+      'une plaque nommee remplace la photo absente',
+      (await plaque.count()) === 1 && (await plaque.locator('img').count()) === 0,
+      ((await plaque.textContent()) ?? '').replace(/\s+/g, ' ').trim().slice(0, 70)
     );
 
     // `?notice=` a circule avant `?ref=` : l'alias doit encore ouvrir la fiche.

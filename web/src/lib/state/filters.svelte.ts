@@ -7,6 +7,7 @@
  * devient inutilisable.
  */
 import { lit, litList } from '$lib/db/duckdb';
+import { romain } from '$lib/format';
 
 export type FacetKey =
   | 'statut'
@@ -152,4 +153,76 @@ export function reset(): void {
 /** Nombre de filtres actifs, pour l'affichage du bouton de remise a zero. */
 export function countActive(f: Filters): number {
   return (Object.keys(CLAUSES) as FacetKey[]).filter((key) => CLAUSES[key](f) !== null).length;
+}
+
+/** Un critere pose, tel qu'il s'affiche en puce. */
+export interface Jeton {
+  cle: FacetKey;
+  /** Absente pour les filtres scalaires : plage d'annees, seuil Palissy, zone. */
+  valeur?: string;
+  libelle: string;
+}
+
+/** Cles multivaluees : une puce par valeur cochee. */
+const MULTIPLES: readonly FacetKey[] = [
+  'statut', 'domaines', 'denominations', 'auteurs',
+  'regions', 'departements', 'proprietaires', 'periodes'
+];
+
+/**
+ * Liste aplatie des criteres poses. Les filtres actifs n'etaient jusqu'ici
+ * resumes que par leur nombre : savoir *lesquels* obligeait a rouvrir chaque
+ * section, et en retirer un seul a le retrouver parmi 40 valeurs.
+ *
+ * L'ordre suit `CLAUSES`, la meme table que `buildWhere` et `countActive` :
+ * une seule liste de cles fait autorite.
+ */
+export function jetonsActifs(f: Filters): Jeton[] {
+  const jetons: Jeton[] = [];
+  for (const cle of Object.keys(CLAUSES) as FacetKey[]) {
+    if (MULTIPLES.includes(cle)) {
+      for (const valeur of f[cle] as string[]) jetons.push({ cle, valeur, libelle: valeur });
+    } else if (cle === 'siecles') {
+      for (const siecle of f.siecles) {
+        jetons.push({ cle, valeur: String(siecle), libelle: `${romain(siecle)}e siècle` });
+      }
+    } else if (cle === 'anneeProtection' && f.anneeProtection) {
+      jetons.push({ cle, libelle: `${f.anneeProtection[0]} – ${f.anneeProtection[1]}` });
+    } else if (cle === 'nbPalissy' && f.nbPalissy > 0) {
+      jetons.push({ cle, libelle: `≥ ${f.nbPalissy} objets` });
+    } else if (cle === 'recherche' && f.recherche) {
+      jetons.push({ cle, libelle: `« ${f.recherche} »` });
+    } else if (cle === 'bbox' && f.bbox) {
+      jetons.push({ cle, libelle: 'zone visible' });
+    }
+  }
+  return jetons;
+}
+
+/**
+ * Retire une valeur d'une facette, ou le filtre entier s'il est scalaire.
+ *
+ * Deux cles ont un etat miroir hors de `filters` — le champ de recherche de la
+ * barre et le suivi de vue de la carte — que l'appelant doit remettre lui-meme :
+ * les remettre ici obligerait cet etat a connaitre l'interface.
+ */
+export function retirer(cle: FacetKey, valeur?: string): void {
+  if (cle === 'siecles') {
+    const siecle = Number(valeur);
+    filters.siecles = filters.siecles.filter((s) => s !== siecle);
+  } else if (MULTIPLES.includes(cle)) {
+    // Retrait en place, comme `toggle` : reaffecter la cle ferait perdre le
+    // proxy reactif que `$state` a pose sur le tableau.
+    const liste = filters[cle] as string[];
+    const index = liste.indexOf(valeur ?? '');
+    if (index !== -1) liste.splice(index, 1);
+  } else if (cle === 'anneeProtection') {
+    filters.anneeProtection = null;
+  } else if (cle === 'nbPalissy') {
+    filters.nbPalissy = 0;
+  } else if (cle === 'recherche') {
+    filters.recherche = '';
+  } else if (cle === 'bbox') {
+    filters.bbox = null;
+  }
 }

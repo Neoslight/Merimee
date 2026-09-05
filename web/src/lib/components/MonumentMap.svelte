@@ -97,6 +97,15 @@
     };
   }
 
+  /** Coupe le suivi de vue et retire la contrainte de zone. Appele par la page
+   *  quand la puce « zone visible » est retiree : sans cela `suivreVue` reste
+   *  vrai et le prochain `moveend` repose aussitot la bbox. */
+  export function delierVue() {
+    if (!suivreVue) return;
+    suivreVue = false;
+    onbbox(null);
+  }
+
   /**
    * `setStyle` detruit toutes les sources et couches ajoutees : changer de fond
    * de carte veut dire les reposer entierement. D'ou cette fonction, appelee a
@@ -185,7 +194,10 @@
       style: untrack(() => FONDS[theme.courant]),
       center: [depart.lon, depart.lat],
       zoom: depart.zoom,
-      attributionControl: { compact: true },
+      // L'attribution est posee a la main, en bas a **gauche** : a droite, le
+      // panneau de fiche la recouvrait des qu'une notice etait ouverte. Une
+      // mention de licence masquee n'est pas une mention.
+      attributionControl: false,
       // La rotation n'apporte rien a une carte de points et transforme le
       // moindre glissement a deux doigts en desorientation sur telephone.
       dragRotate: false,
@@ -193,6 +205,7 @@
       touchPitch: false
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
 
     // `style.load` se declenche au montage **et** apres chaque `setStyle` :
     // c'est le seul evenement qui couvre les deux.
@@ -217,8 +230,17 @@
       minuteur = setTimeout(emettreBbox, 150);
     });
 
+    // La bande de puces qui apparait au premier filtre change la hauteur de la
+    // scene. MapLibre ne redimensionne pas son canevas tout seul : sans cet
+    // observateur la carte reste dessinee a l'ancienne taille, decalee du
+    // pointeur. Les deux panneaux, eux, sont des calques et ne declenchent
+    // rien — c'est precisement pourquoi ils sont sortis du flux.
+    const gabarit = new ResizeObserver(() => map.resize());
+    gabarit.observe(conteneur);
+
     carte = map;
     return () => {
+      gabarit.disconnect();
       clearTimeout(minuteur);
       map.remove();
       carte = undefined;
@@ -311,10 +333,15 @@
     inset: 0;
   }
 
+  /* `--marge-gauche` est posee par la page : c'est la largeur du tiroir des
+     filtres quand il est ouvert a cote de la carte. La carte n'a pas a
+     connaitre l'existence d'un panneau de facettes, une variable heritee
+     suffit. */
   .legende {
     position: absolute;
-    left: 12px;
-    bottom: 12px;
+    left: calc(var(--marge-gauche, 0px) + 12px);
+    bottom: 34px;
+    transition: left 160ms ease;
     display: flex;
     align-items: center;
     gap: 14px;
@@ -355,9 +382,21 @@
     border-color: var(--accent);
   }
 
-  /* Sur un telephone la legende deborde et vient buter sur l'attribution
-     CARTO, qui a sa propre position imposee en bas a droite. Les cinq tranches
-     d'epoque n'y tiennent pas sur une ligne : la legende s'enroule. */
+  /* Les commandes MapLibre s'ecartent des deux calques, comme la legende : la
+     boussole et le zoom passaient sous la fiche, l'attribution sous le tiroir.
+     Les deux variables sont posees par la page. */
+  .carte :global(.maplibregl-ctrl-bottom-left) {
+    left: var(--marge-gauche, 0px);
+    transition: left 160ms ease;
+  }
+
+  .carte :global(.maplibregl-ctrl-top-right) {
+    right: var(--marge-droite, 0px);
+    transition: right 160ms ease;
+  }
+
+  /* Sur un telephone les cinq tranches d'epoque ne tiennent pas sur une
+     ligne : la legende s'enroule et occupe toute la largeur. */
   @media (max-width: 900px) {
     .legende {
       left: 8px;

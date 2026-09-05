@@ -1,6 +1,7 @@
 <script lang="ts">
   import DetailPanel from '$lib/components/DetailPanel.svelte';
   import FacetPanel from '$lib/components/FacetPanel.svelte';
+  import Jetons from '$lib/components/Jetons.svelte';
   import Matrice from '$lib/components/Matrice.svelte';
   import MonumentMap from '$lib/components/MonumentMap.svelte';
   import Timeline from '$lib/components/Timeline.svelte';
@@ -25,10 +26,13 @@
     ANNEE_MAX,
     countActive,
     filters,
+    jetonsActifs,
     replier,
     reset,
+    retirer,
     toggleSiecle,
-    type FacetKey
+    type FacetKey,
+    type Jeton
   } from '$lib/state/filters.svelte';
   import { decoder, encoder, type Vue, type VueCarte } from '$lib/state/permalien';
   import { appliquer, basculer, theme } from '$lib/state/theme.svelte';
@@ -62,7 +66,9 @@
 
   // Position de depart de la carte, portee par le lien partage et par lui seul.
   const cadrageInitial = initial.cadrage;
-  let vueCarte = $state<{ vueCourante: () => VueCarte | null } | undefined>();
+  let vueCarte = $state<
+    { vueCourante: () => VueCarte | null; delierVue: () => void } | undefined
+  >();
 
   // Le script en tete d'`app.html` a deja pose `data-theme` avant le premier
   // paint : cet effet ne change donc rien a l'ecran au montage. Il resout la
@@ -182,9 +188,26 @@
     }
   }
 
-  // Sous 900 px la grille a trois colonnes ne tient pas : les deux panneaux
-  // deviennent des calques, et la frise se replie. L'etat d'ouverture depend
-  // du gabarit, il est donc lu au montage plutot que devine.
+  // --- Puces de filtres actifs ---------------------------------------------
+  // Deux cles ont un etat miroir hors de `filters` : le champ de la barre, qui
+  // alimente `recherche` par un effet retarde, et le suivi de vue de la carte,
+  // qui reposerait `bbox` au prochain deplacement. Les remettre est le travail
+  // de la page, seule a connaitre les deux.
+  function retirerJeton(puce: Jeton) {
+    retirer(puce.cle, puce.valeur);
+    if (puce.cle === 'recherche') terme = '';
+    if (puce.cle === 'bbox') vueCarte?.delierVue();
+  }
+
+  function toutEffacer() {
+    reset();
+    terme = '';
+    vueCarte?.delierVue();
+  }
+
+  // Le seuil telephone (768 px) est purement graphique — la fiche remonte du
+  // bas au lieu de glisser du cote — et vit donc dans la feuille de style.
+  // Celui-ci commande de l'etat : tiroir referme, frise repliee, voile pose.
   const ETROIT = '(max-width: 900px)';
   let etroit = $state(false);
   let facettesOuvertes = $state(false);
@@ -192,21 +215,23 @@
 
   $effect(() => {
     if (!browser) return;
-    const requete = window.matchMedia(ETROIT);
-    const appliquer = () => {
-      etroit = requete.matches;
-      friseOuverte = !requete.matches;
-      if (!requete.matches) facettesOuvertes = false;
+    const moyen = window.matchMedia(ETROIT);
+    const appliquerGabarit = () => {
+      etroit = moyen.matches;
+      friseOuverte = !moyen.matches;
+      // Le tiroir est ouvert par defaut des qu'il y a la place de le poser a
+      // cote de la carte, referme sinon : c'est un calque, il ne prend rien.
+      facettesOuvertes = !moyen.matches;
     };
-    appliquer();
-    requete.addEventListener('change', appliquer);
-    return () => requete.removeEventListener('change', appliquer);
+    appliquerGabarit();
+    moyen.addEventListener('change', appliquerGabarit);
+    return () => moyen.removeEventListener('change', appliquerGabarit);
   });
 
-  // Ouvrir une fiche au telephone doit refermer le tiroir des filtres, sinon
-  // la fiche s'ouvre derriere lui.
+  // Ouvrir une fiche sur un ecran etroit doit refermer le tiroir des filtres,
+  // sinon la fiche s'ouvre derriere lui. Au large les deux calques cohabitent.
   $effect(() => {
-    if (selection) facettesOuvertes = false;
+    if (selection && etroit) facettesOuvertes = false;
   });
 
   const VUES: { cle: Vue; titre: string }[] = [
@@ -229,6 +254,11 @@
 
   const nf = new Intl.NumberFormat('fr-FR');
   const actifs = $derived(countActive(filters));
+  const puces = $derived(jetonsActifs(filters));
+  // Le tiroir ne se pose a cote de la carte qu'au large : c'est le seul cas ou
+  // la legende, ancree en bas a gauche, doit s'ecarter pour ne pas passer
+  // dessous.
+  const margeGauche = $derived(facettesOuvertes && !etroit ? '246px' : '0px');
 </script>
 
 <div class="app">
@@ -237,6 +267,16 @@
       <strong>MÉRIMÉE</strong>
       <span>monuments historiques · 1840 – 2026</span>
     </div>
+
+    <nav class="bascule">
+      {#each VUES as choix (choix.cle)}
+        <button
+          class:actif={vue === choix.cle}
+          aria-pressed={vue === choix.cle}
+          onclick={() => (vue = choix.cle)}
+        >{choix.titre}</button>
+      {/each}
+    </nav>
 
     <input
       class="recherche"
@@ -252,9 +292,6 @@
         <span class="bleu">{nf.format(compteurs.inscrits)} inscrites</span>
         <span class="faible">{nf.format(compteurs.objets)} objets</span>
       {/if}
-      {#if actifs > 0}
-        <button class="raz" onclick={reset}>effacer {actifs} filtre{actifs > 1 ? 's' : ''}</button>
-      {/if}
       <button class="filtres" aria-expanded={facettesOuvertes}
               onclick={() => (facettesOuvertes = !facettesOuvertes)}>
         Filtres{#if actifs > 0} <em>{actifs}</em>{/if}
@@ -268,24 +305,11 @@
     </div>
   </header>
 
-  <main>
-    <div class="colonne facettes" class:ouvert={facettesOuvertes}>
-      {#if etroit}
-        <!-- Le voile ne laisse qu'une bande de 60 px a cote du tiroir : trop
-             etroit pour etre la seule maniere de le refermer. -->
-        <button class="fermer-tiroir" onclick={() => (facettesOuvertes = false)}>
-          Fermer les filtres
-        </button>
-      {/if}
-      <FacetPanel {facettes} {chargement} />
-    </div>
+  {#if puces.length > 0}
+    <Jetons jetons={puces} {actifs} onretirer={retirerJeton} onreset={toutEffacer} />
+  {/if}
 
-    {#if etroit && facettesOuvertes}
-      <!-- Fermer en touchant a cote : le geste attendu sur un tiroir. -->
-      <button class="voile" aria-label="Fermer les filtres"
-              onclick={() => (facettesOuvertes = false)}></button>
-    {/if}
-
+  <main class:fiche-ouverte={selection !== null} style="--marge-gauche: {margeGauche}">
     <div class="centre">
       <div class="scene">
         <MonumentMap
@@ -342,21 +366,34 @@
           </div>
         {/if}
 
-        <nav class="bascule">
-          {#each VUES as choix (choix.cle)}
-            <button
-              class:actif={vue === choix.cle}
-              aria-pressed={vue === choix.cle}
-              onclick={() => (vue = choix.cle)}
-            >{choix.titre}</button>
-          {/each}
-        </nav>
-
         {#if erreur}
           <div class="erreur"><b>Erreur DuckDB</b><p>{erreur}</p></div>
         {:else if chargement && !compteurs}
           <div class="amorce">{LIBELLES[amorcage.phase]}</div>
         {/if}
+
+        <!-- Les deux panneaux sont des calques : la carte garde sa pleine
+             largeur et les ouvrir ne provoque aucun redimensionnement du
+             canevas WebGL. Ils vivent dans la scene, pas dans `main`, pour
+             laisser la frise entierement visible sous eux. -->
+        <div class="colonne facettes" class:ouvert={facettesOuvertes}>
+          <button class="fermer-tiroir" onclick={() => (facettesOuvertes = false)}>
+            Fermer les filtres
+          </button>
+          <FacetPanel {facettes} {chargement} />
+        </div>
+
+        {#if etroit && facettesOuvertes}
+          <!-- Fermer en touchant a cote : le geste attendu sur un tiroir. Au
+               large le tiroir ne recouvre rien, il n'y a rien a voiler. -->
+          <button class="voile" aria-label="Fermer les filtres"
+                  onclick={() => (facettesOuvertes = false)}></button>
+        {/if}
+
+        <div class="colonne fiche-hote" class:ouvert={selection !== null}>
+          <DetailPanel reference={selection} {copie} oncopier={copierLien}
+                       onclose={() => (selection = null)} />
+        </div>
       </div>
 
       {#if etroit}
@@ -373,27 +410,24 @@
         siecleSelection={filters.siecles}
         plage={filters.anneeProtection}
         onsiecle={toggleSiecle}
+        onsiecles={(choix) => (filters.siecles = choix)}
         onplage={(p) => (filters.anneeProtection = p)}
       />
       {/if}
-    </div>
-
-    <div class="colonne fiche-hote" class:ouvert={selection !== null}>
-      <DetailPanel reference={selection} onclose={() => (selection = null)} />
     </div>
   </main>
 </div>
 
 <style>
   .app {
-    display: grid;
-    grid-template-rows: auto 1fr;
+    display: flex;
+    flex-direction: column;
     height: 100vh;
   }
 
   .barre {
     display: grid;
-    grid-template-columns: 260px 1fr auto;
+    grid-template-columns: auto auto 1fr auto;
     align-items: center;
     gap: 18px;
     padding: 0 16px;
@@ -452,7 +486,6 @@
   .bleu { color: var(--inscrit); }
   .faible { opacity: 0.7; }
 
-  .raz,
   .hasard,
   .lien,
   .theme {
@@ -477,51 +510,32 @@
     border-color: var(--texte-faible);
   }
 
-  main {
-    display: grid;
-    grid-template-columns: 246px 1fr 340px;
-    min-height: 0;
-    position: relative;
+  /* Le tiroir se commande a toutes les largeurs, avec le compte des criteres
+     poses : c'est tout ce qui en reste visible une fois referme. */
+  .filtres {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid var(--accent);
+    background: transparent;
+    color: var(--accent);
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-size: 11px;
+    cursor: pointer;
+    white-space: nowrap;
   }
 
-  /* Les enveloppes existent pour que la page pilote la mise en page des deux
-     panneaux sans reaching dans leur CSS interne. */
-  .colonne {
-    display: grid;
-    min-height: 0;
-  }
-
-  .filtres,
-  .replier,
-  .voile,
-  .fermer-tiroir {
-    display: none;
-  }
-
-  .centre {
-    display: grid;
-    grid-template-rows: 1fr auto;
-    min-width: 0;
-    min-height: 0;
-  }
-
-  .scene {
-    position: relative;
-    min-height: 0;
-    background: var(--fond-creux);
+  .filtres em {
+    font-style: normal;
+    font-variant-numeric: tabular-nums;
   }
 
   .bascule {
-    position: absolute;
-    top: 12px;
-    left: 12px;
-    z-index: 4;
     display: flex;
     gap: 1px;
     padding: 1px;
     border: 1px solid var(--bord);
-    background: color-mix(in srgb, var(--fond) 88%, transparent);
-    backdrop-filter: blur(8px);
     border-radius: 7px;
   }
 
@@ -540,6 +554,35 @@
     color: var(--accent);
   }
 
+  main {
+    display: grid;
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    --largeur-fiche: 340px;
+  }
+
+  /* Les commandes de zoom de MapLibre s'ecartent quand la fiche est posee
+     par-dessus. La largeur vit dans une variable pour que la marge la suive
+     sans que la page ait a connaitre le point de rupture. */
+  main.fiche-ouverte {
+    --marge-droite: var(--largeur-fiche);
+  }
+
+  .centre {
+    display: grid;
+    grid-template-rows: 1fr auto;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .scene {
+    position: relative;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--fond-creux);
+  }
+
   /* Les controles MapLibre sont a z-index 2 et la carte reste montee sous les
      autres vues : sans cela le zoom et l'attribution traversent le calque. */
   .liste {
@@ -550,11 +593,12 @@
     background: var(--fond);
   }
 
+  /* Le selecteur de vue est monte dans la barre : la reserve de 200 px qu'il
+     imposait ici n'a plus lieu d'etre. */
   .liste header {
     position: sticky;
     top: 0;
-    /* Degage le selecteur de vue, pose en absolu au-dessus. */
-    padding: 12px 16px 10px 200px;
+    padding: 12px 16px 10px;
     border-bottom: 1px solid var(--bord);
     background: var(--fond);
   }
@@ -643,19 +687,104 @@
     word-break: break-word;
   }
 
-  @media (max-width: 1200px) {
+  /* --- Les deux calques ---------------------------------------------------
+     Aucun `backdrop-filter` : un flou plein ecran au-dessus d'un canevas WebGL
+     se paie a chaque image. Fond opaque, ombre portee. */
+  .colonne {
+    position: absolute;
+    display: grid;
+    min-height: 0;
+    transition: transform 160ms ease;
+  }
+
+  .facettes {
+    inset: 0 auto 0 0;
+    z-index: 6;
+    grid-template-rows: auto 1fr;
+    width: 246px;
+    transform: translateX(-100%);
+    box-shadow: 0 0 24px rgb(var(--voile) / 35%);
+  }
+
+  .facettes.ouvert {
+    transform: translateX(0);
+  }
+
+  .fermer-tiroir {
+    border: none;
+    border-bottom: 1px solid var(--bord);
+    background: var(--fond-creux);
+    color: var(--accent);
+    padding: 9px 14px;
+    font-size: 11px;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  /* La fiche ne compresse plus la carte : elle glisse par-dessus, et seulement
+     quand une notice est choisie. L'invite « selectionnez un point » n'a donc
+     plus 340 px a occuper en permanence. */
+  .fiche-hote {
+    inset: 0 0 0 auto;
+    z-index: 7;
+    width: var(--largeur-fiche);
+    transform: translateX(101%);
+    box-shadow: 0 0 28px rgb(var(--voile) / 40%);
+  }
+
+  .fiche-hote.ouvert {
+    transform: translateX(0);
+  }
+
+  .voile,
+  .replier {
+    display: none;
+  }
+
+  @media (max-width: 1320px) {
     main {
-      grid-template-columns: 220px 1fr 300px;
+      --largeur-fiche: 320px;
+    }
+
+    /* Le selecteur de vue occupe desormais la barre : quelque chose doit
+       ceder avant le champ de recherche. Le sous-titre et le compte d'objets
+       sont ce qui manque le moins — les deux se relisent ailleurs. */
+    .marque span,
+    .chiffres .faible {
+      display: none;
     }
   }
 
-  /* --- Gabarit etroit -----------------------------------------------------
-     Une seule colonne : la scene occupe l'ecran, les deux panneaux passent
-     en calques. Un lien partage s'ouvre le plus souvent sur un telephone. */
+  /* Plus tot que le gabarit etroit : sans cette rangee le champ de recherche
+     se reduisait a trois caracteres. */
+  @media (max-width: 1150px) {
+    .barre {
+      grid-template-columns: auto auto 1fr;
+      grid-template-rows: auto auto;
+      height: auto;
+      padding: 8px 16px;
+      gap: 8px 14px;
+    }
+
+    .chiffres {
+      grid-column: 3;
+      justify-self: end;
+    }
+
+    .recherche {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      max-width: none;
+    }
+  }
+
+  /* --- Gabarit moyen ------------------------------------------------------
+     Le tiroir recouvre la carte au lieu de se poser a cote : la place manque.
+     Il se ferme donc en touchant a cote, et la frise se replie. */
   @media (max-width: 900px) {
     .barre {
       grid-template-columns: 1fr auto;
-      grid-template-rows: auto auto;
+      grid-template-rows: auto auto auto;
       height: auto;
       padding: 8px 12px;
       gap: 8px 12px;
@@ -665,15 +794,22 @@
       display: none;
     }
 
-    .recherche {
+    .bascule {
       grid-column: 1 / -1;
       grid-row: 2;
+      justify-self: start;
+    }
+
+    .recherche {
+      grid-column: 1 / -1;
+      grid-row: 3;
+      max-width: none;
     }
 
     .chiffres {
       gap: 8px;
       font-size: 11px;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       justify-content: flex-end;
     }
 
@@ -688,59 +824,6 @@
       display: none;
     }
 
-    .chiffres {
-      flex-wrap: nowrap;
-    }
-
-    .filtres {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      border: 1px solid var(--accent);
-      background: transparent;
-      color: var(--accent);
-      border-radius: 999px;
-      padding: 4px 12px;
-      font-size: 11px;
-      cursor: pointer;
-    }
-
-    .filtres em {
-      font-style: normal;
-      font-variant-numeric: tabular-nums;
-    }
-
-    main {
-      grid-template-columns: 1fr;
-    }
-
-    .facettes {
-      position: absolute;
-      inset: 0 auto 0 0;
-      z-index: 6;
-      grid-template-rows: auto 1fr;
-      width: min(84vw, 320px);
-      transform: translateX(-100%);
-      transition: transform 160ms ease;
-      box-shadow: 0 0 32px rgb(var(--voile) / 55%);
-    }
-
-    .facettes.ouvert {
-      transform: translateX(0);
-    }
-
-    .fermer-tiroir {
-      display: block;
-      border: none;
-      border-bottom: 1px solid var(--bord);
-      background: var(--fond-creux);
-      color: var(--accent);
-      padding: 10px;
-      font-size: 12px;
-      text-align: left;
-      cursor: pointer;
-    }
-
     .voile {
       display: block;
       position: absolute;
@@ -752,20 +835,9 @@
       cursor: pointer;
     }
 
-    /* La fiche remonte du bas et n'occupe l'ecran que si une notice est
-       choisie : l'invite « selectionnez un point » n'a pas de place ici. */
-    .fiche-hote {
-      position: absolute;
-      inset: auto 0 0 0;
-      z-index: 7;
-      max-height: 82%;
-      transform: translateY(101%);
-      transition: transform 200ms ease;
-      box-shadow: 0 -8px 32px rgb(var(--voile) / 55%);
-    }
-
-    .fiche-hote.ouvert {
-      transform: translateY(0);
+    .facettes {
+      width: min(84vw, 320px);
+      box-shadow: 0 0 32px rgb(var(--voile) / 55%);
     }
 
     .replier {
@@ -779,15 +851,27 @@
       font-size: 11px;
       cursor: pointer;
     }
+  }
 
-    .liste header {
-      padding-left: 16px;
-      padding-top: 44px;
+  /* --- Gabarit telephone --------------------------------------------------
+     La fiche remonte du bas plutot que de glisser du cote : 340 px de large
+     sur un ecran de 375 ne laisseraient rien voir de la carte derriere. */
+  @media (max-width: 768px) {
+    /* La feuille remonte du bas : elle ne masque plus rien a droite. */
+    main.fiche-ouverte {
+      --marge-droite: 0px;
     }
 
-    .bascule {
-      top: 8px;
-      left: 8px;
+    .fiche-hote {
+      inset: auto 0 0 0;
+      width: auto;
+      max-height: 82%;
+      transform: translateY(101%);
+      box-shadow: 0 -8px 32px rgb(var(--voile) / 55%);
+    }
+
+    .fiche-hote.ouvert {
+      transform: translateY(0);
     }
   }
 </style>

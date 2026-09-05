@@ -4,10 +4,14 @@
 
   interface Props {
     reference: string | null;
+    /** Etat transitoire du presse-papier, partage avec le bouton de la barre :
+     *  une seule implementation du permalien, deux endroits ou l'appeler. */
+    copie: boolean;
+    oncopier: () => void;
     onclose: () => void;
   }
 
-  let { reference, onclose }: Props = $props();
+  let { reference, copie, oncopier, onclose }: Props = $props();
 
   let fiche = $state<Detail | null>(null);
   let erreur = $state<string | null>(null);
@@ -169,12 +173,20 @@
         {/if}
         {#each fiche.periodes as periode}<span class="badge sourd">{periode}</span>{/each}
       </p>
+      <p class="actions">
+        <!-- Le nom accessible differe du libelle : la barre porte deja un
+             bouton « Copier le lien », et deux boutons de meme nom sont
+             indiscernables pour un lecteur d'ecran comme pour un test. -->
+        <button aria-label="Copier le lien de la notice" onclick={oncopier}>
+          {copie ? 'Lien copié' : 'Copier le lien'}
+        </button>
+        <a href={popUrl(fiche.reference)} target="_blank" rel="noreferrer">
+          Notice POP {fiche.reference} ↗
+        </a>
+      </p>
     </header>
 
     {#if courante}
-      <!-- Une notice sur six n'a pas d'image : la section disparait alors
-           entierement. Un cadre gris de remplacement laisserait croire a un
-           chargement en cours. -->
       <figure class="photo">
         <img
           src={vignette(courante, 640)}
@@ -200,6 +212,16 @@
           </a>
         </figcaption>
       </figure>
+    {:else}
+      <!-- Une notice sur six n'a pas d'image. La plaque la nomme au lieu de
+           laisser un trou, mais elle **dit** l'absence : ni animation, ni
+           icone brisee, ni degrade, rien qui puisse passer pour un
+           chargement en cours. -->
+      <div class="plaque">
+        <strong>{fiche.denominations[0] ?? fiche.titre}</strong>
+        {#if fiche.domaines.length}<span>{fiche.domaines.join(', ')}</span>{/if}
+        <em>aucune photographie sur Wikimedia Commons</em>
+      </div>
     {/if}
 
     <dl>
@@ -258,7 +280,6 @@
     <section>
       <h3>Ressources</h3>
       <ul class="liens">
-        <li><a href={popUrl(fiche.reference)} target="_blank" rel="noreferrer">Notice POP {fiche.reference}</a></li>
         {#if fiche.archiv_mh}
           <li><a href={fiche.archiv_mh} target="_blank" rel="noreferrer">Dossier Archiv-MH</a></li>
         {/if}
@@ -394,9 +415,70 @@
   .violet { color: var(--mixte); }
   .sourd { color: var(--texte-faible); }
 
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+    margin: 10px 0 0;
+    font-size: 11px;
+  }
+
+  .actions button {
+    border: 1px solid var(--bord);
+    background: transparent;
+    color: var(--texte-faible);
+    border-radius: 999px;
+    padding: 3px 11px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+
+  .actions button:hover {
+    color: var(--texte);
+    border-color: var(--texte-faible);
+  }
+
   .photo {
     margin: 0;
     border-bottom: 1px solid var(--bord);
+  }
+
+  /* Meme rapport que la photo qu'elle remplace : passer d'une notice illustree
+     a une autre qui ne l'est pas ne doit pas faire sauter la fiche. */
+  .plaque {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    aspect-ratio: 4 / 3;
+    padding: 18px;
+    border-bottom: 1px solid var(--bord);
+    background: var(--fond-creux);
+    text-align: center;
+  }
+
+  .plaque strong {
+    font-family: var(--police-titre);
+    font-size: 19px;
+    font-weight: 600;
+    line-height: 1.25;
+    color: var(--texte);
+  }
+
+  .plaque span {
+    font-size: 11px;
+    color: var(--texte-faible);
+  }
+
+  .plaque em {
+    margin-top: 4px;
+    font-style: normal;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    color: var(--texte-faible);
+    opacity: 0.8;
   }
 
   /* Rapport fixe : sans lui, chaque image qui arrive pousse la fiche entiere
