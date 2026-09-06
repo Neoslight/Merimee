@@ -39,9 +39,34 @@ const page = await navigateur.newPage({
 });
 
 const erreursConsole = [];
-// Le fond de carte ne suit plus le theme : une seule feuille de style doit
-// partir sur le reseau, quel que soit le nombre de bascules.
+// Le fond de carte suit le theme : une feuille par bascule, et c'est leur
+// **succession** qui est verifiee — dark-matter en sombre, positron en clair.
 const fondsDemandes = [];
+const nomFond = (u) => u.split('/gl/')[1]?.split('/')[0] ?? '';
+
+/**
+ * Attend que la carte ait effectivement repose ses couches.
+ *
+ * Un delai fixe serait un pari sur le reseau : la feuille CARTO fait 107 Ko et
+ * `style.load` n'arrive qu'apres, si bien qu'un releve pris trop tot montre
+ * l'etat d'avant la bascule. Rend le dernier releve dans tous les cas — c'est
+ * a la verification de trancher, pas au guetteur.
+ */
+async function attendreCarte(onglet, predicat, limite = 15000) {
+  const lire = () =>
+    onglet.evaluate(() =>
+      window.__carte
+        ? { teinture: { ...window.__carte.teinture }, chaleurHaute: window.__carte.chaleurHaute }
+        : null
+    );
+  const t0 = Date.now();
+  let etat = await lire();
+  while (Date.now() - t0 < limite && !(etat && predicat(etat))) {
+    await onglet.waitForTimeout(200);
+    etat = await lire();
+  }
+  return etat ?? { teinture: {}, chaleurHaute: '' };
+}
 page.on('request', (r) => {
   if (r.url().includes('basemaps.cartocdn.com') && r.url().endsWith('style.json')) {
     fondsDemandes.push(r.url());
@@ -736,15 +761,14 @@ try {
     `${sombre.fond} -> ${contrasteSombre.toFixed(2)}:1`
   );
 
-  // Le theme ne pilote que l'interface : le fond de carte reste ardoise dans
-  // les deux cas. Les points portent un lisere clair et la rampe de densite
-  // monte vers le blanc — les deux supposent une carte sombre.
+  // La scene porte la couleur des terres : c'est ce qui supprime le flash entre
+  // la bascule, qui recharge la feuille de style, et le premier rendu WebGL.
   const sceneClaire = await page.evaluate(
     () => getComputedStyle(document.querySelector('.scene')).backgroundColor
   );
   verifier(
-    'la scene reste ardoise en theme clair',
-    luminance(sceneClaire) < 0.1,
+    'la scene suit la carte, claire en theme clair',
+    luminance(sceneClaire) > 0.5,
     sceneClaire
   );
 
@@ -759,22 +783,68 @@ try {
     friseClaire
   );
   verifier(
-    'aucun fond de carte clair demande',
-    fondsDemandes.length > 0 && fondsDemandes.every((u) => u.includes('dark-matter')),
-    `${fondsDemandes.length} requete(s), ${new Set(fondsDemandes.map((u) => u.split('/gl/')[1]?.split('/')[0])).size} style(s)`
+    'le style de fond suit le theme en clair',
+    fondsDemandes.length >= 2 &&
+      nomFond(fondsDemandes.at(-1)) === 'positron-gl-style' &&
+      fondsDemandes.some((u) => u.includes('dark-matter')),
+    fondsDemandes.map(nomFond).join(' -> ')
+  );
+
+  // Positron sort gris neutre : il est repeint couche par couche, et cet echec
+  // serait **muet** — la carte ressortirait presque juste. Le decompte par
+  // nature est la seule chose qui l'attrape, et il est imprime a chaque passe
+  // pour qu'un releve aberrant se voie meme quand l'assertion passe.
+  //
+  // Cette verification fait dependre la suite de `basemaps.cartocdn.com`. La
+  // dependance existait deja — `page.route` n'a jamais couvert CARTO — mais
+  // seules des formes d'URL etaient verifiees, si bien que la suite passait
+  // avec un fond absent. Boucher la feuille rendrait le decompte constant par
+  // construction, donc muet sur la seule chose qui puisse casser.
+  const teinture = (await attendreCarte(page, (e) => e.teinture.terre > 0)).teinture;
+  verifier(
+    'le fond clair est reteinte aux couleurs du produit',
+    teinture.ignorees === 0 &&
+      teinture.terre > 0 &&
+      teinture.mer > 0 &&
+      teinture.trait > 0 &&
+      teinture.libelle > 0,
+    teinture
+      ? `terre ${teinture.terre} · mer ${teinture.mer} · trait ${teinture.trait} · ` +
+        `libelle ${teinture.libelle} · detail ${teinture.detail} · ignorees ${teinture.ignorees}`
+      : 'aucun releve'
   );
 
   // La carte a recharge son fond : si les couches n'avaient pas ete reposees,
-  // basculer la densite leverait.
+  // basculer la densite leverait. Les trois cles de la legende disent en plus
+  // que le composant n'est pas reste a mi-chemin — un `poserCouches` qui aurait
+  // leve dans un rappel laisserait la carte muette sans erreur console.
   await page.getByRole('button', { name: 'densité' }).click();
   await page.waitForTimeout(500);
   const densiteApresTheme = await page
     .getByRole('button', { name: 'densité' })
     .getAttribute('aria-pressed');
+
+  // La rampe monte vers le blanc en sombre et descend vers le brun en clair :
+  // elle n'etait posee que par `poserCouches` et restait sur l'ancien theme.
+  // La legende et MapLibre lisent desormais la meme valeur.
+  const haute = (await attendreCarte(page, (e) => e.chaleurHaute === '#431b09')).chaleurHaute;
+  const rampeLegende = await page.evaluate(
+    () => document.querySelector('.legende .rampe')?.getAttribute('style') ?? ''
+  );
+  // Le navigateur normalise le style en ligne : le degrade ressort en `rgb()`
+  // quand le composant l'a ecrit en hexadecimal.
+  verifier(
+    'la rampe de densite suit le theme',
+    haute === '#431b09' && rampeLegende.includes('rgb(67, 27, 9)'),
+    `${haute} · ${rampeLegende.slice(-30)}`
+  );
+
   await page.getByRole('button', { name: 'densité' }).click();
   verifier(
     'les couches survivent au changement de fond',
-    densiteApresTheme === 'true' && erreursConsole.length === avantTheme,
+    densiteApresTheme === 'true' &&
+      erreursConsole.length === avantTheme &&
+      (await page.locator('.legende .cle').count()) === 3,
     erreursConsole.slice(avantTheme, avantTheme + 2).join(' | ') || 'aucune erreur'
   );
 
@@ -791,7 +861,36 @@ try {
   const persiste = await page.evaluate(() => document.documentElement.dataset.theme);
   verifier('le theme survit au rechargement', persiste === 'clair', String(persiste));
   await page.getByRole('button', { name: 'Sombre' }).click();
-  await page.waitForTimeout(1200);
+  await page.waitForTimeout(1500);
+  verifier(
+    'le style de fond suit le theme en sombre',
+    nomFond(fondsDemandes.at(-1)) === 'dark-matter-gl-style',
+    fondsDemandes.map(nomFond).join(' -> ')
+  );
+  // Dark-matter est pris tel quel : la dissymetrie est voulue, un test la garde
+  // pour qu'on ne la « corrige » pas en croyant a un oubli.
+  const teintureSombre = (await attendreCarte(page, (e) => e.teinture.terre === 0)).teinture;
+  verifier(
+    'le fond sombre n est pas reteinte',
+    teintureSombre.terre === 0 && teintureSombre.libelle === 0,
+    `${teintureSombre.terre} couche(s) de terre`
+  );
+
+  // Deux bascules rapprochees mettent deux `setStyle` en vol. MapLibre annule
+  // le premier chargement ; ce qui se verifie ici, c'est qu'aucune couche ne
+  // reste orpheline entre les deux.
+  const avantRafale = erreursConsole.length;
+  await page.getByRole('button', { name: 'Clair' }).click();
+  await page.waitForTimeout(100);
+  await page.getByRole('button', { name: 'Sombre' }).click();
+  await attendreCarte(page, (e) => e.teinture.terre === 0);
+  verifier(
+    'deux bascules rapides ne laissent qu un style',
+    erreursConsole.length === avantRafale &&
+      nomFond(fondsDemandes.at(-1)) === 'dark-matter-gl-style' &&
+      (await page.evaluate(() => document.documentElement.dataset.theme)) === 'sombre',
+    erreursConsole.slice(avantRafale, avantRafale + 2).join(' | ') || 'aucune erreur'
+  );
 
   // --- La vue de carte voyage dans le lien, pas dans l URL vivante ---------
   // Sur un onglet a part : cette section navigue et pousse des entrees, alors

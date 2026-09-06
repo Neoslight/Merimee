@@ -20,10 +20,10 @@
 @import '@fontsource-variable/newsreader/wght.css';
 
 /* --- Theme clair : la reference -------------------------------------------
-   Le fond de carte, lui, reste sombre dans les deux themes : le theme ne
-   pilote que l'interface. C'est ce que dit `--carte-liseret` ci-dessous, blanc
-   casse en clair — un lisere clair autour d'un point n'a de sens que sur une
-   carte sombre. */
+   Le fond de carte suit desormais le theme : les jetons `--carte-*` ci-dessous
+   decrivent le fond lui-meme — terres, mers, traits, libelles — et non plus
+   seulement ce qu'on pose dessus. En clair ils repeignent Positron ; en sombre
+   ils ne font que nommer dark-matter, qui est pris tel quel. */
 :root {
   --fond: #f8f7f4;
   --fond-carte: #fdfcfa; /* surfaces posees : panneaux, en-tete, cartes */
@@ -35,6 +35,10 @@
   --texte-faible: #6e6a62;
   --texte-tenu: #9a958a;
 
+  /* Couleurs d'identite, sans porteur aujourd'hui : `.scene` etait le dernier,
+     et elle prend desormais `--carte-terre` — la couleur que le fond de carte
+     va peindre. Gardees parce qu'elles nomment la palette, pas parce qu'elles
+     servent. */
   --ardoise: #1a1d20;
   --ardoise-clair: #2a2e33;
 
@@ -57,12 +61,14 @@
   /* Statuts de protection. Deux jetons par statut : l'aplat et le texte, qui
      ne peuvent pas etre la meme valeur — un terracotta lisible en 12 px sur
      blanc est trop sombre pour une pastille. */
-  --classe: #c85a32;
+  --classe: #b8381d;
   --classe-texte: #b94723;
-  --inscrit: #c9933b;
+  --inscrit: #cf6910;
   --inscrit-texte: #8a5f1e;
-  --mixte: #7a5c7e;
-  --statut-nul: #9a958a;
+  --mixte: #542566;
+  /* Assombri avec le passage du fond au clair : un gris pale se perdait dans
+     le grege des terres, la ou il valait sur l'ardoise. */
+  --statut-nul: #7d7870;
 
   /* Tranches d'epoque, sur la carte comme dans la legende. */
   --epoque-1: #7a5c7e;
@@ -71,22 +77,46 @@
   --epoque-4: #c9933b;
   --epoque-5: #c85a32;
 
-  /* Carte : lisere des points, cerclage de la selection, rampe de densite.
-     L'URL du fond vectoriel n'est pas ici : une valeur avec `//` dans une
-     propriete personnalisee est un piege inutile, elle vit dans
+  /* Le fond de carte lui-meme. Repeint couche par couche sur Positron, qui
+     sort gris neutre. L'URL du style n'est pas ici : une valeur avec `//` dans
+     une propriete personnalisee est un piege inutile, elle vit dans
      `theme.svelte.ts`. */
-  --carte-liseret: #fdfcfa;
-  /* Lisere de repli quand un fond historique recouvre la carte sombre.
-     Cassini et l'etat-major sont des aplats beiges : le lisere clair
-     ci-dessus y disparait, au moment precis ou l'on cherche a situer les
-     points sur la carte ancienne. */
+  --carte-terre: #eceae4; /* volontairement sous `--fond-carte` : les 1,17:1
+                             qui les separent font flotter les panneaux */
+  --carte-mer: #dce3e8;
+  /* Frontieres **et cotes**. Il n'existe pas de couche « cote » dans le schema
+     OpenMapTiles : le trait de cote est le bord du polygone d'eau, pose par
+     `fill-outline-color`. Ce n'est pas un raffinement — terre et mer ne sont
+     separees que par 1,08:1 de luminance, le littoral ne tient qu'a ce trait. */
+  --carte-trait: #c8c4ba;
+  /* Routes et batiments. Positron les donne en blanc pur : sur le grege, ils
+     passeraient devant les points. */
+  --carte-detail: #f3f1eb;
+  --carte-libelle: #827e75;
+
+  /* Lisere des points : il vaut **le sol**, dans les deux themes. Ce n'est pas
+     une aureole, c'est une decoupe — elle separe deux points qui se touchent
+     sans ajouter d'encre. Le blanc casse d'avant supposait une carte noire. */
+  --carte-liseret: #eceae4;
+  /* Lisere de repli sous un fond historique. Cassini et l'etat-major sont des
+     aplats beiges : un lisere couleur du sol y disparait, que ce sol soit
+     ardoise ou grege. La regle a survecu au passage au clair, sa raison a
+     change. */
   --carte-liseret-sur-clair: #2b2620;
-  --carte-selection: #f8f7f4;
-  --chaleur-0: rgba(26, 29, 32, 0);
-  --chaleur-1: #4a3a24;
+  /* Le cerclage prend le maximum de contraste contre son sol, comme en sombre.
+     Pas `--accent` : il vaut `--classe`, et la selection deviendrait
+     indiscernable du remplissage d'un point classe. */
+  --carte-selection: #1a1d20;
+
+  /* Rampe de densite. Sur fond clair l'effectif fort est le plus **sombre** :
+     ce sont les valeurs de `--matrice-*`, seule rampe sequentielle du produit
+     deja concue pour un fond clair, et la densite repond a la meme question
+     que la matrice. Le zero est le grege des terres, transparent. */
+  --chaleur-0: rgba(236, 234, 228, 0);
+  --chaleur-1: #e6d0a8;
   --chaleur-2: #c9933b;
-  --chaleur-3: #c85a32;
-  --chaleur-4: #f6e3cf;
+  --chaleur-3: #a9531f;
+  --chaleur-4: #431b09;
 
   /* Frise : elle suit le theme comme le reste de l'interface. Le bandeau
      ardoise dans les deux themes a ete abandonne — il posait une bande sombre
@@ -110,8 +140,23 @@
   --matrice-cerclee: #1a1d20;
 
   /* Composantes RVB des ombres et du voile. Une ombre noire sur fond clair
-     salit le panneau qu'elle est censee detacher. */
-  --voile: 26 29 32;
+     salit le panneau qu'elle est censee detacher — et depuis que la carte est
+     claire elle aussi, un gris neutre y passait pour de la salissure. Brun
+     chaud, donc : c'est la base de **toutes** les ombres du produit, y compris
+     les quatre ecrites dans les composants. */
+  --voile: 35 25 15;
+
+  /* Filet des panneaux poses sur la carte. Il n'avait pas lieu d'etre sur une
+     carte ardoise, ou l'ivoire se detachait seul ; sur le grege, l'ombre ne
+     suffit plus a dire ou finit le panneau.
+
+     Il doit etre **plus sombre que les terres**, et non intermediaire entre le
+     panneau et elles : la maquette donnait `rgba(160, 140, 115, 0.18)`, qui
+     compose sur l'ivoire en #ece8e2 — soit 1,01:1 contre `--carte-terre`,
+     invisible au seul endroit ou on lui demande d'exister. Mesure, pas
+     supposition. `--bord` (#eae6dc) est plus clair que les terres et tombe
+     dans le meme piege : d'ou un jeton a part. */
+  --bord-flottant: #d8d2c4;
 
   /* Loupe des champs de recherche. Un `<input>` n'accepte pas de
      pseudo-element : une image de fond est le seul chemin, et son trait est
@@ -119,8 +164,10 @@
      resterait grise sombre en theme sombre. */
   --icone-recherche: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Ccircle cx='7' cy='7' r='4.6' stroke='%236e6a62' stroke-width='1.4'/%3E%3Cline x1='10.6' y1='10.6' x2='14' y2='14' stroke='%236e6a62' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
 
-  /* Ombres : douces, diffuses, jamais de filet gris epais. */
-  --ombre-carte: 0 10px 30px -5px rgb(var(--voile) / 8%);
+  /* Ombres : douces, diffuses, jamais de filet gris epais. `--ombre-carte`
+     porte une seconde passe courte : sur fond clair, une ombre uniquement
+     diffuse ne pose plus le panneau, elle le fait flotter sans bord. */
+  --ombre-carte: 0 4px 24px rgb(var(--voile) / 8%), 0 1px 3px rgb(var(--voile) / 4%);
   --ombre-tiroir: 0 10px 30px -5px rgb(var(--voile) / 18%);
   --ombre-fiche: 0 10px 30px -5px rgb(var(--voile) / 18%), 0 30px 70px -20px rgb(var(--voile) / 22%);
   --ombre-bouton: 0 6px 16px -8px rgb(var(--voile) / 50%);
@@ -182,6 +229,15 @@
   --epoque-4: #d4a359;
   --epoque-5: #e07a4e;
 
+  /* Dark-matter n'est pas repeint : ces six jetons ne font que le nommer,
+     pour que `.scene` ait ou lire, et un futur repeint ou puiser. Seul
+     `--carte-terre` est effectivement lu en sombre. */
+  --carte-terre: #101215;
+  --carte-mer: #14171b;
+  --carte-trait: #23262a;
+  --carte-detail: #1b1e22;
+  --carte-libelle: #7e7a74;
+
   --carte-liseret: #101215;
   --carte-liseret-sur-clair: #101215;
   --carte-selection: #f2f0ea;
@@ -206,6 +262,7 @@
   --matrice-cerclee: #f2f0ea;
 
   --voile: 0 0 0;
+  --bord-flottant: #313539;
 
   --icone-recherche: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Ccircle cx='7' cy='7' r='4.6' stroke='%23a5a09a' stroke-width='1.4'/%3E%3Cline x1='10.6' y1='10.6' x2='14' y2='14' stroke='%23a5a09a' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
 
@@ -270,7 +327,7 @@ a:hover {
    pastille blanche au-dessus d'une pastille ardoise. */
 .maplibregl-ctrl-group {
   border-radius: var(--r-m) !important;
-  border: 1px solid var(--bord) !important;
+  border: 1px solid var(--bord-flottant) !important;
   box-shadow: var(--ombre-carte) !important;
   background: var(--fond-carte) !important;
   overflow: hidden;

@@ -36,11 +36,13 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `web/src/lib/state/filters.svelte.ts` | état des filtres + construction du prédicat SQL |
 | `web/src/lib/state/permalien.ts` | sérialisation de l'état dans l'URL (`encoder` / `decoder`) |
 | `web/src/lib/state/amorcage.svelte.ts` | phase et octets du démarrage, lus par l'écran d'attente |
-| `web/src/lib/state/theme.svelte.ts` | thème sombre/clair, et la palette résolue que lisent MapLibre et Plot |
+| `web/src/lib/state/theme.svelte.ts` | thème sombre/clair, les deux feuilles de fond, et la palette résolue que lisent MapLibre et Plot |
+| `web/src/lib/teinte.ts` | repeint le fond clair par **nature de couche**, jamais par identifiant |
+| `web/src/lib/state/carte.svelte.ts` | ce que la carte a réellement peint — le seul témoin d'un repeint muet |
 | `web/src/lib/format.ts` | `romain`, formats de nombres — étaient recopiés dans trois composants |
 | `web/src/service-worker.ts` | cache des actifs hachés uniquement |
 | `web/src/lib/components/` | `MonumentMap`, `FacetPanel`, `Jetons`, `Timeline`, `Matrice`, `DetailPanel` |
-| `web/tests/smoke.mjs` | 119 vérifications en Chromium réel, avec `serveur.mjs` instrumenté |
+| `web/tests/smoke.mjs` | 124 vérifications en Chromium réel, avec `serveur.mjs` instrumenté |
 | `web/tests/apercu-social.mjs` | régénère la vignette Open Graph depuis l'application |
 
 ## Commandes
@@ -53,7 +55,7 @@ cd etl  && python -m merimee_etl.memoire   # compte les illustrations POP, 1,36 
 cd etl  && python -m pytest tests -q    # 64 tests
 cd web  && npm run dev                  # http://localhost:5173
 cd web  && npm run check                # svelte-check, doit rester à 0/0
-cd web  && npm run build && npm run test # build statique + 119 vérifications navigateur
+cd web  && npm run build && npm run test # build statique + 124 vérifications navigateur
 cd web  && npm run apercu               # régénère static/apercu-social.png
 cd web  && npm run deploy               # build /Merimee + push sur gh-pages
 ```
@@ -181,14 +183,43 @@ dosage on la lit est un confort de lecture, qui reste dans le composant.
 tests hors réseau — l'ETL est conçu ainsi délibérément — et une suite qui dépend de la
 disponibilité d'un service tiers devient intermittente.
 
+**En revanche, il appelle bien CARTO.** Il le faisait déjà en silence — `page.route` n'a
+jamais couvert `basemaps.cartocdn.com` — mais seules des formes d'URL étaient vérifiées,
+si bien que la suite passait avec un fond absent. `le fond clair est reteinte` lit
+désormais le **résultat** : la suite échoue si la feuille ne charge pas. C'est un choix
+assumé — sans CARTO le site est inutilisable, et boucher la feuille par une maquette
+locale rendrait le décompte constant par construction, donc muet sur la seule chose qui
+puisse casser.
+
 **`map.setStyle()` détruit toutes les sources et couches ajoutées.** D'où
 `poserCouches()` dans `MonumentMap.svelte`, branchée sur `style.load` — le seul
 événement qui couvre le montage **et** chaque changement de style — et non sur `load`,
-qui ne se déclenche qu'une fois. Le fond ne suivant plus le thème, `setStyle` n'est
-plus appelé aujourd'hui ; la fonction reste, et le test `les couches survivent au
-changement de fond` vérifie désormais que la bascule de thème repeint les couches sans
-écrire dans le vide — un `setPaintProperty` sur une couche disparue lève, donc c'est le
-compteur d'erreurs console qui fait foi.
+qui ne se déclenche qu'une fois. Le fond suivant de nouveau le thème, `setStyle` est
+appelé à chaque bascule et ce piège est redevenu vivant. Trois points le tiennent :
+
+- **`diff: false` n'est pas une précaution, c'est la condition pour que `style.load` se
+  déclenche.** Par défaut MapLibre **compare** l'ancienne feuille à la nouvelle et
+  n'applique que l'écart : la `Style` est conservée, l'événement n'est pas ré-émis,
+  `poserCouches()` n'est jamais rappelée et `pret` reste faux pour toujours. Rien ne
+  lève — nos couches survivent au diff, les points continuent de s'afficher — et seul
+  le repeint du fond manque à l'appel. Mesuré : sans ce drapeau, la teinture reste à
+  zéro et la rampe de densité sur l'ancien thème, alors que **tous les tests passaient**
+  sauf ceux qui lisent `window.__carte`. C'est exactement la panne muette que ce relevé
+  existe pour attraper ;
+- **`pret` retombe à faux avant l'appel, pas dans le rappel.** `setStyle` détruit les
+  couches de manière synchrone et les effets Svelte sont regroupés en microtâche : rien
+  ne s'intercale entre les deux instructions. Un `setPaintProperty` sur une couche
+  disparue lève, et c'est le compteur d'erreurs console qui fait foi ;
+- **`pret` est aussi le signal de réarmement**, et il doit être lu en **première**
+  instruction par tout effet qui touche une couche. C'est cette lecture qui les
+  enregistre comme dépendants et les rejoue quand `poserCouches()` le remet à vrai —
+  redondant avec ce que `poserCouches()` pose déjà, et volontairement. Déplacer un
+  `if (!pret)` après un autre test casserait le réarmement sans qu'aucun test ne bouge.
+
+L'effet ne part pas au montage : `fondPose` est un simple `let`, initialisé par
+`untrack` à la feuille que le constructeur vient de poser, si bien que le premier
+passage constate qu'il n'a rien à faire. En `$state`, il ferait boucler l'effet qui
+l'écrit.
 
 **Chromium sans tête annonce `prefers-color-scheme: light`.** Les deux scripts
 Playwright forcent donc `colorScheme` : `smoke.mjs` démarre en sombre pour avoir
@@ -320,11 +351,12 @@ conséquences :
   `--marge-gauche` pour les commandes MapLibre : ni la liste ni la matrice n'ont à
   connaître l'existence de ce bouton. Elle tombe à zéro quand le tiroir est ouvert, et
   sur gabarit étroit, où le bouton passe **au-dessus** du titre et non à côté ;
-- **c'est une surface posée, pas un aplat plein.** Le fond de carte reste sombre dans
-  les deux thèmes, mais le bouton appartient à l'interface et suit le thème comme la
-  légende : calcaire en clair, ardoise en sombre, détaché de la carte par son filet
-  (`--bord-appuye`) et son ombre. En aplat inversé (`--plein-fond`), il était noir sur
-  une carte noire dès que le thème passait au sombre.
+- **c'est une surface posée, pas un aplat plein.** Le fond de carte suit désormais le
+  thème, mais cela ne change rien ici : le bouton appartient à l'interface et suit le
+  thème comme la légende, calcaire en clair, ardoise en sombre, détaché de la carte par
+  son filet (`--bord-flottant`) et son ombre. En aplat inversé (`--plein-fond`), il
+  était noir sur une carte noire en sombre, et il serait ardoise sur du grège en clair :
+  dans les deux cas un trou, jamais une commande.
 
 **Les commandes de la carte sont rangées par question.** La légende avait fini en tiroir
 fourre-tout : clés de couleur, choix de sémiologie, densité, cartes anciennes, dosage
@@ -473,29 +505,102 @@ Deux conséquences moins évidentes du même principe :
   porté, s'en est détaché : posé sur la carte et non sur l'interface, il lui faut une
   surface, pas une inversion.
 
-**Le thème ne pilote que l'interface : le fond de carte reste sombre dans les deux
-cas** — la carte seule, la frise ayant rejoint l'interface (cf. plus haut).
-`FOND` est une constante unique. Les points portent un liseré clair
-(`--carte-liseret` vaut `#fdfcfa` en thème clair) et la rampe de densité monte vers le
-blanc : les deux supposent une carte sombre. L'identité pose des panneaux calcaire sur
-une carte ardoise, pas l'inverse. `setStyle` n'est donc plus appelé — mais
-`poserCouches()` **reste** branchée sur `style.load`, qui couvre le montage et
-désamorçait le piège si un fond historique s'ajoutait un jour. Ce jour est venu :
-les fonds historiques s'y posent, cf. plus bas.
+**Le fond de carte suit le thème, et le clair est repeint.** `FONDS`
+(`theme.svelte.ts`) porte deux feuilles CARTO servies sans clé : dark-matter en sombre,
+**Positron en clair**. Positron n'est pas pris tel quel — sa terre est presque blanche,
+ses routes sont du blanc pur, ses bois sont verts — mais **repeint couche par couche**
+par `teinter()` (`lib/teinte.ts`), appelée **en tête de `poserCouches()`, avant tout
+`addLayer`** : posée après, elle repeindrait `monuments-points` en couleur de terre.
+Palette : terres `#eceae4`, mers `#dce3e8`, frontières et côtes `#c8c4ba`, routes et
+bâtiments `#f3f1eb`, libellés `#827e75`. Quatre points à ne pas défaire :
 
-**Sauf sous un fond historique : le liseré des points bascule au sombre.** Cassini
-et l'État-major sont des aplats beiges clairs — le liseré `#fdfcfa` y disparaît, au
-moment précis où l'on cherche à situer les points sur la carte ancienne. D'où
-`--carte-liseret-sur-clair`, substitué dès que la superposition atteint **50 %
-d'opacité** (`liseret()` dans `MonumentMap.svelte`). C'est la seule entorse à la règle
-ci-dessus, et elle ne concerne que la carte, jamais l'interface. La rampe de densité,
-elle, n'est pas corrigée : **densité et fond historique s'excluent mutuellement**,
-parce qu'ils répondent à deux questions incompatibles — l'une agrège, l'autre situe.
+- **la classification va par nature, jamais par identifiant.** `background` → terre,
+  `symbol` → libellé, `source-layer` contenant *water* → mer, *boundar* → trait,
+  *transportation* → détail. Les identifiants de Positron (`landcover_wood`,
+  `boundary_2`) sont une convention de CARTO ; le `source-layer` vient d'OpenMapTiles et
+  le `type` de la spécification MapLibre — ces deux-là sont des contrats ;
+- **elle se termine sur le `type`, sans branche « je laisse tel quel ».** C'est ce qui
+  transforme un renommage chez CARTO en dégradation bénigne au lieu d'une panne muette :
+  une couche non reconnue ressort en terre ou en trait, jamais en vert. Cinq des 93
+  couches de Positron y tombent déjà (`landcover`, `landuse`, `park`), et c'est voulu —
+  la terre est un aplat ;
+- **il n'existe pas de couche « côte » dans OpenMapTiles.** Le trait de côte est le bord
+  du polygone d'eau, donc `fill-outline-color` sur les couches d'eau. Ce n'est pas un
+  raffinement : terre et mer ne sont séparées que par **1,08:1** de luminance, le
+  littoral ne tient qu'à ce trait ;
+- **le décompte par nature est publié sur `window.__carte`** et le smoke test l'imprime :
+  `terre 6 · mer 3 · trait 4 · libellé 27 · détail 53 · ignorées 0` sur les 93 couches
+  de Positron. Aucune vérification hors ligne ne peut prouver que la feuille **réelle**
+  de CARTO est encore correctement teintée ; ce relevé, lu à chaque passe, est le seul
+  dispositif qui signale le contraire.
 
-**Le liseré des points ne s'ouvre qu'au zoom** (`6 → 0`, `9 → 0,5`, `13 → 1,8`). La
-maquette le donnait épais dès le départ, ce qui vaut pour dix pastilles : sur 44 484
-points à z4,7, les anneaux se touchent et la France devient un aplat clair. Vérifié à
-la capture, pas au raisonnement.
+**Le thème sombre ne bouge pas.** `teinter()` sort immédiatement : dark-matter est déjà
+la carte que le projet veut, l'aplatir à l'identique serait deux cents appels pour rien.
+Les jetons `--carte-mer`, `--carte-trait`, `--carte-detail` et `--carte-libelle` ne sont
+donc **pas lus** en sombre ; seul `--carte-terre` l'est, par `.scene`, pour que l'attente
+du chargement soit de la couleur de la carte qui va s'afficher — au montage comme à
+chaque bascule. La dissymétrie est voulue, et un test la garde pour qu'on ne la
+« corrige » pas en croyant à un oubli.
+
+**Le liseré des points vaut le sol, dans les deux thèmes.** `#101215` en sombre,
+`#eceae4` en clair : ce n'est pas une auréole, c'est une **découpe**, qui sépare deux
+points qui se touchent sans ajouter d'encre. Le blanc cassé d'avant supposait une carte
+noire. Le cerclage de sélection suit la symétrie inverse — le maximum de contraste
+contre son sol, `#f2f0ea` en sombre et `#1a1d20` en clair — et surtout pas `--accent`,
+qui vaut `--classe` et rendrait la sélection indiscernable d'un point classé.
+
+**Sauf sous un fond historique : le liseré bascule au sombre.** Cassini et l'État-major
+sont des aplats beiges clairs — un liseré couleur du sol y disparaît, que ce sol soit
+ardoise ou grège. La règle a survécu au passage au clair, sa **raison** a changé :
+`--carte-liseret-sur-clair` est substitué dès que la superposition atteint **50 %
+d'opacité** (`liseret()`). En clair l'anneau est déjà faible dès 30 % ; on ne descend pas
+le seuil pour autant, parce que ce serait une branche sur le thème dans le code alors
+que tout le dispositif fait porter la différence par les jetons. La rampe de densité,
+elle, n'est pas concernée : **densité et fond historique s'excluent mutuellement**,
+l'une agrège, l'autre situe.
+
+**La rampe de densité s'inverse avec le thème**, comme celle de la matrice : en sombre
+elle monte vers le crème, en clair elle descend vers le brun, sur les valeurs de
+`--matrice-1..4`, déjà éprouvées sur un fond clair. `--chaleur-0` reste **transparent**
+dans les deux cas — `heatmap-density` vaut zéro sur toute la surface sans donnée, et un
+zéro opaque laverait la vue entière. Elle est réinjectée par l'effet de palette et non
+seulement par `poserCouches()` : elle doit suivre le thème par un chemin qui lui est
+propre, sans dépendre du fait que la bascule repose les couches. Ce n'était pas le cas,
+et cela ne se voyait pas tant que les deux rampes allaient dans le même sens.
+
+**Le liseré des points ne s'ouvre qu'au zoom, l'opacité aussi.** Rayon
+`4 → 1,2 · 7 → 1,5 · 10 → 4,5 · 14 → 8`, opacité `4 → 0,42 · 8 → 0,60 · 11 → 0,85`,
+largeur de liseré `6 → 0 · 9 → 0,5 · 13 → 1,8`. La maquette donnait le liseré épais dès
+le départ, ce qui vaut pour dix pastilles : sur 44 484 points à z4,7, les anneaux se
+touchent et la France devient un aplat clair. Quatre points, tous vérifiés à la capture
+et non au raisonnement :
+
+- **`circle-stroke-opacity` vaut 1 par défaut et ne suit pas `circle-opacity`.** Un
+  remplissage à 0,42 sous un liseré opaque donne des anneaux creux. Les deux portent
+  donc la **même** expression ;
+- **l'opacité basse ne vaut qu'à l'échelle nationale.** À z5-7 les 44 484 points se
+  superposent et l'accumulation par alpha est la seule densité qu'une couche `circle`
+  sache produire. Un point isolé n'y ressort qu'à **1,6:1** sur la terre grège ; à z8,
+  0,60 le porte à 2,1:1. Un littéral serait plus court et faux ;
+- **l'effet de densité doit reposer l'expression, pas un scalaire.** Il posait `0,82` :
+  tel quel, la première bascule de densité écraserait l'interpolation par zoom et les
+  points redeviendraient opaques à l'échelle nationale, définitivement ;
+- **le halo (`nb > 50`) change d'opacité avec le thème**, 0,14 en sombre et 0,07 en
+  clair. Ce n'est pas un réglage de goût : clair sur fond sombre, un aplat à faible
+  alpha fait une **lueur** ; sombre sur fond clair, il fait une **salissure**. À 0,14 sur
+  le grège, les taches lavande de 26 px autour des villes dominaient la carte. C'est une
+  opacité et non une couleur, elle ne peut donc pas vivre dans `app.css` : c'est la seule
+  branche sur le thème du composant.
+
+**Le mode de fusion « produit » n'existe pas sur une couche `circle`**, et il n'y a rien
+à espérer d'un `mix-blend-mode` CSS : il s'appliquerait au **canevas entier**, fond
+compris, et ne ferait rien entre les points, qui sont composités à l'intérieur du canevas
+avant que CSS n'entre en jeu. L'accumulation se fait donc par alpha, et elle **sature** :
+1 − (1 − 0,42)^N vaut 0,42 · 0,66 · 0,80 · 0,89 · 0,93 · 0,96 — au-delà de six
+recouvrements, Paris et un bourg à sept monuments rendent le même aplat. Un produit, lui,
+assombrit sans borne. La couche qui fait ce travail existe déjà : `heatmap` accumule dans
+une texture et passe le total dans une rampe choisie. **L'accumulation par alpha donne le
+grain, la heatmap donne la quantité ; ne pas demander à l'une le travail de l'autre.**
 
 **L'URL porte l'état d'exploration.** `permalien.ts` encode filtres, vue et notice
 sélectionnée. Trois points non négociables : les valeurs multiples passent par un
@@ -681,6 +786,12 @@ mesurée), pas le *quoi*.
   détruit 88, et le vocabulaire est mêlé de texte libre (`restauré en 2020`, `Etat
   préoccupant`). Utilisable en facette, **jamais** pour dessiner « ce qui est intact » :
   l'absence de valeur ne dit pas bon état, elle dit champ non rempli sur 94,6 % du corpus.
+- **Une feuille de style qui ne charge pas laisse la carte muette.** `style.load` n'est
+  alors jamais emis, `pret` reste faux et les points ne reviennent pas — sans message.
+  Cela valait deja pour le montage ; depuis que `setStyle` suit le theme, cela vaut
+  aussi pour une bascule. Ce qu'il faut : un `map.on('error')` qui, sur une erreur de
+  style, remette `fondPose` a sa valeur precedente pour qu'une seconde tentative soit
+  possible, et un mot a l'ecran.
 - **Chemin clavier sur les deux frises.** Aucun des deux axes n'en a : ils sont des
   `role="application"` pilotés au pointeur. Les bornes saisissables de l'axe des
   protections en tenaient lieu pour lui seul ; les retirer a aligné les deux axes sur

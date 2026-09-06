@@ -11,15 +11,11 @@
  * `getComputedStyle`**, une fois par bascule et non par image. Une couleur
  * ajoutee ailleurs qu'en CSS resterait muette au changement de theme.
  *
- * Le theme ne pilote que l'interface : **le fond de carte reste sombre dans
- * les deux cas**. Les points portent un lisere clair et la rampe de densite
- * monte vers le blanc — les deux supposent une carte sombre, et l'identite
- * pose des panneaux calcaire sur une carte ardoise, pas l'inverse.
- *
- * Une seule chose dement cette hypothese : un **fond historique** (Cassini,
- * etat-major) est un aplat beige clair. D'ou `carteLiseretSurClair`, que
- * `MonumentMap` substitue au lisere des que la superposition passe la moitie
- * de l'opacite.
+ * **Le fond de carte suit le theme**, depuis que le theme clair a le sien.
+ * Deux styles CARTO, un par theme ; celui du clair est repeint aux teintes du
+ * produit par `teinter()` dans `MonumentMap`, d'ou les six jetons `carte*`
+ * ci-dessous. Consequence a ne pas perdre de vue : `setStyle` est de nouveau
+ * appele, et il **detruit** toutes les sources et couches ajoutees.
  */
 import { browser } from '$app/environment';
 
@@ -27,9 +23,20 @@ export type Theme = 'sombre' | 'clair';
 
 export const CLE = 'merimee-theme';
 
-/** Fond vectoriel sobre servi sans cle d'API. Un seul, quel que soit le
- *  theme : cf. l'en-tete. */
-export const FOND = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+/**
+ * Un fond par theme, servis tous deux par CARTO sans cle d'API.
+ *
+ * Positron est un gris neutre, qui n'est pas la palette du produit : il est
+ * repeint apres chargement. Dark-matter, lui, est pris tel quel — c'est la
+ * reference, et aplatir ses routes et ses limites sur deux teintes changerait
+ * un rendu que personne n'a demande de toucher.
+ */
+const FONDS = {
+  clair: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+  sombre: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
+} as const;
+
+export const fondPour = (choix: Theme) => FONDS[choix];
 
 /** Jeton JavaScript -> propriete personnalisee CSS. */
 const NOMS = {
@@ -45,6 +52,11 @@ const NOMS = {
   carteLiseret: '--carte-liseret',
   carteLiseretSurClair: '--carte-liseret-sur-clair',
   carteSelection: '--carte-selection',
+  carteTerre: '--carte-terre',
+  carteMer: '--carte-mer',
+  carteTrait: '--carte-trait',
+  carteDetail: '--carte-detail',
+  carteLibelle: '--carte-libelle',
   chaleur0: '--chaleur-0',
   chaleur1: '--chaleur-1',
   chaleur2: '--chaleur-2',
@@ -70,13 +82,16 @@ export type Palette = Record<keyof typeof NOMS, string>;
  *  `:root` : le rendu prealable n'a pas de document a interroger, et un graphe
  *  sans couleur serait invisible. */
 const REPLI: Palette = {
-  classe: '#c85a32', inscrit: '#c9933b', mixte: '#7a5c7e', statutNul: '#9a958a',
+  classe: '#b8381d', inscrit: '#cf6910', mixte: '#542566', statutNul: '#7d7870',
   epoque1: '#7a5c7e', epoque2: '#4d6b74', epoque3: '#6f7f52', epoque4: '#c9933b',
   epoque5: '#c85a32',
-  carteLiseret: '#fdfcfa', carteLiseretSurClair: '#2b2620', carteSelection: '#f8f7f4',
-  chaleur0: 'rgba(26, 29, 32, 0)', chaleur1: '#4a3a24', chaleur2: '#c9933b',
-  chaleur3: '#c85a32', chaleur4: '#f6e3cf',
-  barreSourde: '#5a5347', friseTexteFaible: '#9c978c',
+  carteLiseret: '#eceae4', carteLiseretSurClair: '#2b2620',
+  carteSelection: '#1a1d20',
+  carteTerre: '#eceae4', carteMer: '#dce3e8', carteTrait: '#c8c4ba',
+  carteDetail: '#f3f1eb', carteLibelle: '#827e75',
+  chaleur0: 'rgba(236, 234, 228, 0)', chaleur1: '#e6d0a8', chaleur2: '#c9933b',
+  chaleur3: '#a9531f', chaleur4: '#431b09',
+  barreSourde: '#cdc6b5', friseTexteFaible: '#6e6a62',
   matrice0: '#f4efe4', matrice1: '#e6d0a8', matrice2: '#c9933b', matrice3: '#a9531f',
   matrice4: '#431b09', matriceTexte: '#f8f7f4', matriceCerclee: '#1a1d20',
   accent: '#b94723', accentPlein: '#c85a32', bord: '#eae6dc'

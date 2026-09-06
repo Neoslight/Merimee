@@ -5,8 +5,10 @@
   } from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { untrack } from 'svelte';
-  import { FOND, palette } from '$lib/state/theme.svelte';
+  import { fondPour, palette, theme } from '$lib/state/theme.svelte';
   import { mesures } from '$lib/state/mesures.svelte';
+  import { etatCarte, oublierTeinture } from '$lib/state/carte.svelte';
+  import { teinter } from '$lib/teinte';
   import type { FondHistorique, VueCarte } from '$lib/state/permalien';
 
   interface Props {
@@ -43,6 +45,17 @@
   let pret = $state(false);
   let densite = $state(false);
   let minuteur: ReturnType<typeof setTimeout> | undefined;
+
+  /**
+   * Feuille de style effectivement demandee a MapLibre.
+   *
+   * Un simple `let`, pas un `$state` : l'effet de bascule la lit **et**
+   * l'ecrit, et un etat reactif le ferait boucler sur lui-meme. C'est aussi ce
+   * qui desamorce le montage — le constructeur vient de poser cette feuille,
+   * l'effet doit constater qu'il n'a rien a faire plutot que de la
+   * retelecharger.
+   */
+  let fondPose = untrack(() => fondPour(theme.courant));
 
   /** Semiologie des points : statut juridique, ou epoque de construction. */
   type Mode = 'statut' | 'epoque';
@@ -124,14 +137,77 @@
    */
   let fondsOuverts = $state(untrack(() => fond) !== null);
 
-  /** Au-dela de cette opacite, le fond beige l'emporte sur la carte ardoise et
-   *  le lisere clair des points s'y efface. */
+  /** Au-dela de cette opacite, l'aplat beige de la carte ancienne l'emporte sur
+   *  le sol, quel qu'il soit — ardoise en sombre, grege en clair — et le lisere,
+   *  qui vaut precisement ce sol, s'y efface. */
   const BASCULE_LISERET = 50;
 
   const tuiles = (h: (typeof HISTORIQUES)[number]) =>
     'https://data.geopf.fr/wmts?SERVICE=WMTS&VERSION=1.0.0&REQUEST=GetTile' +
     `&LAYER=${h.couche}&STYLE=normal&TILEMATRIXSET=PM` +
     `&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=${encodeURIComponent(h.format)}`;
+
+  /**
+   * Rayon des points. A l'echelle nationale, 44 484 pastilles de 2 px pleines
+   * bouchent une carte claire : le point tombe sous 1,5 px et c'est la
+   * **superposition** qui dessine les zones denses. Il s'ouvre des que le zoom
+   * separe les pastilles, la ou l'on cherche un edifice et non une masse.
+   *
+   * Les edifices tres riches en mobilier Palissy gardent leur cran d'avance,
+   * ramene de 2,1x a 2,5x : plus, et la trentaine de sites concernes seraient
+   * les seuls objets lisibles d'une carte volontairement pale.
+   */
+  const RAYON = [
+    'interpolate', ['linear'], ['zoom'],
+    4, ['case', ['>', ['get', 'nb'], 200], 3, 1.2],
+    7, ['case', ['>', ['get', 'nb'], 200], 3.6, 1.5],
+    10, ['case', ['>', ['get', 'nb'], 200], 9, 4.5],
+    14, ['case', ['>', ['get', 'nb'], 200], 16, 8]
+  ] as unknown as ExpressionSpecification;
+
+  /**
+   * Opacite des points, et **du meme coup celle de leur lisere** :
+   * `circle-stroke-opacity` vaut 1 par defaut et ne suit pas `circle-opacity`.
+   * Un remplissage a 0,42 sous un lisere opaque donnerait des anneaux creux.
+   *
+   * L'opacite basse ne vaut qu'a l'echelle nationale : un edifice isole n'y
+   * ressort qu'a 1,6:1 sur la terre gregee, ce qui ne suffit pas a le trouver.
+   * A z8, 0,60 le porte a 2,1:1. Un litteral serait plus court et faux.
+   */
+  const OPACITE = [
+    'interpolate', ['linear'], ['zoom'], 4, 0.42, 8, 0.6, 11, 0.85
+  ] as unknown as ExpressionSpecification;
+
+  /** Sous la densite les points restent en filigrane : ils demeurent la couche
+   *  interactive, les masquer supprimerait le clic vers la fiche. */
+  const opacitePoints = () => (densite ? 0.12 : OPACITE);
+
+  /**
+   * Le halo ne se lit pas de la meme facon selon le sol, et ce n'est pas une
+   * question de gout : clair sur fond sombre, un aplat a faible alpha fait une
+   * **lueur** ; sombre sur fond clair, il fait une **salissure**. Constate a la
+   * capture — 0,14 sur le grege donnait des taches lavande de 26 px autour des
+   * villes, la ou la meme valeur sur l'ardoise donne le halo attendu.
+   *
+   * C'est une opacite, pas une couleur : elle ne peut pas vivre dans `app.css`,
+   * qui ne porte que des teintes. D'ou la seule branche sur le theme du
+   * composant, et elle est ecrite ici plutot que dispersee.
+   */
+  const opaciteHalo = () => (densite ? 0 : theme.courant === 'clair' ? 0.07 : 0.14);
+
+  /** Rampe de densite. Extraite pour que la pose et l'effet de palette lisent
+   *  la meme chose : posee seule, elle restait sur l'ancien theme apres une
+   *  bascule — la claire et la sombre vont pourtant en sens inverse. */
+  function rampeChaleur(): ExpressionSpecification {
+    return [
+      'interpolate', ['linear'], ['heatmap-density'],
+      0, palette.chaleur0,
+      0.2, palette.chaleur1,
+      0.4, palette.chaleur2,
+      0.65, palette.chaleur3,
+      1, palette.chaleur4
+    ] as unknown as ExpressionSpecification;
+  }
 
   /** Le lisere bascule au sombre sous une carte ancienne suffisamment opaque. */
   function liseret(): string {
@@ -195,13 +271,21 @@
   /**
    * Toutes les sources et couches ajoutees, en un seul endroit.
    *
-   * Le fond ne change plus avec le theme, donc `setStyle` n'est plus appele —
-   * mais `style.load` reste le bon point d'accroche : c'est l'evenement du
-   * montage, et il couvre tout `setStyle` futur, qui **detruit** l'ensemble de
-   * ce qui a ete ajoute. Les fonds historiques, poses ici depuis, en dependent
-   * desormais autant que les monuments.
+   * Le fond suit de nouveau le theme, donc `setStyle` est de nouveau appele, et
+   * il **detruit** l'ensemble de ce qui a ete ajoute. `style.load` est le seul
+   * evenement qui couvre le montage **et** chaque echange de feuille. Les fonds
+   * historiques, poses ici, en dependent autant que les monuments.
    */
   function poserCouches(map: MapLibreMap, donnees: GeoJSON.FeatureCollection) {
+    // **Avant tout `addLayer`** : `teinter` parcourt `map.getStyle().layers`, ou
+    // nos propres couches figureraient une fois posees. Repeindre
+    // `monuments-points` en couleur de terre serait la panne la plus bete du
+    // dispositif. En sombre on ne repeint pas : dark-matter est deja la carte
+    // que le projet veut, l'aplatir a l'identique serait deux cents appels pour
+    // rien — c'est une dissymetrie voulue, pas un oubli.
+    if (theme.courant === 'clair') etatCarte.teinture = teinter(map, palette);
+    else oublierTeinture();
+
     // Les fonds historiques se posent **avant** les couches de monuments :
     // MapLibre empile dans l'ordre d'ajout, le raster se retrouve donc entre le
     // fond CARTO et les points, jamais au-dessus. Pas de `beforeId` ici — les
@@ -243,14 +327,7 @@
         'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 4, 0.16, 8, 0.6, 12, 1.6],
         'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 4, 6, 8, 14, 12, 30],
         'heatmap-opacity': 0.75,
-        'heatmap-color': [
-          'interpolate', ['linear'], ['heatmap-density'],
-          0, palette.chaleur0,
-          0.2, palette.chaleur1,
-          0.4, palette.chaleur2,
-          0.65, palette.chaleur3,
-          1, palette.chaleur4
-        ]
+        'heatmap-color': rampeChaleur()
       }
     });
     map.addLayer({
@@ -261,7 +338,7 @@
       filter: ['>', ['get', 'nb'], 50],
       paint: {
         'circle-color': couleurs(),
-        'circle-opacity': densite ? 0 : 0.14,
+        'circle-opacity': opaciteHalo(),
         'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 7, 12, 26]
       }
     });
@@ -271,15 +348,11 @@
       source: 'monuments',
       paint: {
         'circle-color': couleurs(),
-        'circle-opacity': densite ? 0.12 : 0.82,
+        'circle-opacity': opacitePoints(),
         'circle-stroke-color': liseret(),
+        'circle-stroke-opacity': opacitePoints(),
         'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 6, 0, 9, 0.5, 13, 1.8],
-        'circle-radius': [
-          'interpolate', ['linear'], ['zoom'],
-          4, ['case', ['>', ['get', 'nb'], 200], 4, 1.9],
-          9, ['case', ['>', ['get', 'nb'], 200], 9, 4],
-          14, ['case', ['>', ['get', 'nb'], 200], 16, 8]
-        ]
+        'circle-radius': RAYON
       }
     });
     map.addLayer({
@@ -302,7 +375,7 @@
     const depart = untrack(() => vueInitiale ?? DEPART);
     const map = new maplibregl.Map({
       container: conteneur,
-      style: FOND,
+      style: fondPose,
       center: [depart.lon, depart.lat],
       zoom: depart.zoom,
       // L'attribution est posee a la main, en bas a **droite** : a gauche, sa
@@ -376,11 +449,16 @@
 
   // Les points restent la couche interactive : les masquer sous la densite
   // supprimerait le clic vers la fiche, on les garde en filigrane.
+  //
+  // Cet effet doit reposer **l'expression**, pas un scalaire : un litteral
+  // ecraserait l'interpolation par zoom des la premiere bascule de densite, et
+  // les points redeviendraient opaques a l'echelle nationale, definitivement.
   $effect(() => {
     if (!pret || !carte) return;
     carte.setLayoutProperty('monuments-densite', 'visibility', densite ? 'visible' : 'none');
-    carte.setPaintProperty('monuments-points', 'circle-opacity', densite ? 0.12 : 0.82);
-    carte.setPaintProperty('monuments-halo', 'circle-opacity', densite ? 0 : 0.14);
+    carte.setPaintProperty('monuments-points', 'circle-opacity', opacitePoints());
+    carte.setPaintProperty('monuments-points', 'circle-stroke-opacity', opacitePoints());
+    carte.setPaintProperty('monuments-halo', 'circle-opacity', opaciteHalo());
   });
 
   // Fonds historiques : visibilite et dosage. Une seule carte ancienne a la
@@ -409,16 +487,55 @@
     if (densite) fond = null;
   }
 
-  // Semiologie et palette. Les teintes de statut et le lisere changent avec le
-  // theme meme si le fond de carte, lui, ne bouge pas : cet effet couvre les
-  // deux, la bascule de theme comme le changement de mode.
+  // Semiologie et palette : cet effet couvre la bascule de theme comme le
+  // changement de mode.
+  //
+  // La rampe de densite en fait partie, et c'est un correctif : posee seulement
+  // par `poserCouches`, elle restait sur l'ancien theme tant qu'on ne rechargeait
+  // pas la feuille. Elle doit suivre le theme par un chemin qui lui est propre,
+  // sans dependre du fait que la bascule repose les couches.
   $effect(() => {
     if (!pret || !carte) return;
     const expression = couleurs();
     carte.setPaintProperty('monuments-points', 'circle-color', expression);
     carte.setPaintProperty('monuments-halo', 'circle-color', expression);
+    carte.setPaintProperty('monuments-halo', 'circle-opacity', opaciteHalo());
     carte.setPaintProperty('monuments-points', 'circle-stroke-color', liseret());
     carte.setPaintProperty('monuments-selection', 'circle-stroke-color', palette.carteSelection);
+    carte.setPaintProperty('monuments-densite', 'heatmap-color', rampeChaleur());
+    etatCarte.chaleurHaute = palette.chaleur4;
+  });
+
+  /**
+   * Le fond suit le theme.
+   *
+   * `pret` retombe a faux **avant** l'appel et non dans le rappel : `setStyle`
+   * detruit les couches de maniere synchrone, et les effets Svelte sont
+   * regroupes en microtache — rien ne s'intercale entre les deux instructions.
+   * Un `setPaintProperty` sur une couche disparue leve.
+   *
+   * `pret` est aussi le signal de **rearmement** : les cinq effets qui touchent
+   * une couche le lisent en premiere instruction, ce qui les enregistre comme
+   * dependants et les rejoue quand `poserCouches` le remet a vrai. Redondant
+   * avec ce que `poserCouches` pose deja, et volontairement : deplacer un
+   * `if (!pret)` apres un autre test casserait le rearmement sans qu'aucun test
+   * ne bouge.
+   */
+  $effect(() => {
+    const vise = fondPour(theme.courant);
+    const map = carte;
+    if (!map || vise === fondPose) return;
+    fondPose = vise;
+    pret = false;
+    // `diff: false` n'est pas une precaution, c'est la condition pour que
+    // `style.load` se declenche. Par defaut MapLibre **compare** l'ancienne
+    // feuille a la nouvelle et n'applique qu'un ecart : la `Style` est
+    // conservee, l'evenement n'est pas re-emis, `poserCouches` n'est jamais
+    // rappelee et `pret` reste faux pour toujours. Rien ne leve — nos couches
+    // survivent au diff, les points continuent de s'afficher — et seul le
+    // repeint du fond manque a l'appel. Mesure : sans ce drapeau, la teinture
+    // reste a zero et la rampe de densite sur l'ancien theme.
+    map.setStyle(vise, { diff: false });
   });
 </script>
 
@@ -535,7 +652,7 @@
     gap: 9px;
     max-width: min(52vw, 430px);
     padding: 10px 14px 11px;
-    border: 1px solid var(--bord);
+    border: 1px solid var(--bord-flottant);
     border-radius: var(--r-l);
     background: color-mix(in srgb, var(--fond) 94%, transparent);
     box-shadow: var(--ombre-carte);
@@ -668,7 +785,7 @@
     top: 78px;
     right: calc(var(--marge-droite, 0px) + 10px);
     z-index: 2;
-    border: 1px solid var(--bord);
+    border: 1px solid var(--bord-flottant);
     background: var(--fond-carte);
     box-shadow: var(--ombre-carte);
     /* Pas de flou au-dessus d'un canevas WebGL : il se paie a chaque image. */

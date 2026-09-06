@@ -35,9 +35,15 @@ choix — le thème reste hors de l'URL, un lien s'ouvre dans celui de son desti
 
 Blanc calcaire, ardoise, terracotta pour le classé et ocre doré pour l'inscrit ;
 Newsreader pour les titres d'édifices et le texte d'archive, Plus Jakarta Sans pour
-l'interface. Le thème ne pilote que l'interface : la carte reste sombre dans les deux
-cas, les panneaux calcaire se posant sur une carte ardoise et non l'inverse. Les frises,
-elles, suivent le thème : elles appartiennent à l'interface, pas à la carte.
+l'interface. Le thème pilote l'interface **et la carte** : en clair, terres grège et mers
+gris-bleu, volontairement un cran plus sombres que les panneaux, qui flottent au-dessus ;
+en sombre, l'ardoise. La feuille CARTO n'est pas prise telle quelle, elle est repeinte
+couche par couche à la palette du projet.
+
+À l'échelle nationale les points tombent à 1,2 px et sous la moitié de l'opacité : ce
+sont leurs **superpositions** qui dessinent les régions denses, et le point retrouve sa
+présence dès qu'on zoome. Pour compter plutôt que situer, la bascule « densité » agrège
+vraiment.
 
 Aucun serveur applicatif : un pipeline Python produit des fichiers Parquet, que le
 navigateur interroge en SQL via DuckDB-Wasm.
@@ -192,7 +198,8 @@ pas des `var()` : leurs couleurs sont donc déclarées en CSS comme les autres e
 par `getComputedStyle` à chaque bascule de thème, une fois par changement et non par
 image. Écrire une couleur en dur dans un composant la rendrait muette au passage en
 clair. La rampe de la matrice s'inverse entre les deux thèmes : en sombre l'effectif
-fort est clair, en clair il est sombre, sinon la matrice disparaît dans son fond.
+fort est clair, en clair il est sombre, sinon la matrice disparaît dans son fond — et
+celle de la densité fait désormais de même, sur les mêmes valeurs.
 
 **La vue de carte voyage dans le lien, pas dans l'URL.** `c=lon,lat,zoom` n'est ajouté
 que par le « Copier le lien » de la fiche : réécrire l'URL à chaque déplacement la

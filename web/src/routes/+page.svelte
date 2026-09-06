@@ -806,11 +806,15 @@
      scene et pour lesquelles les filtres comptent autant, mais sous le voile
      (5) et le tiroir (6), qu'il n'a pas a percer.
 
-     C'est une surface posee, pas un aplat plein : le fond de carte reste
-     sombre dans les deux themes, mais le bouton appartient a l'interface et
-     suit le theme comme la legende — calcaire en clair, ardoise en sombre,
-     detache de la carte par son filet et son ombre. En aplat inverse il etait
-     presque noir sur une carte noire dans le seul theme sombre. */
+     C'est une surface posee, pas un aplat plein. Le fond de carte suit
+     desormais le theme, mais cela ne change rien ici : le bouton appartient a
+     l'interface et suit le theme comme la legende — calcaire en clair, ardoise
+     en sombre, detache de la carte par son filet et son ombre. En aplat
+     inverse il etait presque noir sur une carte noire en sombre, et il serait
+     ardoise sur du grege en clair : dans les deux cas un trou, jamais une
+     commande. Son filet est `--bord-flottant` et non `--bord-appuye` : sur les
+     terres gregees, tous les filets d'interface sont plus clairs que le sol et
+     disparaissent. */
   .filtres {
     position: absolute;
     top: 12px;
@@ -819,7 +823,7 @@
     display: inline-flex;
     align-items: center;
     gap: 7px;
-    border: 1px solid var(--bord-appuye);
+    border: 1px solid var(--bord-flottant);
     background: var(--fond-carte);
     color: var(--texte);
     border-radius: var(--r-pilule);
@@ -930,13 +934,15 @@
     min-height: 0;
   }
 
-  /* La scene est en ardoise dans les deux themes : le fond de carte s'y pose
-     sans filet, et le theme ne pilote que l'interface. */
+  /* La scene porte `--carte-terre` : la couleur que le fond de carte va peindre.
+     C'est ce qui supprime le flash entre le montage — ou une bascule de theme,
+     qui recharge la feuille de style — et le premier rendu WebGL. En sombre le
+     jeton vaut l'ardoise : pixel identique a ce qui etait ecrit ici avant. */
   .scene {
     position: relative;
     min-height: 0;
     overflow: hidden;
-    background: var(--ardoise);
+    background: var(--carte-terre);
     /* Empreinte du bouton flottant. La liste et la matrice recouvrent la scene :
        sans cette reserve leur titre passerait dessous. Meme procede que
        `--marge-gauche` pour les commandes MapLibre — le composant ne connait
@@ -1074,11 +1080,15 @@
     transition: transform var(--t-tiroir);
   }
 
+  /* Filet **a droite seulement** : le tiroir occupe toute la hauteur, un cadre
+     complet tracerait une ligne au ras du haut et du bas de la fenetre. Il n'en
+     avait aucun tant que la carte etait ardoise, ou l'ivoire se detachait seul. */
   .facettes {
     inset: 0 auto 0 0;
     z-index: 6;
     grid-template-rows: auto auto 1fr;
     width: var(--largeur-tiroir);
+    border-right: 1px solid var(--bord-flottant);
     transform: translateX(-100%);
     box-shadow: var(--ombre-tiroir);
   }
@@ -1134,6 +1144,9 @@
     inset: 12px 12px 12px auto;
     z-index: 7;
     width: var(--largeur-fiche);
+    /* `box-sizing: border-box` est global : la largeur reste `--largeur-fiche`,
+       le filet ne decale aucune geometrie mesuree par les tests. */
+    border: 1px solid var(--bord-flottant);
     border-radius: var(--r-l);
     overflow: hidden;
     transform: translateX(calc(100% + 16px));
