@@ -88,14 +88,16 @@
   --chaleur-3: #c85a32;
   --chaleur-4: #f6e3cf;
 
-  /* Frise : bandeau ardoise dans les deux themes. Les graduations y sont plus
-     lisibles qu'en gris clair sur blanc, et l'histogramme ambre y gagne son
-     contraste. */
-  --barre-sourde: #5a5347;
-  --frise-fond: #1a1d20;
-  --frise-texte: #ede9df;
-  --frise-texte-faible: #9c978c;
-  --frise-graduation: rgba(248, 247, 244, 0.1);
+  /* Frise : elle suit le theme comme le reste de l'interface. Le bandeau
+     ardoise dans les deux themes a ete abandonne — il posait une bande sombre
+     sous une page claire, alors que seul le fond de carte a une raison de
+     rester sombre. En clair, `--barre-sourde` doit rester lisible sur le
+     calcaire : un gris chaud, pas un gris de texte. */
+  --barre-sourde: #cdc6b5;
+  --frise-fond: #fdfcfa;
+  --frise-texte: #1a1d20;
+  --frise-texte-faible: #6e6a62;
+  --frise-graduation: rgba(26, 29, 32, 0.1);
 
   /* Matrice : rampe monochrome ambre, l'effectif fort est le plus sombre.
      Elle est posee sur `--fond`, pas sur le bandeau de frise. */
@@ -258,15 +260,34 @@ a:hover {
   background: var(--bord-appuye);
 }
 
-/* Le fond de carte CartoDB impose ses propres couleurs de controle ; on ne
-   reprend que le rayon et l'ombre du produit. */
 .maplibregl-ctrl-attrib {
   font-size: 10px;
 }
 
+/* Le zoom passait en blanc dans les deux themes — c'est la valeur par defaut
+   de MapLibre. Il tient desormais la meme colonne d'outils que le module des
+   cartes anciennes, qui suit le theme : les laisser diverger aurait mis une
+   pastille blanche au-dessus d'une pastille ardoise. */
 .maplibregl-ctrl-group {
   border-radius: var(--r-m) !important;
   border: 1px solid var(--bord) !important;
   box-shadow: var(--ombre-carte) !important;
+  background: var(--fond-carte) !important;
   overflow: hidden;
+}
+
+.maplibregl-ctrl-group button + button {
+  border-top: 1px solid var(--bord) !important;
+}
+
+.maplibregl-ctrl-group button:hover {
+  background: var(--fond-creux) !important;
+}
+
+/* Les icones du zoom sont des SVG noirs poses en image de fond : sur une
+   pastille ardoise elles disparaissent. Elles ne sont pas des jetons — on ne
+   peut pas leur donner une couleur — d'ou l'inversion, seul levier disponible
+   sur une image de fond. */
+:root[data-theme='sombre'] .maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+  filter: invert(1);
 }

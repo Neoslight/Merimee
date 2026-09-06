@@ -535,23 +535,26 @@
         </div>
       </div>
 
-      {#if etroit}
-        <button class="replier" aria-expanded={friseOuverte}
-                onclick={() => (friseOuverte = !friseOuverte)}>
-          {friseOuverte ? 'Masquer les frises' : 'Afficher les frises'}
-        </button>
-      {/if}
-
+      <!-- La frise se replie a toutes les largeurs, plus seulement sur
+           telephone : c'est le tiers bas de l'ecran qu'elle rend a la carte.
+           Meme dispositif que le tiroir des filtres — la croix est dans le
+           panneau, le bouton qui le rouvre prend sa place. -->
       {#if friseOuverte}
-      <Timeline
-        siecles={barresSiecles}
-        protections={barresAnnees}
-        siecleSelection={filters.siecles}
-        plage={filters.anneeProtection}
-        onsiecle={toggleSiecle}
-        onsiecles={(choix) => (filters.siecles = choix)}
-        onplage={(p) => (filters.anneeProtection = p)}
-      />
+        <Timeline
+          siecles={barresSiecles}
+          protections={barresAnnees}
+          siecleSelection={filters.siecles}
+          plage={filters.anneeProtection}
+          onsiecle={toggleSiecle}
+          onsiecles={(choix) => (filters.siecles = choix)}
+          onplage={(p) => (filters.anneeProtection = p)}
+          onfermer={() => (friseOuverte = false)}
+        />
+      {:else}
+        <button class="replier" aria-expanded="false"
+                onclick={() => (friseOuverte = true)}>
+          Afficher les frises
+        </button>
       {/if}
     </div>
   </main>
@@ -1141,9 +1144,27 @@
     transform: translateX(0);
   }
 
-  .voile,
-  .replier {
+  .voile {
     display: none;
+  }
+
+  /* Bandeau plein largeur : il ne coute sa hauteur que lorsque la frise est
+     repliee, et dit ou elle est partie. */
+  .replier {
+    display: block;
+    width: 100%;
+    border: none;
+    border-top: 1px solid var(--bord);
+    background: var(--fond);
+    color: var(--texte-faible);
+    padding: 8px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: color var(--t-rapide);
+  }
+
+  .replier:hover {
+    color: var(--texte);
   }
 
   @media (max-width: 1320px) {
@@ -1243,17 +1264,6 @@
       width: min(84vw, 320px);
     }
 
-    .replier {
-      display: block;
-      width: 100%;
-      border: none;
-      border-top: 1px solid var(--bord);
-      background: var(--fond);
-      color: var(--texte-faible);
-      padding: 7px;
-      font-size: 11px;
-      cursor: pointer;
-    }
   }
 
   /* --- Gabarit telephone --------------------------------------------------

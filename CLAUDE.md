@@ -38,7 +38,7 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `web/src/lib/format.ts` | `romain`, formats de nombres — étaient recopiés dans trois composants |
 | `web/src/service-worker.ts` | cache des actifs hachés uniquement |
 | `web/src/lib/components/` | `MonumentMap`, `FacetPanel`, `Jetons`, `Timeline`, `Matrice`, `DetailPanel` |
-| `web/tests/smoke.mjs` | 106 vérifications en Chromium réel, avec `serveur.mjs` instrumenté |
+| `web/tests/smoke.mjs` | 114 vérifications en Chromium réel, avec `serveur.mjs` instrumenté |
 | `web/tests/apercu-social.mjs` | régénère la vignette Open Graph depuis l'application |
 
 ## Commandes
@@ -50,7 +50,7 @@ cd etl  && python -m merimee_etl.commons   # complète par les fichiers citant l
 cd etl  && python -m pytest tests -q    # 60 tests
 cd web  && npm run dev                  # http://localhost:5173
 cd web  && npm run check                # svelte-check, doit rester à 0/0
-cd web  && npm run build && npm run test # build statique + 106 vérifications navigateur
+cd web  && npm run build && npm run test # build statique + 114 vérifications navigateur
 cd web  && npm run apercu               # régénère static/apercu-social.png
 cd web  && npm run deploy               # build /Merimee + push sur gh-pages
 ```
@@ -333,10 +333,20 @@ sont désormais séparées par ce qu'elles font :
   un rail à deux options (`statut` / `époque`) précédé de son libellé, et la bascule de
   densité. Le rail remplace un bouton unique dont le libellé alternait, et dont on ne
   savait pas s'il annonçait l'état courant ou sa destination ;
-- **les cartes anciennes, à droite sous le zoom**, dans une boîte nommée : c'est un
-  calque posé sous les points, pas une clé de lecture. Le nom du fond porte sa période
-  en seconde ligne — un `title` ne se lit pas au tactile — et le dosage d'opacité n'y
-  apparaît qu'une fois un fond actif ;
+- **les cartes anciennes prolongent la colonne d'outils du zoom**, et s'y **replient**
+  en une pastille de 31 px, au même bord droit et au même langage graphique que lui.
+  C'est un calque posé sous les points, pas une clé de lecture, et on ne s'en sert pas
+  en continu. Trois points à ne pas défaire : la pastille **dit qu'un fond est actif**
+  (filet ocre), sinon une carte ancienne resterait à l'écran sans commande visible pour
+  l'éteindre ; le module **se déplie de lui-même si `fond=` est dans l'URL**, lu une
+  seule fois au montage (`untrack`) — le suivre rouvrirait le panneau sous le doigt de
+  qui vient de le fermer ; le nom du fond porte sa période en seconde ligne, un `title`
+  ne se lisant pas au tactile. Le style commun aux deux fonds passe par `.fonds >
+  button` et non `.fonds button`, qui coiffait aussi la croix de l'en-tête ;
+- **le zoom de MapLibre suit désormais le thème.** Il restait blanc dans les deux, ce
+  qui était sa valeur par défaut ; une pastille blanche au-dessus d'une pastille ardoise
+  ne tenait pas. Ses icônes sont des SVG noirs posés en **image de fond** — on ne peut
+  pas leur donner un jeton, d'où l'inversion en thème sombre, seul levier disponible ;
 - **« limiter à la zone visible » a rejoint le tiroir des filtres.** C'en est un : il
   restreint le corpus, comme une facette, et n'avait rien à faire parmi des commandes
   d'affichage. Conséquence sur l'état, cf. plus bas : `suivreVue` a quitté
@@ -345,6 +355,45 @@ sont désormais séparées par ce qu'elles font :
 Les clés de lecture portent `.cle` et non un `span` nu : la légende contient d'autres
 `span` depuis qu'elle nomme ses commandes, et le test qui vérifie qu'elle suit le mode
 de coloration compte ces clés — trois par statut, cinq par époque.
+
+**La frise est un panneau, pas un socle.** Trois décisions tenues ensemble :
+
+- **elle suit le thème.** Le bandeau ardoise dans les deux thèmes a été abandonné : il
+  posait une bande sombre sous une page claire, alors que seul le **fond de carte** a
+  une raison de rester sombre — le liseré des points et la rampe de densité le
+  supposent, une frise ne suppose rien. En clair, `--barre-sourde` (les siècles non
+  retenus) doit rester un gris **chaud** et non un gris de texte : sur le calcaire, un
+  gris neutre passe pour une barre désactivée ;
+- **elle se replie à toutes les largeurs**, plus seulement sur téléphone. Même
+  dispositif que le tiroir des facettes : la croix est dans le panneau, et le bandeau
+  qui le rouvre prend sa place — il ne coûte sa hauteur que lorsque la frise est partie ;
+- **les deux axes répondent aux mêmes gestes** : clic pour une valeur, glissement pour
+  une plage, et recliquer la même valeur l'efface. Les deux bornes saisissables de l'axe
+  des protections ont disparu avec le vide qu'elles occupaient. **Conséquence assumée :
+  il n'y a plus de chemin clavier vers la plage d'années** — il n'y en avait déjà aucun
+  vers les siècles, et la puce reste retirable au clavier. Le rendre aux deux axes est
+  dans « reste à faire », pas dans un seul.
+
+**Chaque frise mesure sa propre colonne.** Les deux graphiques partageaient la largeur
+observée sur la première piste : celle des années, qui occupe 1,6 fois la colonne de
+gauche, était donc **dessinée à la largeur de sa voisine** et laissait un tiers de sa
+place vide à droite — l'espace où logeaient justement les bornes. Un `ResizeObserver`
+observe désormais les deux boîtes, et `.piste` porte `min-width: 0` : sans lui un
+élément de grille prend la largeur de son contenu, et un graphique dimensionné sur la
+mesure entretiendrait sa propre croissance. Le test compare boîte et SVG, à 4 px près.
+
+**`replaceChildren` efface tout, y compris ce que Svelte a rendu.** Le voile de
+brossage vivait dans le même `<div>` que le graphique : chaque rafraîchissement des
+données le supprimait avec l'ancre où Svelte le réinsère, si bien qu'un lien portant
+`annees=` arrivait sans voile et qu'il ne revenait plus. La toile est désormais un
+nœud à part (`.toile`), enfant du même conteneur positionné : Plot y règne, Svelte rend
+le voile à côté.
+
+**`echelleX` est réactif, `inverseX` non.** Le premier est lu par l'aperçu de brossage,
+qui doit se redessiner dès que le graphique est reconstruit : en simple `let`, un lien
+portant `annees=` arrivait **sans son voile**, l'échelle étant encore nulle au premier
+calcul de `$derived`. Le second n'est lu que dans un gestionnaire d'événement, donc
+toujours après. Invisible tant que les bornes affichaient la plage en chiffres.
 
 **`USING SAMPLE 1 ROWS` passe sous le filtre.** `auHasard()` tirait une ligne de la
 table entière puis lui appliquait le prédicat : `has_historique` ne couvrant que 24 819
@@ -422,7 +471,8 @@ Deux conséquences moins évidentes du même principe :
   surface, pas une inversion.
 
 **Le thème ne pilote que l'interface : le fond de carte reste sombre dans les deux
-cas.** `FOND` est une constante unique. Les points portent un liseré clair
+cas** — la carte seule, la frise ayant rejoint l'interface (cf. plus haut).
+`FOND` est une constante unique. Les points portent un liseré clair
 (`--carte-liseret` vaut `#fdfcfa` en thème clair) et la rampe de densité monte vers le
 blanc : les deux supposent une carte sombre. L'identité pose des panneaux calcaire sur
 une carte ardoise, pas l'inverse. `setStyle` n'est donc plus appelé — mais
@@ -570,6 +620,11 @@ mesurée), pas le *quoi*.
   détruit 88, et le vocabulaire est mêlé de texte libre (`restauré en 2020`, `Etat
   préoccupant`). Utilisable en facette, **jamais** pour dessiner « ce qui est intact » :
   l'absence de valeur ne dit pas bon état, elle dit champ non rempli sur 94,6 % du corpus.
+- **Chemin clavier sur les deux frises.** Aucun des deux axes n'en a : ils sont des
+  `role="application"` pilotés au pointeur. Les bornes saisissables de l'axe des
+  protections en tenaient lieu pour lui seul ; les retirer a aligné les deux axes sur
+  la même lacune plutôt que d'en corriger une. Ce qu'il faut : un `tabindex`, une
+  valeur focalisable par axe, les flèches pour déplacer, `Maj`+flèches pour étendre.
 - Auteur cliquable dans la fiche, ouvrant ses autres réalisations — `filters.auteurs`
   existe déjà, c'est une poignée de lignes.
 - **PMTiles est incompatible avec le filtrage croisé**, définitivement : une tuile

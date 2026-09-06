@@ -112,6 +112,18 @@
    *  dosage de lecture, pas un etat d'exploration. */
   let opaciteFond = $state(65);
 
+  /**
+   * Le module des cartes anciennes est replie par defaut : deux fonds et un
+   * curseur d'opacite occupaient en permanence un coin de la carte pour une
+   * fonction dont on se sert par intermittence.
+   *
+   * Il s'ouvre de lui-meme quand un fond est deja actif a l'arrivee — un lien
+   * partage porte `fond=cassini`, et la commande doit alors montrer son etat
+   * plutot que de le cacher. Lu **une seule fois**, au montage : le suivre
+   * rouvrirait le module sous le doigt de qui vient de le refermer.
+   */
+  let fondsOuverts = $state(untrack(() => fond) !== null);
+
   /** Au-dela de cette opacite, le fond beige l'emporte sur la carte ardoise et
    *  le lisere clair des points s'y efface. */
   const BASCULE_LISERET = 50;
@@ -454,30 +466,51 @@
   </div>
 </div>
 
-<!-- Les cartes anciennes ont leur propre boite, a l'ecart de la legende : ce
-     n'est pas une cle de lecture des points mais un calque pose sous eux, et
-     les melanger faisait de la legende un tiroir fourre-tout. Elle suit
-     `--marge-droite` comme le zoom : la fiche ne doit pas la recouvrir. -->
-<div class="fonds">
-  <p class="titre-outil">Cartes anciennes</p>
-  {#each HISTORIQUES as h (h.cle)}
-    <button class:actif={fond === h.cle} onclick={() => choisirFond(h.cle)}
-            aria-pressed={fond === h.cle}
-            title="Superposer la carte {h.titre} ({h.epoque}) — {h.poids}">
-      <span class="nom-fond">{h.titre}</span>
-      <span class="epoque">{h.epoque}</span>
-    </button>
-  {/each}
-  {#if fond}
-    <!-- Le curseur natif apporte le clavier et le tactile sans rien ecrire. -->
-    <label class="dosage">
-      <span>opacité</span>
-      <output>{opaciteFond} %</output>
-      <input type="range" min="0" max="100" step="5" bind:value={opaciteFond}
-             aria-label="Opacité du fond historique" />
-    </label>
-  {/if}
-</div>
+<!-- Les cartes anciennes prennent la colonne d'outils, sous le zoom : c'est un
+     calque de carte, pas une cle de lecture des points, et il se replie parce
+     qu'on ne s'en sert pas en continu. La colonne suit `--marge-droite` comme
+     le zoom : la fiche ne doit rien recouvrir. -->
+{#if fondsOuverts}
+  <div class="fonds">
+    <div class="entete-fonds">
+      <p class="titre-outil">Cartes anciennes</p>
+      <button class="fermer-fonds" aria-label="Replier les cartes anciennes"
+              onclick={() => (fondsOuverts = false)}>×</button>
+    </div>
+    {#each HISTORIQUES as h (h.cle)}
+      <button class:actif={fond === h.cle} onclick={() => choisirFond(h.cle)}
+              aria-pressed={fond === h.cle}
+              title="Superposer la carte {h.titre} ({h.epoque}) — {h.poids}">
+        <span class="nom-fond">{h.titre}</span>
+        <span class="epoque">{h.epoque}</span>
+      </button>
+    {/each}
+    {#if fond}
+      <!-- Le curseur natif apporte le clavier et le tactile sans rien ecrire. -->
+      <label class="dosage">
+        <span>opacité</span>
+        <output>{opaciteFond} %</output>
+        <input type="range" min="0" max="100" step="5" bind:value={opaciteFond}
+               aria-label="Opacité du fond historique" />
+      </label>
+    {/if}
+  </div>
+{:else}
+  <button class="ouvrir-fonds" class:actif={fond !== null} aria-expanded="false"
+          aria-label="Cartes anciennes"
+          title="Superposer une carte ancienne — Cassini, état-major"
+          onclick={() => (fondsOuverts = true)}>
+    <!-- Trois feuillets empiles : le geste est une superposition, pas un choix
+         de fond. Trait en `currentColor`, sinon la couleur echapperait au
+         theme comme a la regle « tout vit dans app.css ». -->
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 3.2 3.4 7.5 12 11.8l8.6-4.3z" />
+      <path d="M3.4 12 12 16.3l8.6-4.3" />
+      <path d="M3.4 16.5 12 20.8l8.6-4.3" />
+    </svg>
+  </button>
+{/if}
 
 <style>
   .carte {
@@ -601,7 +634,7 @@
   }
 
   .densite,
-  .fonds button {
+  .fonds > button {
     border: 1px solid var(--bord);
     background: var(--fond-carte);
     color: var(--texte-faible);
@@ -613,41 +646,82 @@
   }
 
   .densite:hover,
-  .fonds button:hover {
+  .fonds > button:hover {
     border-color: var(--inscrit);
     color: var(--inscrit-texte);
   }
 
   .densite.actif,
-  .fonds button.actif {
+  .fonds > button.actif {
     border-color: var(--inscrit);
     background: color-mix(in srgb, var(--inscrit) 14%, transparent);
     color: var(--inscrit-texte);
     font-weight: 600;
   }
 
-  /* La boite des cartes anciennes se pose sous le zoom, dont elle prolonge la
-     colonne d'outils. 84 px : la hauteur du groupe MapLibre plus sa marge. */
+  /* Le module prolonge la colonne d'outils du zoom : meme bord droit, meme
+     largeur au repos, meme langage graphique. 78 px : la hauteur du groupe
+     MapLibre (deux boutons de 29 px et son filet) plus sa marge de 10 px. */
+  .ouvrir-fonds,
   .fonds {
     position: absolute;
-    top: 84px;
-    right: calc(var(--marge-droite, 0px) + 12px);
+    top: 78px;
+    right: calc(var(--marge-droite, 0px) + 10px);
     z-index: 2;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    width: 158px;
-    padding: 10px 11px 11px;
     border: 1px solid var(--bord);
-    border-radius: var(--r-l);
-    background: color-mix(in srgb, var(--fond) 94%, transparent);
+    background: var(--fond-carte);
     box-shadow: var(--ombre-carte);
+    /* Pas de flou au-dessus d'un canevas WebGL : il se paie a chaque image. */
     backdrop-filter: none;
     transition: right var(--t-tiroir);
   }
 
+  .ouvrir-fonds {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 31px;
+    height: 31px;
+    border-radius: var(--r-m);
+    color: var(--texte-faible);
+    cursor: pointer;
+  }
+
+  .ouvrir-fonds svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .ouvrir-fonds:hover {
+    background: var(--fond-creux);
+    color: var(--texte);
+  }
+
+  /* Replie sur un fond actif, le bouton doit encore le dire : sinon la carte
+     ancienne resterait a l'ecran sans commande visible pour l'eteindre. */
+  .ouvrir-fonds.actif {
+    border-color: var(--inscrit);
+    color: var(--inscrit-texte);
+  }
+
+  .fonds {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 168px;
+    padding: 9px 11px 11px;
+    border-radius: var(--r-l);
+  }
+
+  .entete-fonds {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
   .titre-outil {
-    margin: 0 0 2px 2px;
+    margin: 0 0 0 2px;
     font-size: 9.5px;
     font-weight: 600;
     letter-spacing: 0.07em;
@@ -655,9 +729,29 @@
     color: var(--texte-tenu);
   }
 
+  .fermer-fonds {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 21px;
+    height: 21px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--texte-tenu);
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    transition: color var(--t-rapide);
+  }
+
+  .fermer-fonds:hover {
+    color: var(--texte);
+  }
+
   /* Le nom sur une ligne, la periode sous lui : c'est elle qui dit ce que la
      superposition apporte, et un `title` ne se lit pas au tactile. */
-  .fonds button {
+  .fonds > button {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
@@ -672,7 +766,7 @@
     color: var(--texte);
   }
 
-  .fonds button.actif .nom-fond {
+  .fonds > button.actif .nom-fond {
     color: var(--inscrit-texte);
   }
 
@@ -739,10 +833,13 @@
       font-size: 10px;
     }
 
+    .ouvrir-fonds,
     .fonds {
-      top: 78px;
-      right: calc(var(--marge-droite, 0px) + 8px);
-      width: 132px;
+      top: 74px;
+    }
+
+    .fonds {
+      width: 146px;
       padding: 8px 9px 9px;
     }
   }

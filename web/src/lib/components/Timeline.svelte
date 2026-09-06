@@ -13,17 +13,36 @@
     onsiecle: (siecle: number) => void;
     onsiecles: (siecles: number[]) => void;
     onplage: (plage: [number, number] | null) => void;
+    onfermer: () => void;
   }
 
-  let { siecles, protections, siecleSelection, plage, onsiecle, onsiecles, onplage }: Props =
-    $props();
+  let {
+    siecles,
+    protections,
+    siecleSelection,
+    plage,
+    onsiecle,
+    onsiecles,
+    onplage,
+    onfermer
+  }: Props = $props();
 
   const HAUTEUR = 104;
 
   let boiteSiecles: HTMLDivElement;
   let boiteAnnees: HTMLDivElement;
-  let largeur = $state(900);
-  let echelleX: ((valeur: number) => number) | null = null;
+  // Une largeur **par piste**. Les deux graphiques partageaient la mesure du
+  // premier : la piste des annees, qui occupe 1,6 fois la colonne de gauche,
+  // etait donc dessinee a la largeur de sa voisine et laissait 350 px de vide a
+  // sa droite — l'espace ou logeaient les bornes saisissables.
+  let largeurSiecles = $state(900);
+  let largeurAnnees = $state(900);
+  // `echelleX` est reactif, `inverseX` non : le premier est lu par l'apercu de
+  // brossage, qui doit se redessiner des que le graphique est (re)construit —
+  // sinon un lien portant `annees=` arrivait sans son voile, l'echelle etant
+  // encore nulle au premier calcul. Le second n'est lu que dans un gestionnaire
+  // d'evenement, donc toujours apres.
+  let echelleX = $state<((valeur: number) => number) | null>(null);
   let inverseX: ((pixel: number) => number) | null = null;
 
   // Piste des siecles : echelle **a bandes**, donc pas d'`invert`. Le pixel se
@@ -34,10 +53,15 @@
     null;
 
   $effect(() => {
-    const observateur = new ResizeObserver(([entree]) => {
-      largeur = Math.max(320, entree.contentRect.width);
+    const observateur = new ResizeObserver((entrees) => {
+      for (const entree of entrees) {
+        const mesure = Math.max(320, entree.contentRect.width);
+        if (entree.target === boiteSiecles) largeurSiecles = mesure;
+        else largeurAnnees = mesure;
+      }
     });
     observateur.observe(boiteSiecles);
+    observateur.observe(boiteAnnees);
     return () => observateur.disconnect();
   });
 
@@ -47,7 +71,7 @@
     const donnees = siecles;
     const selection = siecleSelection;
     const graphe = Plot.plot({
-      width: largeur,
+      width: largeurSiecles,
       height: HAUTEUR,
       marginLeft: 34,
       marginRight: 8,
@@ -107,7 +131,7 @@
   $effect(() => {
     const donnees = protections;
     const graphe = Plot.plot({
-      width: largeur,
+      width: largeurAnnees,
       height: HAUTEUR,
       marginLeft: 34,
       marginRight: 8,
@@ -164,17 +188,15 @@
     const b = annee(event);
     depart = null;
     courant = null;
-    // Un clic sec (pas un glissement) efface la plage.
-    onplage(Math.abs(a - b) < 1 ? null : [Math.min(a, b), Math.max(a, b)]);
-  }
-
-  function saisirBorne(index: 0 | 1, valeur: string) {
-    const annee = Number.parseInt(valeur, 10);
-    if (!Number.isFinite(annee)) return;
-    const borne = Math.min(ANNEE_MAX, Math.max(ANNEE_MIN, annee));
-    const courante: [number, number] = plage ? [...plage] : [ANNEE_MIN, ANNEE_MAX];
-    courante[index] = borne;
-    onplage([Math.min(...courante), Math.max(...courante)]);
+    // Les deux pistes repondent aux memes gestes : glisser pose une plage,
+    // cliquer pose une seule valeur — et re-cliquer la meme l'efface, comme
+    // recliquer un siecle le decoche. Le clic effacait la plage sans rien
+    // poser, ce qui n'avait d'equivalent nulle part ailleurs.
+    if (Math.abs(a - b) >= 1) {
+      onplage([Math.min(a, b), Math.max(a, b)]);
+      return;
+    }
+    onplage(plage && plage[0] === a && plage[1] === a ? null : [a, a]);
   }
 
   const apercu = $derived.by(() => {
@@ -242,14 +264,23 @@
 </script>
 
 <section class="frise">
+  <!-- La frise se replie a toutes les largeurs, comme le tiroir des filtres :
+       la croix est ici, le bouton qui la rouvre est dans la page. -->
+  <button class="fermer-frise" aria-label="Masquer les frises" onclick={onfermer}>×</button>
+
   <div class="piste">
     <header>
       <h3>Époque de construction</h3>
       <span>clic pour un siècle, glisser pour une plage</span>
     </header>
-    <div class="graphe brossable cliquable" bind:this={boiteSiecles}
+    <div class="graphe brossable cliquable piste-siecles"
          role="application" aria-label="Histogramme des époques de construction, cliquer un siècle ou glisser pour sélectionner une plage"
          onpointerdown={debutSiecle} onpointermove={glisseSiecle} onpointerup={finSiecle}>
+      <!-- La toile est a Plot, le voile est a Svelte : `replaceChildren` efface
+           **tous** les enfants de son hote, y compris ceux que Svelte y a
+           rendus et l'ancre ou il les reinsere. Les melanger faisait
+           disparaitre le voile au premier rafraichissement des donnees. -->
+      <div class="toile" bind:this={boiteSiecles}></div>
       {#if apercuSiecles}
         <div class="brosse" style="left:{apercuSiecles.gauche}px; width:{apercuSiecles.largeur}px"></div>
       {/if}
@@ -259,27 +290,12 @@
   <div class="piste">
     <header>
       <h3>Année de protection</h3>
-      <span class="bornes">
-        <!-- Le brossage a la souris a son equivalent clavier : deux bornes
-             saisissables, qui restent le seul chemin accessible. -->
-        <label>
-          de
-          <input type="number" min={ANNEE_MIN} max={ANNEE_MAX} value={plage?.[0] ?? ANNEE_MIN}
-                 oninput={(e) => saisirBorne(0, e.currentTarget.value)} />
-        </label>
-        <label>
-          à
-          <input type="number" min={ANNEE_MIN} max={ANNEE_MAX} value={plage?.[1] ?? ANNEE_MAX}
-                 oninput={(e) => saisirBorne(1, e.currentTarget.value)} />
-        </label>
-        {#if plage}
-          <button onclick={() => onplage(null)}>effacer</button>
-        {/if}
-      </span>
+      <span>clic pour une année, glisser pour une plage</span>
     </header>
-    <div class="graphe brossable" bind:this={boiteAnnees}
-         role="application" aria-label="Histogramme des actes de protection, glisser pour sélectionner une plage d'années"
+    <div class="graphe brossable cliquable piste-annees"
+         role="application" aria-label="Histogramme des actes de protection, cliquer une année ou glisser pour sélectionner une plage"
          onpointerdown={debut} onpointermove={glisse} onpointerup={fin}>
+      <div class="toile" bind:this={boiteAnnees}></div>
       {#if apercu}
         <div class="brosse" style="left:{apercu.gauche}px; width:{apercu.largeur}px"></div>
       {/if}
@@ -288,16 +304,48 @@
 </section>
 
 <style>
-  /* La frise passe sur un bandeau ardoise **dans les deux themes** : les
-     graduations y sont plus lisibles qu'en gris clair sur blanc, et
-     l'histogramme ambre y gagne son contraste. */
+  /* La frise appartient a l'interface, pas a la carte : elle suit donc le
+     theme. La reserve a droite est celle de la croix, qui s'y pose. */
   .frise {
+    position: relative;
     display: grid;
     grid-template-columns: 1fr 1.6fr;
     gap: 36px;
-    padding: 20px 26px 18px;
-    border-top: 1px solid var(--frise-graduation);
+    padding: 20px 48px 18px 26px;
+    border-top: 1px solid var(--bord);
     background: var(--frise-fond);
+  }
+
+  /* `min-width: 0` : sans lui, un element de grille prend la largeur de son
+     contenu des qu'elle depasse sa part, et le graphique — dimensionne sur la
+     largeur mesuree — entretiendrait sa propre croissance. */
+  .piste {
+    min-width: 0;
+  }
+
+  /* Meme pastille que la croix du tiroir des filtres : c'est le meme geste. */
+  .fermer-frise {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border: 1px solid var(--bord);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--frise-texte-faible);
+    font-size: 17px;
+    line-height: 1;
+    cursor: pointer;
+    transition: all var(--t-rapide);
+  }
+
+  .fermer-frise:hover {
+    border-color: var(--bord-appuye);
+    color: var(--frise-texte);
   }
 
   header {
@@ -322,52 +370,6 @@
     color: var(--frise-texte-faible);
   }
 
-  .bornes {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .bornes label {
-    display: flex;
-    align-items: center;
-    gap: 3px;
-  }
-
-  /* Champs creux sur l'ardoise : un fond clair y ferait deux taches. */
-  .bornes input {
-    width: 58px;
-    padding: 3px 8px;
-    background: color-mix(in srgb, var(--frise-texte) 8%, transparent);
-    border: 1px solid transparent;
-    border-radius: 6px;
-    color: var(--frise-texte);
-    font-size: 10.5px;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-    transition: border-color var(--t-rapide);
-  }
-
-  .bornes input:focus {
-    outline: none;
-    border-color: var(--inscrit);
-  }
-
-  header button {
-    background: none;
-    border: none;
-    padding: 0;
-    color: var(--inscrit-texte);
-    cursor: pointer;
-    font-size: 10.5px;
-    text-decoration: underline;
-    transition: color var(--t-rapide);
-  }
-
-  header button:hover {
-    color: var(--frise-texte);
-  }
-
   .graphe {
     position: relative;
     color: var(--frise-texte-faible);
@@ -375,6 +377,13 @@
 
   .graphe :global(svg) {
     overflow: visible;
+  }
+
+  /* Le graphique donne sa hauteur a la piste : la toile n'ajoute rien, elle
+     isole seulement ce que Plot remplace de ce que Svelte rend. */
+  .toile {
+    display: block;
+    min-width: 0;
   }
 
   .brossable {
@@ -425,6 +434,8 @@
   @media (max-width: 900px) {
     .frise {
       grid-template-columns: 1fr;
+      padding: 20px 44px 18px 16px;
+      gap: 20px;
     }
   }
 </style>

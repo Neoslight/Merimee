@@ -211,7 +211,7 @@ try {
 
   // Croisement avec un siecle depuis la frise.
   const avantSiecle = militaire;
-  await page.locator('.cliquable rect').nth(9).click();
+  await page.locator('.piste-siecles rect').nth(9).click();
   await page.waitForFunction(
     (avant) => {
       const el = document.querySelector('.chiffres span b');
@@ -465,6 +465,16 @@ try {
   // avant toute activation.
   verifier('aucune tuile IGN avant activation', tuilesIgn.length === 0, `${tuilesIgn.length} requetes`);
 
+  // Le module des cartes anciennes est replie par defaut : il ne coute son coin
+  // de carte que lorsqu'on s'en sert.
+  verifier(
+    'les cartes anciennes sont repliees au depart',
+    (await page.locator('button.ouvrir-fonds').count()) === 1 &&
+      (await page.locator('.fonds').count()) === 0
+  );
+  await page.locator('button.ouvrir-fonds').click();
+  await page.waitForTimeout(300);
+
   await page.getByRole('button', { name: 'Cassini' }).click();
   await page.waitForTimeout(900);
   verifier('Cassini demande ses tuiles une fois active', tuilesIgn.length > 0, `${tuilesIgn.length} tuiles`);
@@ -579,8 +589,15 @@ try {
   // Les cartes anciennes ont quitte la legende pour leur propre boite.
   verifier(
     'les cartes anciennes ont leur boite a part',
-    (await page.locator('.fonds button').count()) === 2 &&
+    (await page.locator('.fonds > button').count()) === 2 &&
       (await page.locator('.legende button', { hasText: 'Cassini' }).count()) === 0
+  );
+  // Un lien portant `fond=` doit ouvrir le module : sinon la carte ancienne
+  // s'affiche sans commande visible pour l'eteindre.
+  verifier(
+    'un fond porte par l URL deplie le module',
+    (await page.locator('.fonds').count()) === 1,
+    page.url().split('?')[1] ?? '(aucun parametre)'
   );
 
   // --- Puce de zone visible -------------------------------------------------
@@ -614,7 +631,7 @@ try {
   // L'echelle des siecles est **a bandes** : pas d'`invert`, le pixel se
   // retraduit en balayant les bandes. Un glissement doit poser plusieurs
   // siecles la ou le clic n'en bascule qu'un.
-  const piste = await page.locator('.cliquable').boundingBox();
+  const piste = await page.locator('.piste-siecles').boundingBox();
   await page.mouse.move(piste.x + piste.width * 0.5, piste.y + piste.height * 0.6);
   await page.mouse.down();
   await page.mouse.move(piste.x + piste.width * 0.8, piste.y + piste.height * 0.6, { steps: 10 });
@@ -631,6 +648,48 @@ try {
     const el = document.querySelector('.chiffres span b');
     return el && el.textContent.replace(/\D/g, '') === '46760';
   }, null, { timeout: 20_000 });
+
+  // --- L axe des protections repond aux memes gestes ------------------------
+  // Les deux bornes saisissables ont disparu : un clic pose une annee, un
+  // glissement une plage, comme sur l'axe des siecles.
+  const pisteAnnees = await page.locator('.piste-annees').boundingBox();
+  await page.mouse.click(
+    pisteAnnees.x + pisteAnnees.width * 0.6,
+    pisteAnnees.y + pisteAnnees.height * 0.5
+  );
+  await page.waitForFunction(() => /annees=/.test(location.search), null, { timeout: 20_000 });
+  const uneAnnee = new URL(page.url()).searchParams.get('annees');
+  verifier(
+    'un clic sur l axe des protections pose une annee',
+    /^\d{4}-\d{4}$/.test(uneAnnee ?? '') && uneAnnee.split('-')[0] === uneAnnee.split('-')[1],
+    uneAnnee ?? 'aucune'
+  );
+  await page.getByRole('button', { name: /effacer \d+ filtres?/ }).click();
+  await page.waitForFunction(() => !/annees=/.test(location.search), null, { timeout: 20_000 });
+
+  // La frise se replie a toutes les largeurs, comme le tiroir des filtres.
+  await page.getByRole('button', { name: 'Masquer les frises' }).click();
+  await page.waitForTimeout(400);
+  verifier('les frises se replient au large', (await page.locator('.frise').count()) === 0);
+  await page.getByRole('button', { name: 'Afficher les frises' }).click();
+  await page.waitForTimeout(600);
+  verifier('les frises reviennent', (await page.locator('.frise').count()) === 1);
+
+  // Les deux graphiques remplissent leur colonne : ils partageaient la mesure
+  // du premier, et celui des annees laissait un tiers de sa place vide.
+  const largeurs = await page.evaluate(() => {
+    const boite = (s) => document.querySelector(s).getBoundingClientRect().width;
+    const svg = (s) => document.querySelector(`${s} svg`).getBoundingClientRect().width;
+    return {
+      siecles: boite('.piste-siecles') - svg('.piste-siecles'),
+      annees: boite('.piste-annees') - svg('.piste-annees')
+    };
+  });
+  verifier(
+    'chaque frise remplit sa colonne',
+    Math.abs(largeurs.siecles) < 4 && Math.abs(largeurs.annees) < 4,
+    `restes ${largeurs.siecles.toFixed(1)} et ${largeurs.annees.toFixed(1)} px`
+  );
 
   // --- Theme clair ----------------------------------------------------------
   // `setStyle` detruit sources et couches : c'est la regression que ce lot
@@ -687,6 +746,17 @@ try {
     'la scene reste ardoise en theme clair',
     luminance(sceneClaire) < 0.1,
     sceneClaire
+  );
+
+  // La frise, elle, appartient a l'interface : elle suit le theme. Le bandeau
+  // ardoise dans les deux themes posait une bande sombre sous une page claire.
+  const friseClaire = await page.evaluate(
+    () => getComputedStyle(document.querySelector('.frise')).backgroundColor
+  );
+  verifier(
+    'la frise suit le theme, claire en theme clair',
+    luminance(friseClaire) > 0.5,
+    friseClaire
   );
   verifier(
     'aucun fond de carte clair demande',
@@ -849,6 +919,18 @@ try {
       'une plaque nommee remplace la photo absente',
       (await plaque.count()) === 1 && (await plaque.locator('img').count()) === 0,
       ((await plaque.textContent()) ?? '').replace(/\s+/g, ' ').trim().slice(0, 70)
+    );
+
+    // Un lien portant `annees=` doit arriver avec son voile de brossage : c'est
+    // la seule trace visible de la plage depuis que les bornes saisissables ont
+    // disparu. L'echelle du graphique n'existe pas encore au premier calcul de
+    // l'apercu — d'ou `echelleX` en `$state`.
+    await onglet.goto(`${BASE}/?annees=1920-1935`, { waitUntil: 'domcontentloaded' });
+    await attendre(onglet, '.chiffres b');
+    await onglet.waitForTimeout(1500);
+    verifier(
+      'un lien avec une plage arrive avec son voile',
+      (await onglet.locator('.piste-annees .brosse').count()) === 1
     );
 
     // `?notice=` a circule avant `?ref=` : l'alias doit encore ouvrir la fiche.

@@ -20,9 +20,14 @@ s'efface tant qu'il est ouvert.
 
 Les commandes de la carte sont rangées par question : la légende, en bas à gauche, dit
 ce que les couleurs signifient puis propose de les changer ; les cartes anciennes —
-Cassini, l'état-major — ont leur propre boîte sous le zoom, parce qu'un calque posé
-sous les points n'est pas une clé de lecture ; et « limiter à la zone visible », qui
-restreint le corpus, est passé parmi les filtres, avec les autres critères.
+Cassini, l'état-major — prolongent la colonne d'outils du zoom et s'y replient en une
+pastille, parce qu'un calque posé sous les points n'est pas une clé de lecture et qu'on
+ne s'en sert pas en continu ; et « limiter à la zone visible », qui restreint le corpus,
+est passé parmi les filtres, avec les autres critères.
+
+Les deux frises répondent aux mêmes gestes : un clic pose une valeur, un glissement une
+plage, un second clic au même endroit l'efface. Elles se replient d'un geste, comme le
+tiroir des facettes, et rendent alors le tiers bas de l'écran à la carte.
 
 Tout état d'exploration vit dans l'URL : un croisement trouvé se partage par simple
 copie du lien, et le retour arrière referme la fiche ouverte. Sombre ou clair, au
@@ -31,7 +36,8 @@ choix — le thème reste hors de l'URL, un lien s'ouvre dans celui de son desti
 Blanc calcaire, ardoise, terracotta pour le classé et ocre doré pour l'inscrit ;
 Newsreader pour les titres d'édifices et le texte d'archive, Plus Jakarta Sans pour
 l'interface. Le thème ne pilote que l'interface : la carte reste sombre dans les deux
-cas, les panneaux calcaire se posant sur une carte ardoise et non l'inverse.
+cas, les panneaux calcaire se posant sur une carte ardoise et non l'inverse. Les frises,
+elles, suivent le thème : elles appartiennent à l'interface, pas à la carte.
 
 Aucun serveur applicatif : un pipeline Python produit des fichiers Parquet, que le
 navigateur interroge en SQL via DuckDB-Wasm.
