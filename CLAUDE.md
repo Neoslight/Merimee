@@ -434,8 +434,9 @@ axes mais leur nombre est affiché sous le graphique.
 Mérimée ne porte **aucun lien vers une image** : ni colonne Mémoire, ni Wikidata, ni
 fichier. Le premier pont est Wikidata (`P380` identifiant Mérimée → `P18` image), et il
 couvre **39 556 notices sur 46 760, soit 84,6 %**. Le second est Commons, par les
-fichiers dont la page **cite la référence**. `python -m merimee_etl.wikidata` et
-`python -m merimee_etl.commons` écrivent deux fichiers **séparés** dans `data/ref/` —
+fichiers dont la page **cite la référence** : **512 notices de plus, 85,7 % au total**.
+`python -m merimee_etl.wikidata` et `python -m merimee_etl.commons` écrivent deux
+fichiers **séparés** dans `data/ref/` —
 deux bases tierces de fiabilité différente, dont l'une doit pouvoir être régénérée ou
 jetée sans toucher l'autre ; `python -m merimee_etl` **ne les appelle jamais**, il se
 contente de la colonne `commons` des fragments — vide si les instantanés sont absents.
@@ -466,9 +467,14 @@ n'ont pas d'item manquant, elles n'ont pas de `P18`. Trois routes ont été mesu
 | route | rendement | ce que ça vaut |
 |---|---|---|
 | image de tête d'article frwiki | 172/300 « images », **13 vraies photos** | cartes de localisation, blasons, `MH_disparu.svg` |
-| `insource:"PA…"` sur Commons | **11/100**, confirmé à 14/120 en production | le fichier **cite la notice** |
+| `insource:"PA…"` sur Commons | 11/100 en échantillon, **512/7 190 = 7,1 %** en passe complète | le fichier **cite la notice** |
 | geosearch 150 m | 44/100 | **sujet non vérifié** |
 | items sans P18 mais avec `P373` | 224 | négligeable |
+
+La passe complète coûte **1 h 40** : l'API de recherche répond en ~700 ms, et il y a
+7 190 notices à interroger. D'où l'écriture incrémentale et la reprise — les références
+déjà trouvées sont sautées, celles cherchées sans succès sont revues au passage suivant,
+Commons s'enrichissant.
 
 Le geosearch rend `BENOIT HAMON.jpg` pour la préfecture de Nanterre et
 `Église (Salins-les-Bains).jpg` pour une « Demeure ». Corroborer par le titre ne filtre

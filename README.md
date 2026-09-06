@@ -189,11 +189,18 @@ premier changement de filtre — ce n'est pas un filtre, elle ne restreint aucun
 
 **Les photographies tiennent dans les fragments déjà téléchargés.** La base Mérimée ne
 porte aucun lien vers une image. Wikidata en porte un — `P380` identifiant Mérimée vers
-`P18` image — et il couvre **84,6 % du corpus, 39 556 notices**. L'instantané est pris à
-part (`python -m merimee_etl.wikidata`), versionné, puis reporté dans la colonne
-`commons` de `details` : ouvrir une fiche ne coûte donc aucune requête de plus, seule
-l'image part sur le réseau. Le pipeline ne va jamais en ligne de lui-même, et la colonne
-vaut la liste vide si l'instantané manque.
+`P18` image — et il couvre **84,6 % du corpus, 39 556 notices**. Ce pont n'est pas
+étroit : 46 618 items portent déjà un `P380`, si bien que les fiches sans photographie
+n'ont pas d'item manquant — la photographie n'existe pas. Un second instantané
+(`python -m merimee_etl.commons`) rattrape ce que Commons héberge sans l'avoir relié à
+Wikidata, par les fichiers dont la page cite la référence : **512 notices de plus,
+85,7 %**. Le geosearch géolocalisé, mesuré aussi, a été écarté — 44 % de réponses mais
+un sujet non vérifié, la préfecture de Nanterre y récoltant le portrait d'un ministre.
+
+Les deux instantanés sont pris à part, versionnés séparément, puis reportés dans la
+colonne `commons` de `details` : ouvrir une fiche ne coûte donc aucune requête de plus,
+seule l'image part sur le réseau. Le pipeline ne va jamais en ligne de lui-même, et la
+colonne vaut la liste vide si les instantanés manquent.
 
 Le crédit auteur et la licence sont lus à la volée sur l'API Commons, parce que Wikidata
 ne les porte pas : ces images sont pour la plupart sous CC-BY-SA, le crédit est une
