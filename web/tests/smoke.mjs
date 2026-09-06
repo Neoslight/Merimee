@@ -432,6 +432,23 @@ try {
 
   // --- Densite --------------------------------------------------------------
   await page.locator('.bascule button', { hasText: 'Carte' }).click();
+  await page.waitForTimeout(300);
+
+  // L'attribution et la legende se partageaient le coin bas gauche : la
+  // pastille « i » se posait sur la legende. La preuve est geometrique, pas
+  // une lecture de la regle CSS qui la deplace.
+  const boiteAttrib = await page.locator('.maplibregl-ctrl-bottom-right').boundingBox();
+  const boiteLegende = await page.locator('.legende').boundingBox();
+  const disjointes =
+    boiteAttrib.x >= boiteLegende.x + boiteLegende.width ||
+    boiteLegende.x >= boiteAttrib.x + boiteAttrib.width ||
+    boiteAttrib.y >= boiteLegende.y + boiteLegende.height ||
+    boiteLegende.y >= boiteAttrib.y + boiteAttrib.height;
+  verifier(
+    'l attribution ne recouvre plus la legende',
+    disjointes,
+    `attrib x${Math.round(boiteAttrib.x)} · legende x${Math.round(boiteLegende.x)}`
+  );
   await page.getByRole('button', { name: 'densité' }).click();
   await page.waitForTimeout(500);
   // Viser le bouton par son nom : `.legende button[aria-pressed]` attrapait le
@@ -540,23 +557,47 @@ try {
   verifier('le fond quitte l URL', !page.url().includes('fond='), page.url());
 
   // --- Semiologie par epoque ------------------------------------------------
-  const legendeStatut = await page.locator('.legende span').count();
-  await page.locator('.legende button.mode').click();
+  // Les cles de lecture portent `.cle` : la legende contient d'autres `span`
+  // depuis qu'elle nomme ses commandes, et compter `span` melangerait les deux.
+  const legendeStatut = await page.locator('.legende .cle').count();
+  await page.locator('.legende button.mode', { hasText: 'époque' }).click();
   await page.waitForTimeout(400);
-  const legendeEpoque = await page.locator('.legende span').count();
+  const legendeEpoque = await page.locator('.legende .cle').count();
   verifier(
     'la legende suit le mode de coloration',
     legendeStatut === 3 && legendeEpoque === 5,
     `${legendeStatut} -> ${legendeEpoque}`
   );
-  await page.locator('.legende button.mode').click();
+  // Deux boutons exclusifs, pas une bascule : le rail annonce l'etat courant.
+  const epoqueActive = await page
+    .locator('.legende button.mode', { hasText: 'époque' })
+    .getAttribute('aria-pressed');
+  verifier('le rail de coloration annonce l option retenue', epoqueActive === 'true', String(epoqueActive));
+  await page.locator('.legende button.mode', { hasText: 'statut' }).click();
   await page.waitForTimeout(300);
+
+  // Les cartes anciennes ont quitte la legende pour leur propre boite.
+  verifier(
+    'les cartes anciennes ont leur boite a part',
+    (await page.locator('.fonds button').count()) === 2 &&
+      (await page.locator('.legende button', { hasText: 'Cassini' }).count()) === 0
+  );
 
   // --- Puce de zone visible -------------------------------------------------
   // `bbox` a elle aussi un etat miroir hors de `filters` : le suivi de vue de
   // la carte. Retirer la puce sans l'eteindre laisserait le prochain
   // deplacement reposer la zone aussitot.
-  await page.getByRole('button', { name: 'lier la vue' }).click();
+  // La case vit dans le tiroir des filtres : restreindre a la zone visible est
+  // un critere, pas un reglage d'affichage. Au large le tiroir est ouvert par
+  // defaut — ne l'ouvrir que s'il ne l'est pas, sinon le bouton flottant, qui
+  // s'efface tant qu'il est ouvert, n'existe pas.
+  if ((await page.locator('.facettes.ouvert').count()) === 0) {
+    await page.getByRole('button', { name: /^Filtres/ }).click();
+    await page.waitForTimeout(320);
+  }
+  const zone = page.getByRole('checkbox', { name: /zone visible/ });
+  verifier('la case de zone visible est dans le tiroir', (await zone.count()) === 1);
+  await zone.check();
   await page.waitForSelector('.jetons button:not(.raz)', { timeout: 20_000 });
   const puceZone = page.locator('.jetons button:not(.raz)').first();
   verifier(
@@ -566,8 +607,8 @@ try {
   );
   await puceZone.click();
   await page.waitForTimeout(500);
-  const libelleSuivi = (await page.locator('.legende button').last().textContent()).trim();
-  verifier('la puce de zone delie la vue', libelleSuivi === 'lier la vue', libelleSuivi);
+  const encoreLiee = await zone.isChecked();
+  verifier('la puce de zone delie la vue', encoreLiee === false, String(encoreLiee));
 
   // --- Brossage de l axe construction ---------------------------------------
   // L'echelle des siecles est **a bandes** : pas d'`invert`, le pixel se

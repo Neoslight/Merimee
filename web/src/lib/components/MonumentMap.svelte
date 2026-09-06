@@ -17,6 +17,10 @@
     vueInitiale: VueCarte | null;
     /** Fond historique superpose. Lie a la page, qui seule ecrit l'URL. */
     fond: FondHistorique | null;
+    /** Restreindre les filtres a la zone visible. La case qui le commande est
+     *  dans le tiroir des filtres — c'en est un — donc l'etat vit dans la page,
+     *  seule a posseder `filters.bbox`. */
+    suivreVue: boolean;
     onselect: (reference: string) => void;
     onbbox: (bbox: [number, number, number, number] | null) => void;
   }
@@ -26,6 +30,7 @@
     selection,
     vueInitiale,
     fond = $bindable(),
+    suivreVue = $bindable(),
     onselect,
     onbbox
   }: Props = $props();
@@ -36,7 +41,6 @@
   let conteneur: HTMLDivElement;
   let carte: MapLibreMap | undefined = $state();
   let pret = $state(false);
-  let suivreVue = $state(false);
   let densite = $state(false);
   let minuteur: ReturnType<typeof setTimeout> | undefined;
 
@@ -163,14 +167,18 @@
     };
   }
 
-  /** Coupe le suivi de vue et retire la contrainte de zone. Appele par la page
-   *  quand la puce « zone visible » est retiree : sans cela `suivreVue` reste
-   *  vrai et le prochain `moveend` repose aussitot la bbox. */
-  export function delierVue() {
-    if (!suivreVue) return;
-    suivreVue = false;
-    onbbox(null);
-  }
+  /**
+   * Le lien entre la case du tiroir et la contrainte de zone.
+   *
+   * La lier pose la zone courante, la delier la retire — y compris quand la
+   * page eteint `suivreVue` parce que la puce « zone visible » a ete retiree
+   * ailleurs. Sans cette derniere branche, le prochain `moveend` reposerait
+   * aussitot la bbox que l'on vient d'enlever.
+   */
+  $effect(() => {
+    if (suivreVue) emettreBbox();
+    else onbbox(null);
+  });
 
   /**
    * Toutes les sources et couches ajoutees, en un seul endroit.
@@ -285,9 +293,9 @@
       style: FOND,
       center: [depart.lon, depart.lat],
       zoom: depart.zoom,
-      // L'attribution est posee a la main, en bas a **gauche** : a droite, le
-      // panneau de fiche la recouvrait des qu'une notice etait ouverte. Une
-      // mention de licence masquee n'est pas une mention.
+      // L'attribution est posee a la main, en bas a **droite** : a gauche, sa
+      // pastille « i » se posait sur la legende. La fiche, qui l'en avait
+      // chassee, ne la recouvre plus — `--marge-droite` l'ecarte.
       attributionControl: false,
       // La rotation n'apporte rien a une carte de points et transforme le
       // moindre glissement a deux doigts en desorientation sur telephone.
@@ -296,7 +304,7 @@
       touchPitch: false
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
-    map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
 
     // `style.load` se declenche au montage **et** apres chaque `setStyle` :
     // c'est le seul evenement qui couvre les deux.
@@ -400,56 +408,75 @@
     carte.setPaintProperty('monuments-points', 'circle-stroke-color', liseret());
     carte.setPaintProperty('monuments-selection', 'circle-stroke-color', palette.carteSelection);
   });
-
-  function basculerSuivi() {
-    suivreVue = !suivreVue;
-    if (suivreVue) emettreBbox();
-    else onbbox(null);
-  }
 </script>
 
 <div class="carte" bind:this={conteneur}></div>
 
 <div class="legende">
-  {#if mode === 'statut'}
-    <span><i style="background:{palette.classe}"></i>classé</span>
-    <span><i style="background:{palette.inscrit}"></i>inscrit</span>
-    <span><i style="background:{palette.mixte}"></i>les deux</span>
-  {:else}
-    {#each TRANCHES as tranche (tranche.cle)}
-      <span><i style="background:{palette[tranche.cle]}"></i>{tranche.titre}</span>
-    {/each}
-  {/if}
-  <i class="separateur" aria-hidden="true"></i>
-  <button class="mode" class:actif={mode === 'epoque'}
-          onclick={() => (mode = mode === 'statut' ? 'epoque' : 'statut')}
-          aria-pressed={mode === 'epoque'} title="Colorer les points par époque de construction">
-    {mode === 'epoque' ? 'par époque' : 'par statut'}
-  </button>
-  <button class:actif={densite} onclick={basculerDensite}
-          aria-pressed={densite} title="Afficher la densité plutôt que les points seuls">
-    densité
-  </button>
+  <div class="cles">
+    {#if densite}
+      <!-- Sous la densite, les teintes de statut ne disent plus rien : la
+           legende montre la rampe qui est effectivement a l'ecran. -->
+      <span class="cle">
+        <i class="rampe"
+           style="background:linear-gradient(90deg,{palette.chaleur1},{palette.chaleur2},{palette.chaleur3},{palette.chaleur4})"
+        ></i>
+        de quelques notices à plusieurs centaines
+      </span>
+    {:else if mode === 'statut'}
+      <span class="cle"><i style="background:{palette.classe}"></i>classé</span>
+      <span class="cle"><i style="background:{palette.inscrit}"></i>inscrit</span>
+      <span class="cle"><i style="background:{palette.mixte}"></i>les deux</span>
+    {:else}
+      {#each TRANCHES as tranche (tranche.cle)}
+        <span class="cle"><i style="background:{palette[tranche.cle]}"></i>{tranche.titre}</span>
+      {/each}
+    {/if}
+  </div>
+
+  <!-- Les commandes sont sous un filet, la ou la lecture s'arrete : la legende
+       dit d'abord ce qu'on voit, elle propose ensuite de le changer. -->
+  <div class="commandes">
+    <span class="etiquette">colorer par</span>
+    <div class="segments">
+      <button class="mode" class:actif={mode === 'statut'} aria-pressed={mode === 'statut'}
+              onclick={() => (mode = 'statut')}
+              title="Colorer les points par statut de protection">statut</button>
+      <button class="mode" class:actif={mode === 'epoque'} aria-pressed={mode === 'epoque'}
+              onclick={() => (mode = 'epoque')}
+              title="Colorer les points par époque de construction">époque</button>
+    </div>
+    <i class="separateur" aria-hidden="true"></i>
+    <button class="densite" class:actif={densite} onclick={basculerDensite}
+            aria-pressed={densite} title="Afficher la densité plutôt que les points seuls">
+      densité
+    </button>
+  </div>
+</div>
+
+<!-- Les cartes anciennes ont leur propre boite, a l'ecart de la legende : ce
+     n'est pas une cle de lecture des points mais un calque pose sous eux, et
+     les melanger faisait de la legende un tiroir fourre-tout. Elle suit
+     `--marge-droite` comme le zoom : la fiche ne doit pas la recouvrir. -->
+<div class="fonds">
+  <p class="titre-outil">Cartes anciennes</p>
   {#each HISTORIQUES as h (h.cle)}
     <button class:actif={fond === h.cle} onclick={() => choisirFond(h.cle)}
             aria-pressed={fond === h.cle}
             title="Superposer la carte {h.titre} ({h.epoque}) — {h.poids}">
-      {h.titre}
+      <span class="nom-fond">{h.titre}</span>
+      <span class="epoque">{h.epoque}</span>
     </button>
   {/each}
   {#if fond}
     <!-- Le curseur natif apporte le clavier et le tactile sans rien ecrire. -->
     <label class="dosage">
-      opacité
+      <span>opacité</span>
+      <output>{opaciteFond} %</output>
       <input type="range" min="0" max="100" step="5" bind:value={opaciteFond}
              aria-label="Opacité du fond historique" />
-      <output>{opaciteFond} %</output>
     </label>
   {/if}
-  <button class:actif={suivreVue} onclick={basculerSuivi} aria-pressed={suivreVue}
-          title="Restreindre les filtres à la zone visible">
-    {suivreVue ? 'vue liée' : 'lier la vue'}
-  </button>
 </div>
 
 <style>
@@ -461,17 +488,21 @@
   /* `--marge-gauche` est posee par la page : c'est la largeur du tiroir des
      filtres quand il est ouvert a cote de la carte. La carte n'a pas a
      connaitre l'existence d'un panneau de facettes, une variable heritee
-     suffit. */
+     suffit.
+
+     Le coin bas gauche est libre depuis que l'attribution est passee a droite :
+     la legende descend donc jusqu'au bord, elle n'enjambe plus rien. */
   .legende {
     position: absolute;
     left: calc(var(--marge-gauche, 0px) + 12px);
-    bottom: 34px;
+    bottom: 12px;
+    z-index: 2;
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px 16px;
-    padding: 9px 14px;
-    border: 1px solid rgb(var(--voile) / 6%);
+    flex-direction: column;
+    gap: 9px;
+    max-width: min(52vw, 430px);
+    padding: 10px 14px 11px;
+    border: 1px solid var(--bord);
     border-radius: var(--r-l);
     background: color-mix(in srgb, var(--fond) 94%, transparent);
     box-shadow: var(--ombre-carte);
@@ -482,31 +513,95 @@
     transition: left var(--t-tiroir);
   }
 
-  .legende span {
+  .cles {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 14px;
+  }
+
+  .cle {
     display: flex;
     align-items: center;
     gap: 6px;
     white-space: nowrap;
   }
 
-  .legende i {
+  .cle i {
     width: 9px;
     height: 9px;
     border-radius: 50%;
   }
 
-  /* Filet de separation entre la lecture de la legende et ses commandes. Un
-     `<i>` et non un `<span>` : le test qui verifie que la legende suit le mode
-     de coloration compte `.legende span` — trois entrees par statut, cinq par
-     epoque. */
+  /* La rampe de densite se lit comme un gradient, pas comme une pastille. */
+  .cle i.rampe {
+    width: 46px;
+    height: 8px;
+    border-radius: var(--r-pilule);
+  }
+
+  .commandes {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+    padding-top: 9px;
+    border-top: 1px solid var(--bord);
+  }
+
+  /* Le libelle dit ce que reglent les deux boutons qui suivent. Sans lui,
+     « statut » et « epoque » ressemblaient a des filtres poses sur le corpus. */
+  .etiquette {
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--texte-tenu);
+  }
+
+  /* Deux options exclusives, donc un rail et une pastille — comme le selecteur
+     de vue de la barre. Un bouton unique qui change de libelle demandait de
+     deviner s'il annonce l'etat courant ou sa destination. */
+  .segments {
+    display: flex;
+    gap: 2px;
+    padding: 2px;
+    background: var(--fond-creux);
+    border-radius: var(--r-pilule);
+  }
+
+  .segments button {
+    border: none;
+    background: transparent;
+    color: var(--texte-faible);
+    border-radius: var(--r-pilule);
+    padding: 3px 10px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all var(--t-rapide);
+  }
+
+  .segments button:hover {
+    color: var(--texte);
+  }
+
+  .segments button.actif {
+    background: var(--fond-carte);
+    color: var(--texte);
+    font-weight: 600;
+    box-shadow: 0 2px 6px -2px rgb(var(--voile) / 18%);
+  }
+
+  /* Filet de separation entre le rail des couleurs et la bascule de densite :
+     deux commandes voisines, deux questions differentes. */
   .separateur {
     width: 1px;
     height: 16px;
-    border-radius: 0;
     background: var(--bord);
   }
 
-  .legende button {
+  .densite,
+  .fonds button {
     border: 1px solid var(--bord);
     background: var(--fond-carte);
     color: var(--texte-faible);
@@ -517,65 +612,138 @@
     transition: all var(--t-rapide);
   }
 
-  .legende button:hover {
+  .densite:hover,
+  .fonds button:hover {
     border-color: var(--inscrit);
     color: var(--inscrit-texte);
   }
 
-  .legende button.actif {
+  .densite.actif,
+  .fonds button.actif {
     border-color: var(--inscrit);
     background: color-mix(in srgb, var(--inscrit) 14%, transparent);
     color: var(--inscrit-texte);
     font-weight: 600;
   }
 
+  /* La boite des cartes anciennes se pose sous le zoom, dont elle prolonge la
+     colonne d'outils. 84 px : la hauteur du groupe MapLibre plus sa marge. */
+  .fonds {
+    position: absolute;
+    top: 84px;
+    right: calc(var(--marge-droite, 0px) + 12px);
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 158px;
+    padding: 10px 11px 11px;
+    border: 1px solid var(--bord);
+    border-radius: var(--r-l);
+    background: color-mix(in srgb, var(--fond) 94%, transparent);
+    box-shadow: var(--ombre-carte);
+    backdrop-filter: none;
+    transition: right var(--t-tiroir);
+  }
+
+  .titre-outil {
+    margin: 0 0 2px 2px;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--texte-tenu);
+  }
+
+  /* Le nom sur une ligne, la periode sous lui : c'est elle qui dit ce que la
+     superposition apporte, et un `title` ne se lit pas au tactile. */
+  .fonds button {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    border-radius: var(--r-m);
+    padding: 6px 11px 7px;
+    text-align: left;
+  }
+
+  .nom-fond {
+    font-size: 12px;
+    color: var(--texte);
+  }
+
+  .fonds button.actif .nom-fond {
+    color: var(--inscrit-texte);
+  }
+
+  .epoque {
+    font-size: 10px;
+    color: var(--texte-tenu);
+  }
+
   /* Le dosage n'apparait qu'avec un fond actif : il n'occupe donc de place que
      lorsqu'il en a une a regler. */
+  /* Le libelle et la valeur sur une ligne, le curseur sous eux : partages en
+     largeur, les trois ne laissaient qu'une quarantaine de pixels de course. */
   .dosage {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr auto;
     align-items: center;
-    gap: 7px;
+    gap: 3px 6px;
+    margin-top: 3px;
+    font-size: 10.5px;
     white-space: nowrap;
     color: var(--texte-faible);
   }
 
   .dosage input {
-    width: 84px;
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
     accent-color: var(--inscrit);
     cursor: pointer;
   }
 
-  /* Largeur fixe : sans elle, passer de « 5 % » a « 100 % » decale toute la
-     legende a chaque cran du curseur. */
+  /* Chiffres tabulaires : sans eux, passer de « 5 % » a « 100 % » decale le
+     libelle a chaque cran du curseur. */
   .dosage output {
-    min-width: 34px;
     font-variant-numeric: tabular-nums;
+    text-align: right;
     color: var(--texte-moyen);
   }
 
-  /* Les commandes MapLibre s'ecartent des deux calques, comme la legende : la
-     boussole et le zoom passaient sous la fiche, l'attribution sous le tiroir.
-     Les deux variables sont posees par la page. */
-  .carte :global(.maplibregl-ctrl-bottom-left) {
-    left: var(--marge-gauche, 0px);
-    transition: left 160ms ease;
-  }
+  /* Les commandes MapLibre s'ecartent des deux calques, comme la legende et la
+     boite des cartes anciennes. La variable est posee par la page.
 
+     L'attribution est repassee **en bas a droite** : a gauche, sa pastille
+     « i » se posait sur la legende. La raison qui l'en avait chassee — la fiche
+     la recouvrait — tombe avec `--marge-droite`, qui l'ecarte du calque comme
+     elle ecarte le zoom. */
+  .carte :global(.maplibregl-ctrl-bottom-right),
   .carte :global(.maplibregl-ctrl-top-right) {
     right: var(--marge-droite, 0px);
     transition: right 160ms ease;
   }
 
   /* Sur un telephone les cinq tranches d'epoque ne tiennent pas sur une
-     ligne : la legende s'enroule et occupe toute la largeur. */
+     ligne : la legende s'enroule et occupe toute la largeur. Elle remonte
+     au-dessus de l'attribution, qui n'a plus de place a elle a cette largeur. */
   @media (max-width: 900px) {
     .legende {
       left: 8px;
       right: 8px;
-      bottom: 34px;
-      gap: 8px 10px;
+      bottom: 36px;
+      max-width: none;
       border-radius: var(--r-m);
       font-size: 10px;
+    }
+
+    .fonds {
+      top: 78px;
+      right: calc(var(--marge-droite, 0px) + 8px);
+      width: 132px;
+      padding: 8px 9px 9px;
     }
   }
 </style>

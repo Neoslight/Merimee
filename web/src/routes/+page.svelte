@@ -93,9 +93,13 @@
 
   // Position de depart de la carte, portee par le lien partage et par lui seul.
   const cadrageInitial = initial.cadrage;
-  let vueCarte = $state<
-    { vueCourante: () => VueCarte | null; delierVue: () => void } | undefined
-  >();
+  let vueCarte = $state<{ vueCourante: () => VueCarte | null } | undefined>();
+
+  // « Limiter a la zone visible » est un filtre : sa case vit donc dans le
+  // tiroir des filtres, avec les autres, et non plus dans la legende de la
+  // carte. L'etat est ici parce que la page possede `filters.bbox` ; la carte
+  // le lit et pose ou retire la zone.
+  let suivreVue = $state(false);
 
   // Le script en tete d'`app.html` a deja pose `data-theme` avant le premier
   // paint : cet effet ne change donc rien a l'ecran au montage. Il resout la
@@ -247,13 +251,13 @@
   function retirerJeton(puce: Jeton) {
     retirer(puce.cle, puce.valeur);
     if (puce.cle === 'recherche' || puce.cle === 'texte') terme = '';
-    if (puce.cle === 'bbox') vueCarte?.delierVue();
+    if (puce.cle === 'bbox') suivreVue = false;
   }
 
   function toutEffacer() {
     reset();
     terme = '';
-    vueCarte?.delierVue();
+    suivreVue = false;
   }
 
   // Le seuil telephone (768 px) est purement graphique — la fiche remonte du
@@ -412,6 +416,7 @@
           {selection}
           vueInitiale={cadrageInitial}
           bind:fond
+          bind:suivreVue
           onselect={(ref) => (selection = ref)}
           onbbox={(bbox) => (filters.bbox = bbox)}
         />
@@ -507,6 +512,13 @@
             <button class="fermer-tiroir" aria-label="Fermer les filtres"
                     onclick={() => (facettesOuvertes = false)}>×</button>
           </div>
+          <!-- La zone visible est un critere comme un autre : elle rejoint
+               les facettes plutot que la legende de la carte, ou elle voisinait
+               des commandes d'affichage qui ne filtrent rien. -->
+          <label class="zone">
+            <input type="checkbox" bind:checked={suivreVue} />
+            <span>Limiter à la zone visible sur la carte</span>
+          </label>
           <FacetPanel {facettes} {cardinaux} {chargement} />
         </div>
 
@@ -789,7 +801,13 @@
      criteres poses : c'est tout ce qui en reste visible une fois referme.
      z-index 4 : au-dessus de la liste et de la matrice (3), qui recouvrent la
      scene et pour lesquelles les filtres comptent autant, mais sous le voile
-     (5) et le tiroir (6), qu'il n'a pas a percer. */
+     (5) et le tiroir (6), qu'il n'a pas a percer.
+
+     C'est une surface posee, pas un aplat plein : le fond de carte reste
+     sombre dans les deux themes, mais le bouton appartient a l'interface et
+     suit le theme comme la legende — calcaire en clair, ardoise en sombre,
+     detache de la carte par son filet et son ombre. En aplat inverse il etait
+     presque noir sur une carte noire dans le seul theme sombre. */
   .filtres {
     position: absolute;
     top: 12px;
@@ -798,21 +816,22 @@
     display: inline-flex;
     align-items: center;
     gap: 7px;
-    border: none;
-    background: var(--plein-fond);
-    color: var(--plein-texte);
+    border: 1px solid var(--bord-appuye);
+    background: var(--fond-carte);
+    color: var(--texte);
     border-radius: var(--r-pilule);
     padding: 9px 16px;
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
     white-space: nowrap;
-    box-shadow: var(--ombre-bouton);
-    transition: opacity var(--t-rapide);
+    box-shadow: var(--ombre-carte);
+    transition: all var(--t-rapide);
   }
 
   .filtres:hover {
-    opacity: 0.85;
+    border-color: var(--accent);
+    color: var(--accent);
   }
 
   .filtres em {
@@ -825,6 +844,27 @@
     color: var(--texte-sur-plein);
     font-size: 10.5px;
     text-align: center;
+  }
+
+  /* La case de zone visible se pose sous l'en-tete du tiroir, hors de la
+     partie qui defile : c'est un critere de cadrage, pas une facette de plus. */
+  .zone {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 0 22px 14px;
+    background: var(--fond-carte);
+    font-size: 12px;
+    color: var(--texte-moyen);
+    cursor: pointer;
+  }
+
+  .zone input {
+    flex: 0 0 auto;
+    width: 15px;
+    height: 15px;
+    accent-color: var(--accent-plein);
+    cursor: pointer;
   }
 
   /* Selecteur de vue : un rail creux, la vue active est une pastille posee. */
@@ -1034,7 +1074,7 @@
   .facettes {
     inset: 0 auto 0 0;
     z-index: 6;
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto auto 1fr;
     width: var(--largeur-tiroir);
     transform: translateX(-100%);
     box-shadow: var(--ombre-tiroir);

@@ -18,6 +18,12 @@ sont des tiroirs qui flottent au-dessus de la carte au lieu de la compresser. Le
 qui ouvre les facettes se pose au coin de la carte, là où le tiroir apparaît, et
 s'efface tant qu'il est ouvert.
 
+Les commandes de la carte sont rangées par question : la légende, en bas à gauche, dit
+ce que les couleurs signifient puis propose de les changer ; les cartes anciennes —
+Cassini, l'état-major — ont leur propre boîte sous le zoom, parce qu'un calque posé
+sous les points n'est pas une clé de lecture ; et « limiter à la zone visible », qui
+restreint le corpus, est passé parmi les filtres, avec les autres critères.
+
 Tout état d'exploration vit dans l'URL : un croisement trouvé se partage par simple
 copie du lien, et le retour arrière referme la fiche ouverte. Sombre ou clair, au
 choix — le thème reste hors de l'URL, un lien s'ouvre dans celui de son destinataire.
@@ -210,9 +216,9 @@ obligation. Il n'est jamais bloquant.
 `246px | 1fr | 340px` en permanence — dont 340 px pour afficher « Sélectionnez un
 point ». Les deux panneaux sont devenus des calques : la carte garde sa pleine largeur,
 et les ouvrir ne provoque aucun redimensionnement du canevas WebGL. En contrepartie,
-les commandes MapLibre doivent s'écarter d'eux : l'attribution CARTO est passée en bas
-à gauche, parce qu'à droite la fiche la recouvrait — une mention de licence masquée
-n'est pas une mention.
+les commandes MapLibre doivent s'écarter d'eux : l'attribution CARTO est posée à la
+main, en bas à droite, derrière la même marge que le zoom — une mention de licence que
+la fiche recouvre, ou qui chevauche la légende, n'est pas une mention.
 
 **Les puces disent l'état, et deux d'entre elles ont un miroir.** Retirer la puce de
 recherche doit aussi vider le champ de la barre, qui alimente le filtre ; retirer celle

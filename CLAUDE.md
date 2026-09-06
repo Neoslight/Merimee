@@ -38,7 +38,7 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `web/src/lib/format.ts` | `romain`, formats de nombres — étaient recopiés dans trois composants |
 | `web/src/service-worker.ts` | cache des actifs hachés uniquement |
 | `web/src/lib/components/` | `MonumentMap`, `FacetPanel`, `Jetons`, `Timeline`, `Matrice`, `DetailPanel` |
-| `web/tests/smoke.mjs` | 102 vérifications en Chromium réel, avec `serveur.mjs` instrumenté |
+| `web/tests/smoke.mjs` | 106 vérifications en Chromium réel, avec `serveur.mjs` instrumenté |
 | `web/tests/apercu-social.mjs` | régénère la vignette Open Graph depuis l'application |
 
 ## Commandes
@@ -50,7 +50,7 @@ cd etl  && python -m merimee_etl.commons   # complète par les fichiers citant l
 cd etl  && python -m pytest tests -q    # 60 tests
 cd web  && npm run dev                  # http://localhost:5173
 cd web  && npm run check                # svelte-check, doit rester à 0/0
-cd web  && npm run build && npm run test # build statique + 102 vérifications navigateur
+cd web  && npm run build && npm run test # build statique + 106 vérifications navigateur
 cd web  && npm run apercu               # régénère static/apercu-social.png
 cd web  && npm run deploy               # build /Merimee + push sur gh-pages
 ```
@@ -316,7 +316,35 @@ conséquences :
   lue par le titre de la liste et par celui de la matrice. Même procédé que
   `--marge-gauche` pour les commandes MapLibre : ni la liste ni la matrice n'ont à
   connaître l'existence de ce bouton. Elle tombe à zéro quand le tiroir est ouvert, et
-  sur gabarit étroit, où le bouton passe **au-dessus** du titre et non à côté.
+  sur gabarit étroit, où le bouton passe **au-dessus** du titre et non à côté ;
+- **c'est une surface posée, pas un aplat plein.** Le fond de carte reste sombre dans
+  les deux thèmes, mais le bouton appartient à l'interface et suit le thème comme la
+  légende : calcaire en clair, ardoise en sombre, détaché de la carte par son filet
+  (`--bord-appuye`) et son ombre. En aplat inversé (`--plein-fond`), il était noir sur
+  une carte noire dès que le thème passait au sombre.
+
+**Les commandes de la carte sont rangées par question.** La légende avait fini en tiroir
+fourre-tout : clés de couleur, choix de sémiologie, densité, cartes anciennes, dosage
+d'opacité et contrainte de zone dans une seule bande de pilules indifférenciées. Elles
+sont désormais séparées par ce qu'elles font :
+
+- **la légende, en bas à gauche**, dit d'abord ce qu'on voit — les clés de couleur, ou
+  la rampe quand la densité est active — puis, sous un filet, propose de le changer :
+  un rail à deux options (`statut` / `époque`) précédé de son libellé, et la bascule de
+  densité. Le rail remplace un bouton unique dont le libellé alternait, et dont on ne
+  savait pas s'il annonçait l'état courant ou sa destination ;
+- **les cartes anciennes, à droite sous le zoom**, dans une boîte nommée : c'est un
+  calque posé sous les points, pas une clé de lecture. Le nom du fond porte sa période
+  en seconde ligne — un `title` ne se lit pas au tactile — et le dosage d'opacité n'y
+  apparaît qu'une fois un fond actif ;
+- **« limiter à la zone visible » a rejoint le tiroir des filtres.** C'en est un : il
+  restreint le corpus, comme une facette, et n'avait rien à faire parmi des commandes
+  d'affichage. Conséquence sur l'état, cf. plus bas : `suivreVue` a quitté
+  `MonumentMap` pour la page.
+
+Les clés de lecture portent `.cle` et non un `span` nu : la légende contient d'autres
+`span` depuis qu'elle nomme ses commandes, et le test qui vérifie qu'elle suit le mode
+de coloration compte ces clés — trois par statut, cinq par époque.
 
 **`USING SAMPLE 1 ROWS` passe sous le filtre.** `auHasard()` tirait une ligne de la
 table entière puis lui appliquait le prédicat : `has_historique` ne couvrant que 24 819
@@ -338,18 +366,26 @@ défaire :
   `ResizeObserver` → `map.resize()`. Sans lui la carte reste dessinée à l'ancienne taille
   et décalée du pointeur ;
 - **les commandes MapLibre doivent s'écarter des calques.** L'attribution CARTO est
-  passée en **bas à gauche** (`attributionControl: false` puis `addControl(...)`) parce
-  qu'à droite la fiche la recouvrait : une mention de licence masquée n'est pas une
-  mention. Elle et le zoom suivent `--marge-gauche` / `--marge-droite`, posées par la
-  page. Le composant carte n'a pas à connaître l'existence d'un panneau de facettes.
+  posée à la main (`attributionControl: false` puis `addControl(...)`) : une mention de
+  licence masquée n'est pas une mention. Elle a d'abord fui la droite, que la fiche
+  recouvrait, pour le **bas à gauche** — où sa pastille « i » s'est mise à chevaucher la
+  légende. Elle est donc **revenue en bas à droite**, cette fois derrière
+  `--marge-droite`, la même variable qui écarte le zoom : la fiche ne la recouvre plus.
+  Un test le verrouille par la **géométrie** — les boîtes de l'attribution et de la
+  légende doivent être disjointes — et non par la lecture d'une règle CSS. Les marges
+  sont posées par la page ; le composant carte n'a pas à connaître l'existence d'un
+  panneau de facettes.
 
 Pas de `backdrop-filter` sur ces calques : un flou plein écran au-dessus d'un canevas
 WebGL se paie à chaque image.
 
 **Deux filtres ont un état miroir hors de `filters`.** `retirer()` ne suffit donc pas,
 et c'est la page qui complète : `recherche` a le champ de la barre, qui l'alimente par
-un effet retardé et garderait son texte ; `bbox` a `suivreVue` dans `MonumentMap`, qui
-la reposerait au prochain `moveend` — d'où `delierVue()`. Même chose pour `reset()`.
+un effet retardé et garderait son texte ; `bbox` a `suivreVue`, qui la reposerait au
+prochain `moveend`. Même chose pour `reset()`. `suivreVue` **vit dans la page** depuis
+que sa case est dans le tiroir des filtres : `MonumentMap` le reçoit en `$bindable` et
+un seul effet y répond — lier pose la zone courante, délier la retire. C'est ce qui a
+remplacé l'ancien `delierVue()` exporté, que la page devait penser à appeler.
 
 **Le nom accessible d'une puce porte l'action, pas la valeur** (`aria-label="Retirer le
 filtre architecture militaire"`). Sinon la puce et l'option de même libellé dans le
@@ -379,8 +415,11 @@ Deux conséquences moins évidentes du même principe :
   SVG est une couleur — laissée dans le composant, elle serait restée gris sombre sur
   fond sombre ;
 - **l'aplat plein s'inverse avec le thème** (`--plein-fond` / `--plein-texte`). En clair
-  c'est l'ardoise sur calcaire ; en sombre l'ardoise **est** le fond, et le bouton
-  « Filtres » disparaissait purement et simplement.
+  c'est l'ardoise sur calcaire ; en sombre l'ardoise **est** le fond, et un aplat ardoise
+  sur fond sombre ne se voit plus. Il ne reste qu'un porteur, `.cible.actif` — le bouton
+  qui annonce que la recherche vise les historiques. Le bouton « Filtres », qui l'a
+  porté, s'en est détaché : posé sur la carte et non sur l'interface, il lui faut une
+  surface, pas une inversion.
 
 **Le thème ne pilote que l'interface : le fond de carte reste sombre dans les deux
 cas.** `FOND` est une constante unique. Les points portent un liseré clair
