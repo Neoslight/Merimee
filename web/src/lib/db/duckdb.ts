@@ -10,6 +10,7 @@
  * jsDelivr : pas de dependance a un CDN tiers a l'execution.
  */
 import * as duckdb from '@duckdb/duckdb-wasm';
+import type { Table } from 'apache-arrow';
 import ehWasm from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
 import ehWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
 import { base } from '$app/paths';
@@ -72,27 +73,31 @@ export async function fragmentDetails(numero: number): Promise<string> {
   return nom;
 }
 
-/**
- * Execute une requete et renvoie des objets JS simples.
- *
- * `mesure` n'est passe que par les appels dont le volume compte — la requete
- * des points, seule a ramener des dizaines de milliers de lignes. Les deux
- * durees sont separees a dessein : le moteur SQL et la conversion des vecteurs
- * Arrow en objets JavaScript n'appellent pas les memes correctifs, et rien ne
- * disait jusqu'ici lequel des deux pesait.
- */
-export async function query<T = Row>(sql: string, mesure = false): Promise<T[]> {
+/** Execute une requete et renvoie des objets JS simples. */
+export async function query<T = Row>(sql: string): Promise<T[]> {
   const conn = await connection();
-  const t0 = mesure ? performance.now() : 0;
   const table = await conn.query(sql);
-  const t1 = mesure ? performance.now() : 0;
-  const lignes = table.toArray().map((row) => row.toJSON() as T);
-  if (mesure) {
-    mesures.sql = t1 - t0;
-    mesures.conversion = performance.now() - t1;
-    mesures.n = lignes.length;
-  }
-  return lignes;
+  return table.toArray().map((row) => row.toJSON() as T);
+}
+
+/**
+ * Execute une requete et renvoie la table Arrow **sans la convertir**.
+ *
+ * Reservee au nuage de points, seule requete a ramener des dizaines de milliers
+ * de lignes. La mesure avait tranche : sur 44 484 points, `conn.query` coutait
+ * 13 ms quand la fabrication d'objets JavaScript en coutait 127 — un jeu par
+ * `row.toJSON()`, un autre par la `FeatureCollection`. Lire les vecteurs
+ * colonnes supprime le premier jeu entierement ; `queries.points()` construit
+ * le second directement depuis eux.
+ *
+ * `mesures.sql` est pose ici, ou le moteur DuckDB est seul en cause.
+ */
+export async function queryArrow(sql: string): Promise<Table> {
+  const conn = await connection();
+  const t0 = performance.now();
+  const table = await conn.query(sql);
+  mesures.sql = performance.now() - t0;
+  return table;
 }
 
 /** Litteral SQL echappe. */

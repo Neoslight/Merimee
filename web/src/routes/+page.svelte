@@ -20,7 +20,6 @@
     type Compte,
     type Ligne,
     type Matrice as DonneesMatrice,
-    type Point,
     type Totaux
   } from '$lib/db/queries';
   import {
@@ -53,7 +52,13 @@
     'departements', 'auteurs', 'proprietaires', 'periodes'
   ];
 
-  let pointsCarte = $state<Point[]>([]);
+  // `$state.raw` et non `$state` : le nuage est remplace en bloc a chaque
+  // filtre, jamais modifie en place. Un etat profond ferait de MapLibre le
+  // declencheur de 44 484 proxies, pour une reactivite dont personne ne se sert.
+  let pointsCarte = $state.raw<GeoJSON.FeatureCollection>({
+    type: 'FeatureCollection',
+    features: []
+  });
   let facettes = $state<Partial<Record<FacetKey, Compte[]>>>({});
   let barresSiecles = $state<BarreSiecle[]>([]);
   let barresAnnees = $state<BarreAnnee[]>([]);

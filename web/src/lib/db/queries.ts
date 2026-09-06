@@ -1,19 +1,9 @@
 /** Requetes du tableau de bord. Un scan complet coute ~46 760 lignes : inutile
  *  de materialiser des vues intermediaires, DuckDB repond en quelques ms. */
-import { fragmentDetails, query, lit } from './duckdb';
+import { fragmentDetails, query, queryArrow, lit } from './duckdb';
 import { fragmentDe } from './shards';
 import { buildWhere, replier, type FacetKey, type Filters } from '$lib/state/filters.svelte';
-
-export interface Point {
-  reference: string;
-  lat: number;
-  lon: number;
-  statut: string;
-  nb_palissy: number;
-  /** Dernier siecle de construction indexe, nul si la notice n'en porte aucun.
-   *  Sert la coloration par epoque de la carte, pas le filtrage. */
-  siecle_max: number | null;
-}
+import { mesures } from '$lib/state/mesures.svelte';
 
 export interface Compte {
   valeur: string;
@@ -43,17 +33,63 @@ const SCALAIRES: Partial<Record<FacetKey, string>> = {
   departements: 'departement_nom'
 };
 
-export async function points(f: Filters): Promise<Point[]> {
-  // Seule requete chronometree : jusqu'a 44 484 lignes a chaque changement de
-  // filtre, contre quelques dizaines pour toutes les autres.
-  return query<Point>(
-    `
-    SELECT reference, lat, lon, statut, nb_palissy, siecle_max
+/**
+ * Le nuage de points, rendu **deja en GeoJSON**.
+ *
+ * La carte en est le seul consommateur : fabriquer d'abord 44 484 objets
+ * `Point` que personne d'autre ne lit etait le poste dominant de tout le cycle
+ * de filtrage — 52 ms de conversion Arrow puis 75 ms de `FeatureCollection`,
+ * contre 13 ms de SQL et 15 ms de rendu. Un seul jeu d'objets est desormais
+ * construit, directement depuis les vecteurs colonnes.
+ *
+ * Le parcours se fait **lot par lot**, et non par `table.getChild(...)` :
+ * DuckDB renvoie une vingtaine de fragments, et `toArray()` sur le vecteur
+ * d'un seul fragment rend une **vue** du tampon, pas une copie. Les
+ * coordonnees et les comptes ne sont donc jamais recopies ; seules les chaines
+ * sont decodees, parce qu'elles doivent exister — la reference identifie la
+ * notice au clic.
+ *
+ * Les types sont fixes en SQL (`::DOUBLE`, `::INT`) plutot que devines a la
+ * lecture : un `BIGINT` rendrait un `BigInt64Array`, dont les valeurs sont des
+ * `bigint` que les expressions MapLibre ne savent pas comparer.
+ */
+export async function points(f: Filters): Promise<GeoJSON.FeatureCollection> {
+  const table = await queryArrow(`
+    SELECT reference, lon::DOUBLE AS lon, lat::DOUBLE AS lat, statut,
+           nb_palissy::INT AS nb, siecle_max::INT AS siecle
     FROM monuments
     WHERE lat IS NOT NULL AND ${buildWhere(f)}
-  `,
-    true
-  );
+  `);
+  const t0 = performance.now();
+  const features: GeoJSON.Feature[] = new Array(table.numRows);
+  let i = 0;
+  for (const lot of table.batches) {
+    const lon = lot.getChild('lon')!.toArray() as Float64Array;
+    const lat = lot.getChild('lat')!.toArray() as Float64Array;
+    const nb = lot.getChild('nb')!.toArray() as Int32Array;
+    const reference = lot.getChild('reference')!;
+    const statut = lot.getChild('statut')!;
+    // Le siecle est nullable et le tampon porte 0 la ou la notice n'en indexe
+    // aucun : seul `get` distingue « XXe » de « non renseigne ».
+    const siecle = lot.getChild('siecle')!;
+    for (let j = 0; j < lot.numRows; j++, i++) {
+      const ref = reference.get(j) as string;
+      features[i] = {
+        type: 'Feature',
+        id: ref,
+        geometry: { type: 'Point', coordinates: [lon[j], lat[j]] },
+        properties: {
+          reference: ref,
+          statut: statut.get(j),
+          nb: nb[j],
+          siecle: siecle.get(j)
+        }
+      };
+    }
+  }
+  mesures.collection = performance.now() - t0;
+  mesures.n = features.length;
+  return { type: 'FeatureCollection', features };
 }
 
 export async function totaux(f: Filters): Promise<Totaux> {

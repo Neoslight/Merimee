@@ -5,13 +5,14 @@
   } from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { untrack } from 'svelte';
-  import type { Point } from '$lib/db/queries';
   import { FOND, palette } from '$lib/state/theme.svelte';
   import { mesures } from '$lib/state/mesures.svelte';
   import type { FondHistorique, VueCarte } from '$lib/state/permalien';
 
   interface Props {
-    points: Point[];
+    /** Nuage deja en GeoJSON : `queries.points()` le construit depuis les
+     *  vecteurs Arrow, la carte n'a plus qu'a le poser. */
+    points: GeoJSON.FeatureCollection;
     selection: string | null;
     vueInitiale: VueCarte | null;
     /** Fond historique superpose. Lie a la page, qui seule ecrit l'URL. */
@@ -144,28 +145,6 @@
     ];
   }
 
-  // Chronometre : c'est le second jeu de 44 000 objets fabrique par cycle, apres
-  // celui de la conversion Arrow. Voir `mesures.svelte.ts` pour le pourquoi.
-  function geojson(liste: Point[]): GeoJSON.FeatureCollection {
-    const t0 = performance.now();
-    const collection: GeoJSON.FeatureCollection = {
-      type: 'FeatureCollection',
-      features: liste.map((p) => ({
-        type: 'Feature',
-        id: p.reference,
-        geometry: { type: 'Point', coordinates: [p.lon, p.lat] },
-        properties: {
-          reference: p.reference,
-          statut: p.statut,
-          nb: p.nb_palissy,
-          siecle: p.siecle_max
-        }
-      }))
-    };
-    mesures.geojson = performance.now() - t0;
-    return collection;
-  }
-
   function emettreBbox() {
     if (!carte) return;
     const b = carte.getBounds();
@@ -202,7 +181,7 @@
    * ce qui a ete ajoute. Les fonds historiques, poses ici depuis, en dependent
    * desormais autant que les monuments.
    */
-  function poserCouches(map: MapLibreMap, donnees: Point[]) {
+  function poserCouches(map: MapLibreMap, donnees: GeoJSON.FeatureCollection) {
     // Les fonds historiques se posent **avant** les couches de monuments :
     // MapLibre empile dans l'ordre d'ajout, le raster se retrouve donc entre le
     // fond CARTO et les points, jamais au-dessus. Pas de `beforeId` ici — les
@@ -226,7 +205,7 @@
       });
     }
 
-    map.addSource('monuments', { type: 'geojson', data: geojson(donnees) });
+    map.addSource('monuments', { type: 'geojson', data: donnees });
     // Couche de densite, masquee par defaut. Elle repond a ce que 44 000
     // points superposes cachent : au niveau national, la carte de points
     // sature et ne distingue plus une commune riche d'un departement dense.
@@ -365,9 +344,8 @@
   $effect(() => {
     const source = pret ? (carte?.getSource('monuments') as maplibregl.GeoJSONSource) : null;
     if (!source) return;
-    const donnees = geojson(points);
     const t0 = performance.now();
-    source.setData(donnees);
+    source.setData(points);
     mesures.rendu = performance.now() - t0;
   });
 

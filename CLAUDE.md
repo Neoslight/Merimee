@@ -36,7 +36,7 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `web/src/lib/format.ts` | `romain`, formats de nombres — étaient recopiés dans trois composants |
 | `web/src/service-worker.ts` | cache des actifs hachés uniquement |
 | `web/src/lib/components/` | `MonumentMap`, `FacetPanel`, `Jetons`, `Timeline`, `Matrice`, `DetailPanel` |
-| `web/tests/smoke.mjs` | 77 vérifications en Chromium réel, avec `serveur.mjs` instrumenté |
+| `web/tests/smoke.mjs` | 91 vérifications en Chromium réel, avec `serveur.mjs` instrumenté |
 | `web/tests/apercu-social.mjs` | régénère la vignette Open Graph depuis l'application |
 
 ## Commandes
@@ -47,7 +47,7 @@ cd etl  && python -m merimee_etl.wikidata  # rafraîchit l'instantané des photo
 cd etl  && python -m pytest tests -q    # 55 tests
 cd web  && npm run dev                  # http://localhost:5173
 cd web  && npm run check                # svelte-check, doit rester à 0/0
-cd web  && npm run build && npm run test # build statique + 77 vérifications navigateur
+cd web  && npm run build && npm run test # build statique + 91 vérifications navigateur
 cd web  && npm run apercu               # régénère static/apercu-social.png
 cd web  && npm run deploy               # build /Merimee + push sur gh-pages
 ```
@@ -188,6 +188,36 @@ compteur d'erreurs console qui fait foi.
 Playwright forcent donc `colorScheme` : `smoke.mjs` démarre en sombre pour avoir
 quelque chose à basculer, `apercu-social.mjs` aussi pour que la vignette soit la même
 d'une machine à l'autre.
+
+**La chaîne des points va des vecteurs Arrow au GeoJSON, sans objets intermédiaires.**
+Mesuré d'abord (`mesures.svelte.ts`, relevé imprimé par le smoke test), sur 44 484 points :
+**SQL 13 ms · Arrow→JS 52 ms · GeoJSON 75 ms · `setData` 15 ms, total 156 ms**. Deux
+enseignements : la saturation qu'on redoute d'ordinaire n'existe pas ici — MapLibre dessine
+en WebGL, pas dans le DOM, et le rendu ne pesait que 10 % — mais **81 % du temps partait en
+fabrication d'objets JavaScript**, deux jeux de 44 484, un par `row.toJSON()`, un par la
+`FeatureCollection`. `points()` lit désormais les colonnes et ne construit plus qu'un jeu :
+**SQL 12 ms · GeoJSON 27 ms · `setData` 16 ms, total 55 ms**, sans dépendance nouvelle.
+Quatre points à ne pas défaire :
+
+- **le parcours va lot par lot** (`table.batches`), et non par `table.getChild()` sur la
+  table entière : DuckDB rend une vingtaine de fragments, et `toArray()` sur le vecteur
+  d'un lot unique rend une **vue** du tampon, pas une copie ;
+- **les types sont fixés en SQL** (`::DOUBLE`, `::INT`) plutôt que devinés à la lecture. Un
+  `BIGINT` rendrait un `BigInt64Array`, dont les `bigint` ne se comparent pas dans une
+  expression MapLibre ;
+- **`pointsCarte` est un `$state.raw`.** Le nuage est remplacé en bloc à chaque filtre,
+  jamais modifié en place : un état profond ferait de MapLibre le déclencheur de 44 484
+  proxies, pour une réactivité dont personne ne se sert ;
+- `deck.gl` ne se justifierait que si `setData` dominait — il pèse 16 ms — et PMTiles reste
+  incompatible avec le filtrage croisé. Ni l'un ni l'autre à rouvrir.
+
+**`mesures.sql` est un temps de bout en bout, pas un temps moteur.** Les huit requêtes d'un
+cycle partagent **une seule connexion** DuckDB et s'y sérialisent : la requête des points
+attend derrière les balayages du cycle précédent. Mesuré : le même filtre « Corse » coûte
+**91 ms** de `sql` quand il succède au corpus entier, **14 ms** quand il succède à un autre
+filtre serré. Conséquence pour le smoke test — le total d'un petit résultat peut dépasser
+celui du gros, et la comparaison des deux régimes porte donc sur `collection`, seul poste
+qui suive le volume.
 
 ## Règles de conception
 
@@ -384,22 +414,12 @@ mesurée), pas le *quoi*.
   l'absence de valeur ne dit pas bon état, elle dit champ non rempli sur 94,6 % du corpus.
 - Auteur cliquable dans la fiche, ouvrant ses autres réalisations — `filters.auteurs`
   existe déjà, c'est une poignée de lignes.
-- **La chaîne des points est désormais mesurée** (`mesures.svelte.ts`, relevé imprimé
-  par le smoke test). Sur le corpus entier, 44 484 points : **SQL 13 ms · Arrow→JS 52 ms ·
-  GeoJSON 75 ms · `setData` 15 ms, total 156 ms**. Deux conséquences. D'abord la
-  saturation qu'on redoute d'ordinaire n'existe pas ici : MapLibre rend en WebGL, pas
-  dans le DOM, et le rendu ne pèse que 10 %. Ensuite **81 % du temps part en fabrication
-  d'objets JavaScript** — deux jeux de 44 484, un par `row.toJSON()`, un par la
-  `FeatureCollection`. Le correctif que ce chiffre désigne est donc de construire la
-  collection depuis les vecteurs colonnes Arrow (`Float32Array`), sans objets
-  intermédiaires : **aucune dépendance nouvelle**. `deck.gl` ne se justifierait que si
-  `setData` dominait, ce qu'il ne fait pas — ne pas l'ajouter pour ses 500 Ko.
 - **PMTiles est incompatible avec le filtrage croisé**, définitivement : une tuile
   précalculée ne peut pas porter un prédicat dynamique à 13 clés. Figer les points en
   tuiles reviendrait à supprimer la fonction centrale du site. Ne pas rouvrir.
 - Une agrégation en grille aux zooms lointains ne demanderait **pas** l'extension
   `spatial` de DuckDB ni H3 : `floor(lon / pas)` suffit. Elle ne se justifie que si
-  `sql` devient le poste dominant, ce qu'il n'est pas (13 ms).
+  `sql` devient le poste dominant, ce qu'il n'est pas (12 ms de moteur).
 - **Doublons d'auteurs rendus visibles par la recherche de facette** : le corpus
   contient `Baltard Louis-Pierre` et `Baltard, Louis-Pierre`. La virgule sépare une
   poignée d'identités qui devraient être fusionnées ; invisible tant que seules les

@@ -918,15 +918,14 @@ try {
   );
 
   // --- Chaine des points : ou passe le temps --------------------------------
-  // Ces chiffres ne sanctionnent rien, ils **departagent**. Trois correctifs
-  // possibles n'ont pas le meme prix — lire les colonnes Arrow sans objets
-  // intermediaires, agreger en grille cote SQL, ou changer de moteur de rendu
-  // — et le plan de travail dit lequel choisir selon le poste dominant.
-  // Les plafonds sont donc larges : ils signalent une regression, ils
-  // n'arbitrent pas une optimisation qui n'a pas encore eu lieu.
+  // Ces chiffres ont departage trois correctifs de prix tres differents. Le
+  // verdict est tombe et il est applique : `points()` lit les vecteurs colonnes
+  // Arrow, la conversion en objets intermediaires a disparu. Le releve reste
+  // pour que la regression se voie — les plafonds sont larges, ils signalent,
+  // ils n'arbitrent plus.
   const releve = async (etiquette) => {
     const m = await page.evaluate(() => ({ ...window.__mesures }));
-    const total = m.sql + m.conversion + m.geojson + m.rendu;
+    const total = m.sql + m.collection + m.rendu;
     mesuresRelevees.push({ etiquette, ...m, total });
     return { ...m, total };
   };
@@ -942,16 +941,21 @@ try {
   );
 
   // Second regime : un filtre serre, pour separer ce qui depend du volume de ce
-  // qui est fixe.
+  // qui est fixe. La comparaison porte sur `collection` et non sur le total :
+  // `sql` est un temps de bout en bout sur une connexion partagee par les huit
+  // requetes du cycle, et la requete des points attend derriere les balayages
+  // du cycle precedent. Mesure a l'appui, le meme filtre Corse coute 91 ms de
+  // `sql` quand il succede au corpus entier, 14 ms quand il succede a un autre
+  // filtre serre. Le total d'un petit resultat peut donc depasser celui du gros.
   await page.locator('.nom-section', { hasText: 'Région' }).click();
   await page.waitForTimeout(250);
   await page.locator('.option', { hasText: 'Corse' }).first().click();
   await page.waitForTimeout(900);
   const filtre = await releve('filtre serre');
   verifier(
-    'un filtre serre coute moins que le corpus entier',
-    filtre.n < pleinCorpus.n && filtre.total <= pleinCorpus.total + 50,
-    `${filtre.n} points en ${filtre.total.toFixed(0)} ms`
+    'un filtre serre allege la fabrication des points',
+    filtre.n < pleinCorpus.n && filtre.collection < pleinCorpus.collection,
+    `${filtre.n} points, GeoJSON ${filtre.collection.toFixed(1)} ms contre ${pleinCorpus.collection.toFixed(0)} ms`
   );
 
   verifier('aucune erreur console', erreursConsole.length === 0, erreursConsole.slice(0, 3).join(' | '));
@@ -971,11 +975,11 @@ try {
 
 if (mesuresRelevees.length) {
   console.log('Chaine des points (ms, releve navigateur) :');
-  console.log('  regime            points     SQL  Arrow->JS  GeoJSON   setData    total');
+  console.log('  regime           points      SQL  GeoJSON  setData    total');
   for (const m of mesuresRelevees) {
     console.log(
       `  ${m.etiquette.padEnd(16)} ${String(m.n).padStart(6)}  ` +
-        [m.sql, m.conversion, m.geojson, m.rendu, m.total]
+        [m.sql, m.collection, m.rendu, m.total]
           .map((v) => v.toFixed(0).padStart(7))
           .join('  ')
     );
