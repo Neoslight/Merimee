@@ -315,66 +315,87 @@
 
 <div class="app">
   <header class="barre">
+    <!-- La marque tient sur deux lignes : le filet vertical separait deux
+         blocs poses cote a cote, il n'a plus rien a separer une fois la
+         signature empilee sous le titre. -->
     <div class="marque">
       <strong>Mérimée</strong>
-      <i class="filet" aria-hidden="true"></i>
       <span class="sous">
         <span>Monuments historiques</span>
+        <i class="filet" aria-hidden="true"></i>
         <span class="dates">1840 — 2026</span>
       </span>
     </div>
 
-    <nav class="bascule">
-      {#each VUES as choix (choix.cle)}
-        <button
-          class:actif={vue === choix.cle}
-          aria-pressed={vue === choix.cle}
-          onclick={() => (vue = choix.cle)}
-        >{choix.titre}</button>
-      {/each}
-    </nav>
+    <!-- Selecteur de vue, recherche et « Au hasard » forment un seul groupe
+         centre. Les deux flancs portent `flex: 1 1 0` : a largeurs egales, le
+         groupe tombe au milieu de la barre sans que rien ne le mesure. -->
+    <div class="centre-barre">
+      <nav class="bascule">
+        {#each VUES as choix (choix.cle)}
+          <button
+            class:actif={vue === choix.cle}
+            aria-pressed={vue === choix.cle}
+            onclick={() => (vue = choix.cle)}
+          >{choix.titre}</button>
+        {/each}
+      </nav>
 
-    <div class="champ">
-      <input
-        class="recherche"
-        type="search"
-        placeholder={cible === 'historiques'
-          ? 'Chercher dans les historiques : jubé, machicoulis…'
-          : 'Rechercher un édifice, une commune, un département…'}
-        bind:value={terme}
-      />
-      <!-- Le bouton annonce ce qu'il engage, comme ceux des fonds historiques
-           annoncent le poids de leurs tuiles : l'index pèse 3,8 Mo. -->
-      <button
-        class="cible"
-        class:actif={cible === 'historiques'}
-        aria-pressed={cible === 'historiques'}
-        aria-busy={indexTexte.etat === 'chargement'}
-        disabled={indexTexte.etat === 'indisponible'}
-        title={indexTexte.etat === 'indisponible'
-          ? 'Index plein texte absent de ce déploiement'
-          : 'Chercher dans le texte des historiques — 3,8 Mo au premier usage'}
-        onclick={() => (cible = cible === 'historiques' ? 'titres' : 'historiques')}
-      >Historiques</button>
+      <div class="champ">
+        <input
+          class="recherche"
+          type="search"
+          placeholder={cible === 'historiques'
+            ? 'Chercher dans les historiques : jubé, machicoulis…'
+            : 'Rechercher un édifice, une commune, un département…'}
+          bind:value={terme}
+        />
+        <!-- Le bouton annonce ce qu'il engage, comme ceux des fonds historiques
+             annoncent le poids de leurs tuiles : l'index pèse 3,8 Mo. -->
+        <button
+          class="cible"
+          class:actif={cible === 'historiques'}
+          aria-pressed={cible === 'historiques'}
+          aria-busy={indexTexte.etat === 'chargement'}
+          disabled={indexTexte.etat === 'indisponible'}
+          title={indexTexte.etat === 'indisponible'
+            ? 'Index plein texte absent de ce déploiement'
+            : 'Chercher dans le texte des historiques — 3,8 Mo au premier usage'}
+          onclick={() => (cible = cible === 'historiques' ? 'titres' : 'historiques')}
+        >Historiques</button>
+        <button class="hasard" onclick={hasard}>Au hasard</button>
+      </div>
     </div>
 
+    <!-- Un seul compteur : le total suit les filtres et c'est le seul qui
+         reponde a « combien en reste-t-il ». Classes, inscrites et objets se
+         relisent dans le tiroir, ou la facette « statut » les donne deja
+         croises — les repeter ici etait une triple lecture du meme etat. -->
     <div class="chiffres">
       {#if compteurs}
         <span><b>{nf.format(compteurs.total)}</b> notices</span>
-        <span class="or">{nf.format(compteurs.classes)} classées</span>
-        <span class="bleu">{nf.format(compteurs.inscrits)} inscrites</span>
-        <span class="faible">{nf.format(compteurs.objets)} objets</span>
       {/if}
-      <button class="filtres" aria-expanded={facettesOuvertes}
-              onclick={() => (facettesOuvertes = !facettesOuvertes)}>
-        Filtres{#if actifs > 0} <em>{actifs}</em>{/if}
-      </button>
-      <button class="hasard" onclick={hasard}>Au hasard</button>
+      <!-- Le libelle est porte par `aria-label` et non par le texte : l'icone
+           dit la destination (lune vers le sombre, soleil vers le clair), le
+           nom accessible la nomme. -->
       <button class="theme" onclick={basculer}
-              title="Basculer entre thème sombre et thème clair">
-        {theme.courant === 'clair' ? 'Sombre' : 'Clair'}
+              aria-label={theme.courant === 'clair' ? 'Sombre' : 'Clair'}
+              title={theme.courant === 'clair'
+                ? 'Passer au thème sombre'
+                : 'Passer au thème clair'}>
+        {#if theme.courant === 'clair'}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20.4 14.8A8.7 8.7 0 0 1 9.2 3.6 8.7 8.7 0 1 0 20.4 14.8Z" />
+          </svg>
+        {:else}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+               stroke-linecap="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4.1" />
+            <path d="M12 2.4v2.3M12 19.3v2.3M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.4 12h2.3M19.3 12h2.3M4.6 19.4 6.2 17.8M17.8 6.2l1.6-1.6" />
+          </svg>
+        {/if}
       </button>
-      <button class="lien" onclick={copierLien}>{copie ? 'Lien copié' : 'Copier le lien'}</button>
     </div>
   </header>
 
@@ -384,7 +405,7 @@
 
   <main class:fiche-ouverte={selection !== null} class:tiroir-pose={tiroirPose}>
     <div class="centre">
-      <div class="scene">
+      <div class="scene" class:tiroir-ouvert={facettesOuvertes}>
         <MonumentMap
           bind:this={vueCarte}
           points={pointsCarte}
@@ -465,6 +486,17 @@
           <div class="amorce">{LIBELLES[amorcage.phase]}</div>
         {/if}
 
+        <!-- Le tiroir se commande depuis le coin de la carte, la ou il
+             s'ouvre, et non plus depuis la barre. Il s'efface tant qu'il est
+             ouvert : la croix de l'en-tete du tiroir est alors le seul geste
+             de fermeture, et le bouton revient avec elle. -->
+        {#if !facettesOuvertes}
+          <button class="filtres" aria-expanded="false"
+                  onclick={() => (facettesOuvertes = true)}>
+            Filtres{#if actifs > 0} <em>{actifs}</em>{/if}
+          </button>
+        {/if}
+
         <!-- Les deux panneaux sont des calques : la carte garde sa pleine
              largeur et les ouvrir ne provoque aucun redimensionnement du
              canevas WebGL. Ils vivent dans la scene, pas dans `main`, pour
@@ -523,12 +555,15 @@
   /* Une rangee qui s'enroule, pas une grille a colonnes fixes : les compteurs
      et les actions occupent une largeur qui depend des donnees, et une piste
      `1fr` leur cedait tout — le champ de recherche tombait a trois
-     caracteres. */
+     caracteres. Le centrage du groupe median vient des deux flancs, qui
+     portent la meme base souple : ils se partagent le reste a parts egales,
+     donc ce qui est entre eux tombe au milieu sans qu'aucune largeur soit
+     ecrite. */
   .barre {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 12px 24px;
+    gap: 12px 20px;
     padding: 12px 24px;
     min-height: 72px;
     background: var(--fond-carte);
@@ -536,32 +571,51 @@
   }
 
   /* La marque passe en serif editorial et en casse normale : les capitales
-     espacees la faisaient lire comme une etiquette, pas comme un titre. */
+     espacees la faisaient lire comme une etiquette, pas comme un titre. Elle
+     tient sur deux lignes : le titre seul, puis sa signature dessous. */
   .marque {
     display: flex;
-    align-items: center;
-    gap: 14px;
+    flex: 1 1 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+    min-width: 0;
   }
 
   .marque strong {
     font-family: var(--police-titre);
-    font-size: 27px;
+    font-size: 25px;
     font-weight: 500;
     letter-spacing: -0.005em;
     line-height: 1;
     color: var(--texte);
   }
 
+  /* Le filet est desormais horizontal : il ponctue la signature au lieu de
+     separer deux blocs poses cote a cote. */
   .filet {
-    width: 1px;
-    height: 34px;
-    background: linear-gradient(var(--bord), var(--bord-appuye), var(--bord));
+    width: 12px;
+    height: 1px;
+    background: var(--bord-appuye);
+  }
+
+  /* Une base declaree et non `auto` : la contribution max-content d'un
+     conteneur flex imbrique ne reprend pas la base de ses enfants, et le champ
+     retombait a une vingtaine de caracteres entre ses deux boutons. Les deux
+     flancs se partagent ce qui reste, ce qui centre le groupe. */
+  .centre-barre {
+    display: flex;
+    flex: 0 1 700px;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    min-width: 0;
   }
 
   .sous {
     display: flex;
-    flex-direction: column;
-    gap: 3px;
+    align-items: center;
+    gap: 8px;
     font-size: 9px;
     font-weight: 600;
     letter-spacing: 0.2em;
@@ -576,15 +630,15 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* Le champ et sa bascule tiennent ensemble dans la rangee qui s'enroule :
-     separes, le bouton partait a la ligne des compteurs. */
+  /* Le champ, sa bascule de cible et « Au hasard » tiennent ensemble dans la
+     rangee qui s'enroule : separes, les boutons partaient a la ligne des
+     compteurs. */
   .champ {
     display: flex;
-    flex: 1 1 260px;
+    flex: 1 1 auto;
     align-items: center;
     gap: 6px;
     min-width: 0;
-    max-width: 480px;
   }
 
   .cible {
@@ -631,7 +685,7 @@
     padding: 0 16px 0 38px;
     background:
       var(--icone-recherche) no-repeat 14px 50% / 15px 15px,
-      color-mix(in srgb, var(--fond-creux) 72%, transparent);
+      var(--fond-creux);
     border: 1px solid var(--bord);
     border-radius: var(--r-pilule);
     color: var(--texte);
@@ -645,6 +699,10 @@
     color: var(--texte-tenu);
   }
 
+  /* Le creux est plein, non fondu a 72 % : la barre est posee sur
+     `--fond-carte`, la surface la plus claire du produit, et un champ presque
+     transparent s'y confondait. Au focus il remonte au niveau de la barre, ce
+     qui inverse le rapport et signale la saisie. */
   .recherche:focus {
     outline: none;
     border-color: var(--inscrit);
@@ -658,11 +716,12 @@
 
   .chiffres {
     display: flex;
+    flex: 1 1 0;
     flex-wrap: wrap;
     align-items: center;
     justify-content: flex-end;
     gap: 10px 14px;
-    margin-left: auto;
+    min-width: 0;
     font-size: 11.5px;
     color: var(--texte-tenu);
   }
@@ -675,40 +734,22 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* Noms de classes conserves, teintes patrimoniales : le classe est
-     terracotta, l'inscrit ocre dore. */
-  .or {
-    color: var(--classe-texte);
-    font-weight: 600;
-  }
-
-  .bleu {
-    color: var(--inscrit-texte);
-    font-weight: 600;
-  }
-
-  .faible { opacity: 0.85; }
-
-  .hasard,
-  .lien,
-  .theme {
-    border: 1px solid var(--bord);
-    background: transparent;
-    color: var(--texte-faible);
-    border-radius: var(--r-pilule);
-    padding: 8px 15px;
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all var(--t-rapide);
-  }
-
-  /* L'action principale reste « Au hasard » ; le permalien s'efface derriere. */
+  /* « Au hasard » se pose au bout du champ : c'est l'autre facon d'entrer dans
+     le corpus quand on ne sait pas quoi y chercher. Meme hauteur que le champ
+     et que la bascule de cible, sinon la rangee se decale d'un pixel. */
   .hasard {
-    border-color: var(--bord-appuye);
+    flex: 0 0 auto;
+    height: 40px;
+    padding: 0 15px;
+    border: 1px solid var(--bord-appuye);
+    border-radius: var(--r-pilule);
     background: var(--fond-carte);
     color: var(--inscrit-texte);
+    font-size: 12px;
     font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all var(--t-rapide);
   }
 
   .hasard:hover {
@@ -716,16 +757,44 @@
     background: color-mix(in srgb, var(--inscrit) 10%, var(--fond-carte));
   }
 
-  .lien:hover,
+  /* Une pastille sans libelle : le theme est un confort de lecture, il n'a pas
+     a peser autant qu'une action d'exploration. Le trait de l'icone est
+     `currentColor`, il suit donc le jeton de couleur comme le reste. */
+  .theme {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border: 1px solid var(--bord);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--texte-faible);
+    cursor: pointer;
+    transition: all var(--t-rapide);
+  }
+
   .theme:hover {
     color: var(--texte);
     border-color: var(--bord-appuye);
   }
 
-  /* Le tiroir se commande a toutes les largeurs, avec le compte des criteres
-     poses : c'est tout ce qui en reste visible une fois referme. C'est aussi
-     la seule action pleine de la barre. */
+  .theme svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  /* Le tiroir se commande depuis le coin ou il s'ouvre, avec le compte des
+     criteres poses : c'est tout ce qui en reste visible une fois referme.
+     z-index 4 : au-dessus de la liste et de la matrice (3), qui recouvrent la
+     scene et pour lesquelles les filtres comptent autant, mais sous le voile
+     (5) et le tiroir (6), qu'il n'a pas a percer. */
   .filtres {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 4;
     display: inline-flex;
     align-items: center;
     gap: 7px;
@@ -733,7 +802,7 @@
     background: var(--plein-fond);
     color: var(--plein-texte);
     border-radius: var(--r-pilule);
-    padding: 8px 15px;
+    padding: 9px 16px;
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
@@ -825,6 +894,15 @@
     min-height: 0;
     overflow: hidden;
     background: var(--ardoise);
+    /* Empreinte du bouton flottant. La liste et la matrice recouvrent la scene :
+       sans cette reserve leur titre passerait dessous. Meme procede que
+       `--marge-gauche` pour les commandes MapLibre — le composant ne connait
+       pas le bouton, il lit une variable heritee. */
+    --reserve-filtres: 126px;
+  }
+
+  .scene.tiroir-ouvert {
+    --reserve-filtres: 0px;
   }
 
   /* Les controles MapLibre sont a z-index 2 et la carte reste montee sous les
@@ -842,7 +920,8 @@
   .liste header {
     position: sticky;
     top: 0;
-    padding: 14px 20px 12px;
+    padding: 14px 20px 12px calc(20px + var(--reserve-filtres, 0px));
+    transition: padding-left var(--t-tiroir);
     border-bottom: 1px solid var(--bord);
     background: var(--fond-carte);
   }
@@ -1032,26 +1111,31 @@
       --largeur-fiche: 352px;
     }
 
-    /* Le selecteur de vue occupe desormais la barre : quelque chose doit
-       ceder avant le champ de recherche. Le sous-titre et le compte d'objets
-       sont ce qui manque le moins — les deux se relisent ailleurs. */
-    .marque span,
-    .chiffres .faible {
+    /* Les flancs se partagent ce que le groupe median laisse : sous 1320 px
+       leur part passe sous la largeur de la signature complete. Les dates
+       cedent avant le sous-titre, elles se relisent dans la frise. */
+    .marque .filet,
+    .marque .dates {
       display: none;
     }
   }
 
-  /* Sous 1150 px le champ prend sa propre rangee plutot que de se reduire :
-     `flex-basis: 100%` suffit, la barre s'enroulant deja. */
+  /* Sous 1150 px le groupe median prend sa propre rangee plutot que de se
+     reduire : `flex-basis: 100%` suffit, la barre s'enroulant deja. Les deux
+     flancs restent seuls sur la premiere ligne et s'y repartissent. */
   @media (max-width: 1150px) {
     .barre {
       padding: 10px 16px;
       gap: 10px 16px;
     }
 
-    .recherche {
+    .centre-barre {
       order: 3;
       flex-basis: 100%;
+      max-width: none;
+    }
+
+    .champ {
       max-width: none;
     }
   }
@@ -1065,8 +1149,7 @@
       gap: 10px 12px;
     }
 
-    .marque .sous,
-    .marque .filet {
+    .marque .sous {
       display: none;
     }
 
@@ -1074,9 +1157,20 @@
       font-size: 23px;
     }
 
-    .bascule {
-      order: 2;
+    /* Le groupe median s'enroule a son tour : le selecteur de vue sur une
+       ligne, le champ et ses deux boutons sur la suivante. */
+    .centre-barre {
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .champ {
       flex-basis: 100%;
+    }
+
+    .cible,
+    .hasard {
+      padding: 0 11px;
     }
 
     .chiffres {
@@ -1084,15 +1178,14 @@
       font-size: 11px;
     }
 
-    /* Sur un ecran etroit, seul le total tient : le detail par statut reste
-       lisible dans la fiche et la liste. « Copier le lien » disparait au
-       profit du partage natif du navigateur. */
-    .chiffres .or,
-    .chiffres .bleu,
-    .chiffres .faible,
-    .lien,
-    .theme {
-      display: none;
+    /* La liste et la matrice occupent toute la scene sur un ecran etroit : le
+       bouton flottant se pose au-dessus de leur titre, et non plus a cote. */
+    .scene {
+      --reserve-filtres: 0px;
+    }
+
+    .liste header {
+      padding-top: 58px;
     }
 
     .voile {

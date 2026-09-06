@@ -121,11 +121,19 @@ try {
     'tiroir ouvert par defaut au large',
     (await page.locator('.facettes.ouvert').count()) === 1
   );
-  await page.getByRole('button', { name: /^Filtres/ }).click();
+  verifier(
+    'le bouton des filtres s efface quand le tiroir est ouvert',
+    (await page.locator('.scene > button.filtres').count()) === 0
+  );
+  await page.locator('.fermer-tiroir').click();
   await page.waitForTimeout(300);
   verifier(
     'le tiroir se referme au large',
     (await page.locator('.facettes.ouvert').count()) === 0
+  );
+  verifier(
+    'le bouton des filtres revient avec la croix',
+    (await page.locator('.scene > button.filtres').count()) === 1
   );
   const largeurRepliee = (await page.locator('.maplibregl-canvas').boundingBox()).width;
   verifier(
@@ -706,7 +714,21 @@ try {
       onglet.url().split('?')[1] ?? '(aucun parametre)'
     );
 
-    await onglet.getByRole('button', { name: /Copier le lien|Lien copié/ }).click();
+    // « Copier le lien » a quitte la barre : il ne vit plus que dans la fiche.
+    // « Au hasard » en ouvre une sans toucher au cadrage, ce que la
+    // verification suivante exige.
+    //
+    // Le tirage est verifie a part : `USING SAMPLE 1 ROWS` passait sous le
+    // filtre et rendait `null` une fois sur deux — un bouton muet, invisible
+    // tant que rien ne le cliquait.
+    await onglet.getByRole('button', { name: 'Au hasard' }).click();
+    await attendre(onglet, '.fiche .fermer');
+    verifier(
+      'au hasard ouvre une fiche',
+      /[?&]ref=PA/.test(onglet.url()),
+      onglet.url().split('?')[1] ?? '(aucun parametre)'
+    );
+    await onglet.getByRole('button', { name: 'Copier le lien de la notice' }).click();
     await onglet.waitForTimeout(400);
     const lienCopie = await onglet.evaluate(() => navigator.clipboard.readText());
     // `URLSearchParams` encode les virgules : comparer sur la forme decodee.
@@ -756,9 +778,9 @@ try {
       (legende ?? '').replace(/\s+/g, ' ').trim().slice(0, 60)
     );
 
-    // Le bouton de la fiche partage l'implementation de celui de la barre : le
-    // lien produit porte donc aussi la vue de carte. Son nom accessible en
-    // differe, sinon les deux boutons seraient indiscernables.
+    // Le permalien ne vit plus que dans la fiche : le lien produit porte donc
+    // aussi la vue de carte. Son nom accessible porte l'action et sa cible,
+    // sinon il serait indiscernable du « Copier » d'un autre calque.
     await onglet.getByRole('button', { name: 'Copier le lien de la notice' }).click();
     await onglet.waitForTimeout(400);
     const lienFiche = decodeURIComponent(

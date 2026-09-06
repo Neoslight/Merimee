@@ -394,12 +394,21 @@ export async function detail(reference: string): Promise<Detail> {
   };
 }
 
-/** Une notice au hasard parmi celles dont l'historique est renseigne. */
+/**
+ * Une notice au hasard parmi celles dont l'historique est renseigne.
+ *
+ * `ORDER BY random() LIMIT 1` et non `USING SAMPLE 1 ROWS` : l'echantillon
+ * passe **sous** le filtre dans le plan, il tirait donc une ligne de la table
+ * entiere puis lui appliquait le predicat. `has_historique` ne couvrant que
+ * 24 819 notices sur 46 760, le bouton rendait `null` une fois sur deux —
+ * mesure : trois clics muets sur cinq. Le tri sur 46 760 lignes ne coute rien
+ * a cote d'un bouton qui ne repond pas.
+ */
 export async function auHasard(f: Filters): Promise<string | null> {
   const [row] = await query<{ reference: string }>(`
     SELECT reference FROM monuments
     WHERE has_historique AND ${buildWhere(f)}
-    USING SAMPLE 1 ROWS
+    ORDER BY random() LIMIT 1
   `);
   return row?.reference ?? null;
 }

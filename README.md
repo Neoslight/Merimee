@@ -14,7 +14,9 @@ le 18e et le 19e — le déplacement du regard patrimonial se lit d'un coup d'œ
 
 Les filtres posés s'affichent en puces sous la barre : on voit lesquels sont actifs et
 on en retire un seul d'un clic. Les deux panneaux — facettes à gauche, fiche à droite —
-sont des tiroirs qui flottent au-dessus de la carte au lieu de la compresser.
+sont des tiroirs qui flottent au-dessus de la carte au lieu de la compresser. Le bouton
+qui ouvre les facettes se pose au coin de la carte, là où le tiroir apparaît, et
+s'efface tant qu'il est ouvert.
 
 Tout état d'exploration vit dans l'URL : un croisement trouvé se partage par simple
 copie du lien, et le retour arrière referme la fiche ouverte. Sombre ou clair, au
@@ -181,9 +183,9 @@ clair. La rampe de la matrice s'inverse entre les deux thèmes : en sombre l'eff
 fort est clair, en clair il est sombre, sinon la matrice disparaît dans son fond.
 
 **La vue de carte voyage dans le lien, pas dans l'URL.** `c=lon,lat,zoom` n'est ajouté
-que par « Copier le lien » : réécrire l'URL à chaque déplacement la noierait et
-empilerait l'historique. Elle est consommée au chargement et disparaît au premier
-changement de filtre — ce n'est pas un filtre, elle ne restreint aucun corpus.
+que par le « Copier le lien » de la fiche : réécrire l'URL à chaque déplacement la
+noierait et empilerait l'historique. Elle est consommée au chargement et disparaît au
+premier changement de filtre — ce n'est pas un filtre, elle ne restreint aucun corpus.
 
 **Les photographies tiennent dans les fragments déjà téléchargés.** La base Mérimée ne
 porte aucun lien vers une image. Wikidata en porte un — `P380` identifiant Mérimée vers

@@ -38,7 +38,7 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `web/src/lib/format.ts` | `romain`, formats de nombres — étaient recopiés dans trois composants |
 | `web/src/service-worker.ts` | cache des actifs hachés uniquement |
 | `web/src/lib/components/` | `MonumentMap`, `FacetPanel`, `Jetons`, `Timeline`, `Matrice`, `DetailPanel` |
-| `web/tests/smoke.mjs` | 99 vérifications en Chromium réel, avec `serveur.mjs` instrumenté |
+| `web/tests/smoke.mjs` | 102 vérifications en Chromium réel, avec `serveur.mjs` instrumenté |
 | `web/tests/apercu-social.mjs` | régénère la vignette Open Graph depuis l'application |
 
 ## Commandes
@@ -50,7 +50,7 @@ cd etl  && python -m merimee_etl.commons   # complète par les fichiers citant l
 cd etl  && python -m pytest tests -q    # 60 tests
 cd web  && npm run dev                  # http://localhost:5173
 cd web  && npm run check                # svelte-check, doit rester à 0/0
-cd web  && npm run build && npm run test # build statique + 99 vérifications navigateur
+cd web  && npm run build && npm run test # build statique + 102 vérifications navigateur
 cd web  && npm run apercu               # régénère static/apercu-social.png
 cd web  && npm run deploy               # build /Merimee + push sur gh-pages
 ```
@@ -285,6 +285,46 @@ lexique ne connaît pas. Sans ces deux phrases, un résultat vide ressemble à u
 retirer ce mécanisme fait tomber à zéro toutes les options non cochées et tue le
 filtrage croisé. `queries.facette()` passe systématiquement la clé en `except`.
 
+**La barre porte trois blocs, et le groupe médian est centré par ses flancs.**
+`marque` et `chiffres` portent `flex: 1 1 0` : ils se partagent à parts égales ce que
+le groupe médian laisse, donc celui-ci tombe au milieu sans qu'aucune largeur ne soit
+écrite. Quatre points à ne pas défaire :
+
+- **`.centre-barre` déclare une base (`flex: 0 1 700px`), pas `auto`.** La contribution
+  max-content d'un conteneur flex imbriqué ne reprend pas la base de ses enfants : avec
+  `auto`, le champ retombait à 197 px, une vingtaine de caractères entre ses deux
+  boutons. Mesuré, pas déduit ;
+- **la marque tient sur deux lignes** — le titre, puis sa signature. Sous 1320 px les
+  dates cèdent avant le sous-titre : la part de chaque flanc passe alors sous la largeur
+  de la signature complète, et les dates se relisent dans la frise ;
+- **un seul compteur.** Le total suit les filtres et répond à « combien en reste-t-il ».
+  Classés, inscrits et objets se lisent dans la facette « statut », qui les donne déjà
+  croisés — les répéter dans la barre était une triple lecture du même état ;
+- **le thème est une pastille sans libellé** (soleil / lune), et son nom accessible
+  reste `Clair` / `Sombre` : l'icône dit la destination, l'`aria-label` la nomme. Le
+  trait des deux SVG est `currentColor`, sinon la règle « toute couleur vit dans
+  `app.css` » tomberait avec eux.
+
+**Le bouton « Filtres » vit au coin de la carte, pas dans la barre.** Il se pose là où
+le tiroir s'ouvre et **s'efface tant qu'il est ouvert** : la croix de l'en-tête du
+tiroir est alors le seul geste de fermeture, et le bouton revient avec elle. Deux
+conséquences :
+
+- **z-index 4**, au-dessus de la liste et de la matrice (3), qui recouvrent la scène et
+  pour lesquelles les filtres comptent autant, mais sous le voile (5) et le tiroir (6) ;
+- **son empreinte est une variable héritée**, `--reserve-filtres`, posée par la scène et
+  lue par le titre de la liste et par celui de la matrice. Même procédé que
+  `--marge-gauche` pour les commandes MapLibre : ni la liste ni la matrice n'ont à
+  connaître l'existence de ce bouton. Elle tombe à zéro quand le tiroir est ouvert, et
+  sur gabarit étroit, où le bouton passe **au-dessus** du titre et non à côté.
+
+**`USING SAMPLE 1 ROWS` passe sous le filtre.** `auHasard()` tirait une ligne de la
+table entière puis lui appliquait le prédicat : `has_historique` ne couvrant que 24 819
+notices sur 46 760, le bouton « Au hasard » restait muet une fois sur deux — mesuré,
+trois clics sans effet sur cinq. `ORDER BY random() LIMIT 1` corrige, et le smoke test
+le verrouille (`au hasard ouvre une fiche`). Le tri de 46 760 lignes ne coûte rien à
+côté d'un bouton qui ne répond pas.
+
 **Les deux panneaux sont des calques, pas des colonnes.** Le tiroir des facettes et la
 fiche flottent au-dessus de la carte (`position: absolute` dans `.scene`), et non plus
 dans une grille `246px | 1fr | 340px` qui compressait le canevas en permanence — 340 px
@@ -314,8 +354,9 @@ la reposerait au prochain `moveend` — d'où `delierVue()`. Même chose pour `r
 **Le nom accessible d'une puce porte l'action, pas la valeur** (`aria-label="Retirer le
 filtre architecture militaire"`). Sinon la puce et l'option de même libellé dans le
 panneau de facettes deviennent deux boutons indiscernables, pour un lecteur d'écran
-comme pour Playwright en mode strict. Même règle pour « Copier le lien » de la fiche,
-homonyme de celui de la barre.
+comme pour Playwright en mode strict. « Copier le lien » a suivi la règle inverse :
+il n'existe plus qu'au singulier, dans la fiche, parce qu'un permalien sans notice
+n'est qu'une copie de la barre d'adresse.
 
 **Le thème n'est pas dans l'URL.** C'est une préférence de lecture, pas un état
 d'exploration : elle vit dans `localStorage` et un lien partagé s'ouvre dans le thème

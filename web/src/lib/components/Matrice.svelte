@@ -138,9 +138,22 @@
     z-index: 3;
     display: grid;
     grid-template-rows: auto 1fr auto;
-    padding: 16px 22px 10px;
+    /* `--reserve-filtres` est posee par la page : c'est l'empreinte du bouton
+       flottant des filtres, qui se pose au coin de la scene. La matrice n'a
+       pas a connaitre ce bouton, une variable heritee suffit — meme procede
+       que `--marge-gauche` pour les commandes MapLibre. */
+    padding: 16px 22px 10px calc(22px + var(--reserve-filtres, 0px));
     background: var(--fond);
     overflow: hidden;
+    transition: padding-left var(--t-tiroir);
+  }
+
+  /* Sur un ecran etroit la reserve tombe a zero et le bouton passe au-dessus
+     du titre : c'est en hauteur qu'il faut lui faire place. */
+  @media (max-width: 900px) {
+    .matrice {
+      padding-top: 58px;
+    }
   }
 
   header {
