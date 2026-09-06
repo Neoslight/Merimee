@@ -44,11 +44,16 @@ const SCALAIRES: Partial<Record<FacetKey, string>> = {
 };
 
 export async function points(f: Filters): Promise<Point[]> {
-  return query<Point>(`
+  // Seule requete chronometree : jusqu'a 44 484 lignes a chaque changement de
+  // filtre, contre quelques dizaines pour toutes les autres.
+  return query<Point>(
+    `
     SELECT reference, lat, lon, statut, nb_palissy, siecle_max
     FROM monuments
     WHERE lat IS NOT NULL AND ${buildWhere(f)}
-  `);
+  `,
+    true
+  );
 }
 
 export async function totaux(f: Filters): Promise<Totaux> {

@@ -27,10 +27,23 @@ export type Vue = 'carte' | 'matrice' | 'liste';
 
 const VUES: readonly Vue[] = ['carte', 'matrice', 'liste'];
 
+/**
+ * Fond de carte historique superpose, `null` quand il n'y en a pas.
+ *
+ * **Le fond entre dans l'URL, son opacite non.** Meme partage qu'avec le
+ * theme : quelle carte ancienne on regarde est un etat d'exploration, a quel
+ * dosage on la lit est un confort de lecture. Un lien partage ouvre donc le
+ * bon fond, a l'opacite de celui qui le recoit.
+ */
+export type FondHistorique = 'cassini' | 'etatmajor';
+
+const FONDS: readonly FondHistorique[] = ['cassini', 'etatmajor'];
+
 export interface EtatPartage {
   filtres: Filters;
   selection: string | null;
   vue: Vue;
+  fond: FondHistorique | null;
 }
 
 /** Position de depart de la carte. Ce n'est pas un filtre : elle ne restreint
@@ -77,6 +90,7 @@ export function encoder(etat: EtatPartage, cadrage?: VueCarte | null): string {
   if (etat.filtres.anneeProtection) p.set('annees', etat.filtres.anneeProtection.join('-'));
   if (etat.filtres.nbPalissy > 0) p.set('objets', String(etat.filtres.nbPalissy));
   if (etat.vue !== 'carte') p.set('vue', etat.vue);
+  if (etat.fond) p.set('fond', etat.fond);
   if (etat.selection) p.set('ref', etat.selection);
   if (cadrage) p.set('c', `${cadrage.lon},${cadrage.lat},${cadrage.zoom}`);
   const chaine = p.toString();
@@ -136,10 +150,12 @@ export function decoder(chaine: string): EtatPartage & { cadrage: VueCarte | nul
   // sur un alias. L'encodage, lui, n'emet que `ref`.
   const ref = p.get('ref') ?? p.get('notice');
   const vue = p.get('vue') as Vue | null;
+  const fond = p.get('fond') as FondHistorique | null;
   return {
     filtres,
     selection: ref && REFERENCE.test(ref) ? ref : null,
     vue: vue && VUES.includes(vue) ? vue : 'carte',
+    fond: fond && FONDS.includes(fond) ? fond : null,
     cadrage: decoderVue(p.get('c'))
   };
 }

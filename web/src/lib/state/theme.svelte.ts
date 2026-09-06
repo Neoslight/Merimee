@@ -15,6 +15,11 @@
  * les deux cas**. Les points portent un lisere clair et la rampe de densite
  * monte vers le blanc — les deux supposent une carte sombre, et l'identite
  * pose des panneaux calcaire sur une carte ardoise, pas l'inverse.
+ *
+ * Une seule chose dement cette hypothese : un **fond historique** (Cassini,
+ * etat-major) est un aplat beige clair. D'ou `carteLiseretSurClair`, que
+ * `MonumentMap` substitue au lisere des que la superposition passe la moitie
+ * de l'opacite.
  */
 import { browser } from '$app/environment';
 
@@ -38,6 +43,7 @@ const NOMS = {
   epoque4: '--epoque-4',
   epoque5: '--epoque-5',
   carteLiseret: '--carte-liseret',
+  carteLiseretSurClair: '--carte-liseret-sur-clair',
   carteSelection: '--carte-selection',
   chaleur0: '--chaleur-0',
   chaleur1: '--chaleur-1',
@@ -67,7 +73,7 @@ const REPLI: Palette = {
   classe: '#c85a32', inscrit: '#c9933b', mixte: '#7a5c7e', statutNul: '#9a958a',
   epoque1: '#7a5c7e', epoque2: '#4d6b74', epoque3: '#6f7f52', epoque4: '#c9933b',
   epoque5: '#c85a32',
-  carteLiseret: '#fdfcfa', carteSelection: '#f8f7f4',
+  carteLiseret: '#fdfcfa', carteLiseretSurClair: '#2b2620', carteSelection: '#f8f7f4',
   chaleur0: 'rgba(26, 29, 32, 0)', chaleur1: '#4a3a24', chaleur2: '#c9933b',
   chaleur3: '#c85a32', chaleur4: '#f6e3cf',
   barreSourde: '#5a5347', friseTexteFaible: '#9c978c',

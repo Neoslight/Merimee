@@ -76,6 +76,11 @@
      propriete personnalisee est un piege inutile, elle vit dans
      `theme.svelte.ts`. */
   --carte-liseret: #fdfcfa;
+  /* Lisere de repli quand un fond historique recouvre la carte sombre.
+     Cassini et l'etat-major sont des aplats beiges : le lisere clair
+     ci-dessus y disparait, au moment precis ou l'on cherche a situer les
+     points sur la carte ancienne. */
+  --carte-liseret-sur-clair: #2b2620;
   --carte-selection: #f8f7f4;
   --chaleur-0: rgba(26, 29, 32, 0);
   --chaleur-1: #4a3a24;
@@ -176,6 +181,7 @@
   --epoque-5: #e07a4e;
 
   --carte-liseret: #101215;
+  --carte-liseret-sur-clair: #101215;
   --carte-selection: #f2f0ea;
   --chaleur-0: rgba(16, 18, 21, 0);
   --chaleur-1: #4a3a24;

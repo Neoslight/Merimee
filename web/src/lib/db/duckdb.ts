@@ -14,6 +14,7 @@ import ehWasm from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
 import ehWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
 import { base } from '$app/paths';
 import { amorcage } from '$lib/state/amorcage.svelte';
+import { mesures } from '$lib/state/mesures.svelte';
 
 export type Row = Record<string, any>;
 
@@ -71,11 +72,27 @@ export async function fragmentDetails(numero: number): Promise<string> {
   return nom;
 }
 
-/** Execute une requete et renvoie des objets JS simples. */
-export async function query<T = Row>(sql: string): Promise<T[]> {
+/**
+ * Execute une requete et renvoie des objets JS simples.
+ *
+ * `mesure` n'est passe que par les appels dont le volume compte — la requete
+ * des points, seule a ramener des dizaines de milliers de lignes. Les deux
+ * durees sont separees a dessein : le moteur SQL et la conversion des vecteurs
+ * Arrow en objets JavaScript n'appellent pas les memes correctifs, et rien ne
+ * disait jusqu'ici lequel des deux pesait.
+ */
+export async function query<T = Row>(sql: string, mesure = false): Promise<T[]> {
   const conn = await connection();
+  const t0 = mesure ? performance.now() : 0;
   const table = await conn.query(sql);
-  return table.toArray().map((row) => row.toJSON() as T);
+  const t1 = mesure ? performance.now() : 0;
+  const lignes = table.toArray().map((row) => row.toJSON() as T);
+  if (mesure) {
+    mesures.sql = t1 - t0;
+    mesures.conversion = performance.now() - t1;
+    mesures.n = lignes.length;
+  }
+  return lignes;
 }
 
 /** Litteral SQL echappe. */

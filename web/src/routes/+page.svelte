@@ -35,7 +35,13 @@
     type FacetKey,
     type Jeton
   } from '$lib/state/filters.svelte';
-  import { decoder, encoder, type Vue, type VueCarte } from '$lib/state/permalien';
+  import {
+    decoder,
+    encoder,
+    type FondHistorique,
+    type Vue,
+    type VueCarte
+  } from '$lib/state/permalien';
   import { appliquer, basculer, theme } from '$lib/state/theme.svelte';
   import { amorcage, LIBELLES } from '$lib/state/amorcage.svelte';
   import { browser } from '$app/environment';
@@ -63,6 +69,10 @@
   let chargement = $state(true);
   let erreur = $state<string | null>(null);
   let vue = $state<Vue>(initial.vue);
+  // Le fond historique vit ici et non dans la carte : c'est la page qui
+  // ecrit l'URL, et le fond en fait partie. Son opacite, elle, reste dans le
+  // composant — dosage de lecture, pas etat d'exploration.
+  let fond = $state<FondHistorique | null>(initial.fond);
   let croisement = $state<DonneesMatrice>({ cellules: [], ecartees: 0 });
   let terme = $state(initial.filtres.recherche);
 
@@ -144,7 +154,7 @@
   let derniereSelection = initial.selection;
 
   $effect(() => {
-    const requete = encoder({ filtres: filters, selection, vue });
+    const requete = encoder({ filtres: filters, selection, vue, fond });
     if (requete === derniereRequete) return;
     const fiche = selection !== derniereSelection;
     derniereRequete = requete;
@@ -171,6 +181,7 @@
     Object.assign(filters, etat.filtres);
     selection = etat.selection;
     vue = etat.vue;
+    fond = etat.fond;
     terme = etat.filtres.recherche;
   });
 
@@ -181,7 +192,7 @@
   async function copierLien() {
     // Seul endroit ou la vue de carte entre dans une URL. L'URL vivante n'en
     // porte pas : un simple deplacement ne doit rien reecrire.
-    const requete = encoder({ filtres: filters, selection, vue }, vueCarte?.vueCourante());
+    const requete = encoder({ filtres: filters, selection, vue, fond }, vueCarte?.vueCourante());
     const lien = location.origin + location.pathname + requete;
     try {
       await navigator.clipboard.writeText(lien);
@@ -326,6 +337,7 @@
           points={pointsCarte}
           {selection}
           vueInitiale={cadrageInitial}
+          bind:fond
           onselect={(ref) => (selection = ref)}
           onbbox={(bbox) => (filters.bbox = bbox)}
         />

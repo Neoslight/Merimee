@@ -144,6 +144,37 @@ pas à celle qu'il touche : `barY` laisse un intervalle entre les barres, et un
 brossage qui démarre dans un intervalle serait perdu. Hors de la zone des barres —
 la marge de l'axe — rien n'est visé.
 
+**Les fonds historiques IGN sont posés, et `maxzoom` est le piège du dispositif.**
+Géoplateforme, **sans clé d'API**, `access-control-allow-origin: *`, `cache-control`
+21 jours. Remesuré à l'intégration : Cassini =
+`BNF-IGNF_GEOGRAPHICALGRIDSYSTEMS.CASSINI` — le préfixe `BNF-IGNF_` est **obligatoire**,
+l'identifiant nu renvoie 400 — PNG, **z ≤ 14, 172 Ko la tuile**, soit ~2 Mo par écran ;
+État-major = `GEOGRAPHICALGRIDSYSTEMS.ETATMAJOR40`, JPEG, **z ≤ 15, 20 Ko**.
+
+Trois points à ne pas défaire :
+
+- **`maxzoom` sur la source n'est pas une précaution.** Sans lui, MapLibre réclame des
+  tuiles au-delà de la résolution réelle et **la couche disparaît au moment précis où
+  l'on zoome sur l'édifice**. Avec, il étire la dernière tuile disponible. Le smoke test
+  cadre à z16 et vérifie que le niveau demandé plafonne à 14 ;
+- **les couches naissent en `visibility: 'none'`** et se posent **avant** celles des
+  monuments — MapLibre empile dans l'ordre d'ajout, donc pas de `beforeId` ici : les
+  couches qu'il viserait n'existent pas encore et le passer lèverait. Aucun octet IGN
+  ne part tant qu'un fond n'est pas demandé, ce qui tient l'engagement face aux 2 Mo
+  de Cassini ;
+- **l'attribution est portée par la source**, donc ajoutée et retirée par MapLibre avec
+  la couche. Ce sont des reproductions BnF / IGN : la mention est une obligation, pas
+  une politesse.
+
+**Le fond historique est dans l'URL, son opacité non.** Même partage qu'avec le thème :
+quelle carte ancienne on regarde est un état d'exploration (`fond=cassini`), à quel
+dosage on la lit est un confort de lecture, qui reste dans le composant.
+
+**Le smoke test n'appelle jamais la Géoplateforme.** Les tuiles sont interceptées par
+`page.route` et la **forme des URL** est vérifiée, pas le contenu. Ce dépôt tient ses
+tests hors réseau — l'ETL est conçu ainsi délibérément — et une suite qui dépend de la
+disponibilité d'un service tiers devient intermittente.
+
 **`map.setStyle()` détruit toutes les sources et couches ajoutées.** D'où
 `poserCouches()` dans `MonumentMap.svelte`, branchée sur `style.load` — le seul
 événement qui couvre le montage **et** chaque changement de style — et non sur `load`,
@@ -242,7 +273,17 @@ cas.** `FOND` est une constante unique. Les points portent un liseré clair
 blanc : les deux supposent une carte sombre. L'identité pose des panneaux calcaire sur
 une carte ardoise, pas l'inverse. `setStyle` n'est donc plus appelé — mais
 `poserCouches()` **reste** branchée sur `style.load`, qui couvre le montage et
-désamorce le piège si un fond historique s'ajoute un jour.
+désamorçait le piège si un fond historique s'ajoutait un jour. Ce jour est venu :
+les fonds historiques s'y posent, cf. plus bas.
+
+**Sauf sous un fond historique : le liseré des points bascule au sombre.** Cassini
+et l'État-major sont des aplats beiges clairs — le liseré `#fdfcfa` y disparaît, au
+moment précis où l'on cherche à situer les points sur la carte ancienne. D'où
+`--carte-liseret-sur-clair`, substitué dès que la superposition atteint **50 %
+d'opacité** (`liseret()` dans `MonumentMap.svelte`). C'est la seule entorse à la règle
+ci-dessus, et elle ne concerne que la carte, jamais l'interface. La rampe de densité,
+elle, n'est pas corrigée : **densité et fond historique s'excluent mutuellement**,
+parce qu'ils répondent à deux questions incompatibles — l'une agrège, l'autre situe.
 
 **Le liseré des points ne s'ouvre qu'au zoom** (`6 → 0`, `9 → 0,5`, `13 → 1,8`). La
 maquette le donnait épais dès le départ, ce qui vaut pour dix pastilles : sur 44 484
@@ -328,14 +369,6 @@ mesurée), pas le *quoi*.
 - Filtres « figures » préréglés (Vauban, Guimard, Le Corbusier) en un clic, au-dessus
   de la facette auteurs existante. Devenus de simples liens depuis les permaliens.
 - Exploitation NLP des 23,6 Mo de texte libre (`historique`, `precision_protection`).
-- **Fonds de carte historiques en superposition**, mesuré et prêt à poser. Géoplateforme
-  IGN, **sans clé d'API**, `access-control-allow-origin: *`, `cache-control` 21 jours :
-  - Cassini = `BNF-IGNF_GEOGRAPHICALGRIDSYSTEMS.CASSINI` (le préfixe `BNF-IGNF_` est
-    obligatoire, l'identifiant nu renvoie 400), PNG, **z ≤ 14, ~160 Ko la tuile** —
-    ~2 Mo par écran, donc superposition explicite et jamais par défaut ;
-  - État-Major = `GEOGRAPHICALGRIDSYSTEMS.ETATMAJOR40`, JPEG, **z ≤ 15, ~18 Ko**.
-  `poserCouches()` est déjà le bon point d'accroche, avec un `beforeId` sous
-  `monuments-densite`.
 - **Repères d'histoire sur les frises.** Attention, ils ne vont pas sur la même piste :
   Guerre de Cent Ans et Révolution sur l'axe *construction*, 1840 (première liste
   Mérimée), 1913 (loi) et 1962 (Malraux) sur l'axe *protection*. Les mélanger sur une
@@ -351,10 +384,22 @@ mesurée), pas le *quoi*.
   l'absence de valeur ne dit pas bon état, elle dit champ non rempli sur 94,6 % du corpus.
 - Auteur cliquable dans la fiche, ouvrant ses autres réalisations — `filters.auteurs`
   existe déjà, c'est une poignée de lignes.
-- `deck.gl` reste l'échappatoire si le rendu GeoJSON de 44 k points devient limitant ;
-  l'interface de la couche est isolée dans `MonumentMap.svelte`. La couche `heatmap`
-  native ajoutée depuis répond déjà à la saturation aux vues larges — mesurer avant
-  d'y toucher.
+- **La chaîne des points est désormais mesurée** (`mesures.svelte.ts`, relevé imprimé
+  par le smoke test). Sur le corpus entier, 44 484 points : **SQL 13 ms · Arrow→JS 52 ms ·
+  GeoJSON 75 ms · `setData` 15 ms, total 156 ms**. Deux conséquences. D'abord la
+  saturation qu'on redoute d'ordinaire n'existe pas ici : MapLibre rend en WebGL, pas
+  dans le DOM, et le rendu ne pèse que 10 %. Ensuite **81 % du temps part en fabrication
+  d'objets JavaScript** — deux jeux de 44 484, un par `row.toJSON()`, un par la
+  `FeatureCollection`. Le correctif que ce chiffre désigne est donc de construire la
+  collection depuis les vecteurs colonnes Arrow (`Float32Array`), sans objets
+  intermédiaires : **aucune dépendance nouvelle**. `deck.gl` ne se justifierait que si
+  `setData` dominait, ce qu'il ne fait pas — ne pas l'ajouter pour ses 500 Ko.
+- **PMTiles est incompatible avec le filtrage croisé**, définitivement : une tuile
+  précalculée ne peut pas porter un prédicat dynamique à 13 clés. Figer les points en
+  tuiles reviendrait à supprimer la fonction centrale du site. Ne pas rouvrir.
+- Une agrégation en grille aux zooms lointains ne demanderait **pas** l'extension
+  `spatial` de DuckDB ni H3 : `floor(lon / pas)` suffit. Elle ne se justifie que si
+  `sql` devient le poste dominant, ce qu'il n'est pas (13 ms).
 - **Doublons d'auteurs rendus visibles par la recherche de facette** : le corpus
   contient `Baltard Louis-Pierre` et `Baltard, Louis-Pierre`. La virgule sépare une
   poignée d'identités qui devraient être fusionnées ; invisible tant que seules les

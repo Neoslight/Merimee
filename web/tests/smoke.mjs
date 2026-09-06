@@ -14,6 +14,7 @@ import { demarrer } from './serveur.mjs';
 
 const { serveur, octets, url: BASE } = await demarrer(new URL('../build', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
 const resultats = [];
+const mesuresRelevees = [];
 let echecs = 0;
 
 function verifier(nom, condition, detail = '') {
@@ -48,6 +49,21 @@ page.on('request', (r) => {
 });
 page.on('console', (msg) => msg.type() === 'error' && erreursConsole.push(msg.text()));
 page.on('pageerror', (e) => erreursConsole.push(String(e)));
+
+// Les fonds historiques IGN sont interceptes, jamais telecharges : ce depot
+// tient ses tests hors reseau — l'ETL est concu ainsi deliberement — et une
+// suite qui depend de la disponibilite de la Geoplateforme devient
+// intermittente. On verifie donc la **forme** des URL emises, pas le contenu
+// des tuiles. Le PNG 1x1 transparent suffit a MapLibre.
+const tuilesIgn = [];
+const PNG_VIDE = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+  'base64'
+);
+await page.route('**://data.geopf.fr/**', (route) => {
+  tuilesIgn.push(route.request().url());
+  return route.fulfill({ status: 200, contentType: 'image/png', body: PNG_VIDE });
+});
 
 let fatale = null;
 
@@ -355,6 +371,103 @@ try {
     .getAttribute('aria-pressed');
   verifier('bascule densite active', etatDensite === 'true', String(etatDensite));
   await page.getByRole('button', { name: 'densité' }).click();
+
+  // --- Fonds de carte historiques -------------------------------------------
+  // Cassini pese ~170 Ko la tuile, soit ~2 Mo par ecran : la superposition doit
+  // rester explicite. Le seul moyen de le prouver est de compter les requetes
+  // avant toute activation.
+  verifier('aucune tuile IGN avant activation', tuilesIgn.length === 0, `${tuilesIgn.length} requetes`);
+
+  await page.getByRole('button', { name: 'Cassini' }).click();
+  await page.waitForTimeout(900);
+  verifier('Cassini demande ses tuiles une fois active', tuilesIgn.length > 0, `${tuilesIgn.length} tuiles`);
+
+  // Le prefixe `BNF-IGNF_` est obligatoire : l'identifiant nu renvoie 400.
+  verifier(
+    'la couche Cassini porte son prefixe BNF-IGNF_',
+    tuilesIgn.every((u) => u.includes('LAYER=BNF-IGNF_GEOGRAPHICALGRIDSYSTEMS.CASSINI')) &&
+      tuilesIgn.every((u) => u.includes('TILEMATRIXSET=PM')),
+    tuilesIgn[0]?.slice(0, 120) ?? ''
+  );
+
+  // L'attribution n'est pas decorative : ce sont des reproductions BnF / IGN.
+  const attributionAvec = await page.locator('.maplibregl-ctrl-attrib').innerText();
+  verifier('attribution Cassini affichee', /Cassini/i.test(attributionAvec), attributionAvec.slice(0, 90));
+
+  // Le piege du dispositif : Cassini s'arrete a z14. Sans `maxzoom` sur la
+  // source, MapLibre reclame des tuiles inexistantes au-dela et la couche
+  // disparait au moment precis ou l'on zoome sur l'edifice. Le cadrage passe
+  // par `c=`, seul chemin fiable pour poser un zoom : la carte n'a pas le
+  // focus clavier, et une molette simulee ne fait qu'approcher la valeur.
+  const urlAvantZoom = page.url();
+  tuilesIgn.length = 0;
+  await page.goto(`${BASE}/?fond=cassini&c=2.35,48.85,16`, { waitUntil: 'domcontentloaded' });
+  await attendre(page, '.chiffres b');
+  await page.waitForTimeout(1500);
+  const niveaux = tuilesIgn
+    .map((u) => Number.parseInt(new URL(u).searchParams.get('TILEMATRIX') ?? '', 10))
+    .filter((n) => Number.isInteger(n));
+  // Deux exigences, pas une : la couche est **toujours servie** a z16 (elle
+  // demande donc des tuiles), et elle les demande **au niveau 14**, plafonnee.
+  verifier(
+    'Cassini reste servie au-dela de son zoom maximal',
+    niveaux.length > 0 && Math.max(...niveaux) === 14,
+    niveaux.length ? `niveaux demandes ${[...new Set(niveaux)].sort((a, b) => a - b).join(', ')}` : 'aucune tuile'
+  );
+
+  // Le detour par `goto` a efface l'etat : le rendre, pour que la suite reparte
+  // d'ou elle en etait.
+  await page.goto(urlAvantZoom, { waitUntil: 'domcontentloaded' });
+  await attendre(page, '.chiffres b');
+  await page.waitForTimeout(600);
+
+  // Densite et fond historique repondent a deux questions incompatibles :
+  // activer l'un doit eteindre l'autre.
+  await page.getByRole('button', { name: 'densité' }).click();
+  await page.waitForTimeout(300);
+  const cassiniApresDensite = await page
+    .getByRole('button', { name: 'Cassini' })
+    .getAttribute('aria-pressed');
+  verifier('activer la densite eteint le fond historique', cassiniApresDensite === 'false', String(cassiniApresDensite));
+  await page.getByRole('button', { name: 'densité' }).click();
+
+  // Le fond est un etat d'exploration, son opacite un confort de lecture : le
+  // premier va dans l'URL, la seconde non.
+  await page.getByRole('button', { name: 'État-major' }).click();
+  await page.waitForTimeout(400);
+  const urlFond = new URL(page.url());
+  verifier('le fond historique entre dans l URL', urlFond.searchParams.get('fond') === 'etatmajor', page.url());
+  verifier(
+    'l opacite reste hors de l URL',
+    !page.url().includes('opacite'),
+    page.url()
+  );
+
+  const dosage = page.getByRole('slider', { name: /Opacité du fond/ });
+  verifier('le curseur d opacite apparait avec le fond', (await dosage.count()) === 1);
+
+  // Un `setPaintProperty` sur une couche absente leve : c'est le compteur
+  // d'erreurs console qui fait foi, pas l'inspection du style.
+  const avantDosage = erreursConsole.length;
+  await dosage.fill('100');
+  await page.waitForTimeout(300);
+  await dosage.fill('0');
+  await page.waitForTimeout(300);
+  verifier(
+    'le dosage repeint sans erreur',
+    erreursConsole.length === avantDosage,
+    erreursConsole.slice(avantDosage, avantDosage + 2).join(' | ')
+  );
+
+  await page.getByRole('button', { name: 'État-major' }).click();
+  await page.waitForTimeout(300);
+  const attributionSans = await page.locator('.maplibregl-ctrl-attrib').innerText();
+  verifier(
+    'l attribution disparait avec le fond',
+    !/Cassini|état-major/i.test(attributionSans),
+    attributionSans.slice(0, 90)
+  );
+  verifier('le fond quitte l URL', !page.url().includes('fond='), page.url());
 
   // --- Semiologie par epoque ------------------------------------------------
   const legendeStatut = await page.locator('.legende span').count();
@@ -804,6 +917,43 @@ try {
     fautifs.map((f) => f.split('/src/')[1]).join(', ') || `${fichiers.length} fichiers relus`
   );
 
+  // --- Chaine des points : ou passe le temps --------------------------------
+  // Ces chiffres ne sanctionnent rien, ils **departagent**. Trois correctifs
+  // possibles n'ont pas le meme prix — lire les colonnes Arrow sans objets
+  // intermediaires, agreger en grille cote SQL, ou changer de moteur de rendu
+  // — et le plan de travail dit lequel choisir selon le poste dominant.
+  // Les plafonds sont donc larges : ils signalent une regression, ils
+  // n'arbitrent pas une optimisation qui n'a pas encore eu lieu.
+  const releve = async (etiquette) => {
+    const m = await page.evaluate(() => ({ ...window.__mesures }));
+    const total = m.sql + m.conversion + m.geojson + m.rendu;
+    mesuresRelevees.push({ etiquette, ...m, total });
+    return { ...m, total };
+  };
+
+  await page.locator('.bascule button', { hasText: 'Carte' }).click();
+  await page.getByRole('button', { name: /^Tout effacer/ }).click().catch(() => {});
+  await page.waitForTimeout(900);
+  const pleinCorpus = await releve('corpus entier');
+  verifier(
+    'la chaine des points repond sur le corpus entier',
+    pleinCorpus.total < 4000 && pleinCorpus.n > 40000,
+    `${pleinCorpus.n} points en ${pleinCorpus.total.toFixed(0)} ms`
+  );
+
+  // Second regime : un filtre serre, pour separer ce qui depend du volume de ce
+  // qui est fixe.
+  await page.locator('.nom-section', { hasText: 'Région' }).click();
+  await page.waitForTimeout(250);
+  await page.locator('.option', { hasText: 'Corse' }).first().click();
+  await page.waitForTimeout(900);
+  const filtre = await releve('filtre serre');
+  verifier(
+    'un filtre serre coute moins que le corpus entier',
+    filtre.n < pleinCorpus.n && filtre.total <= pleinCorpus.total + 50,
+    `${filtre.n} points en ${filtre.total.toFixed(0)} ms`
+  );
+
   verifier('aucune erreur console', erreursConsole.length === 0, erreursConsole.slice(0, 3).join(' | '));
 
   // Capture en vue carte, l'ecran par defaut de l'application.
@@ -817,6 +967,20 @@ try {
 } finally {
   await navigateur.close();
   serveur.close();
+}
+
+if (mesuresRelevees.length) {
+  console.log('Chaine des points (ms, releve navigateur) :');
+  console.log('  regime            points     SQL  Arrow->JS  GeoJSON   setData    total');
+  for (const m of mesuresRelevees) {
+    console.log(
+      `  ${m.etiquette.padEnd(16)} ${String(m.n).padStart(6)}  ` +
+        [m.sql, m.conversion, m.geojson, m.rendu, m.total]
+          .map((v) => v.toFixed(0).padStart(7))
+          .join('  ')
+    );
+  }
+  console.log('');
 }
 
 console.log('Transferts /data (mesures cote serveur) :');
