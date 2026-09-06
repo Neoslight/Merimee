@@ -320,21 +320,26 @@
 
   // Le seuil telephone (768 px) est purement graphique — la fiche remonte du
   // bas au lieu de glisser du cote — et vit donc dans la feuille de style.
-  // Celui-ci commande de l'etat : tiroir referme, frise repliee, voile pose.
+  // Celui-ci commande de l'etat : voile pose sur la scene, et fiche qui
+  // referme le tiroir derriere elle.
   const ETROIT = '(max-width: 900px)';
   let etroit = $state(false);
+
+  // Les deux panneaux repliables s'ouvrent au geste, jamais au chargement, et
+  // **a toutes les largeurs**. Le tiroir etait pose d'emblee des qu'il y avait
+  // la place : il fallait le refermer avant de regarder la carte, qui est ce
+  // qu'on vient voir. Consequence heureuse cote requetes — les effets qui
+  // portent facettes, cardinalites et histogrammes dependent de ces deux
+  // drapeaux, donc le demarrage n'emet plus que trois requetes au lieu de
+  // quatorze, et l'ouverture d'un panneau les rejoue.
   let facettesOuvertes = $state(false);
-  let friseOuverte = $state(true);
+  let friseOuverte = $state(false);
 
   $effect(() => {
     if (!browser) return;
     const moyen = window.matchMedia(ETROIT);
     const appliquerGabarit = () => {
       etroit = moyen.matches;
-      friseOuverte = !moyen.matches;
-      // Le tiroir est ouvert par defaut des qu'il y a la place de le poser a
-      // cote de la carte, referme sinon : c'est un calque, il ne prend rien.
-      facettesOuvertes = !moyen.matches;
     };
     appliquerGabarit();
     moyen.addEventListener('change', appliquerGabarit);

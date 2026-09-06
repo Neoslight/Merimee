@@ -25,6 +25,26 @@ function verifier(nom, condition, detail = '') {
 const attendre = (page, selecteur, timeout = 45_000) =>
   page.waitForSelector(selecteur, { timeout });
 
+/** Le tiroir des filtres est referme au chargement, et chaque navigation le
+ *  referme a nouveau. Les facettes n'etant requetees que lorsqu'il est ouvert,
+ *  le scenario l'ouvre la ou il lit leur contenu, et attend la premiere
+ *  option plutot qu'un delai fixe. */
+async function ouvrirFiltres(page) {
+  if ((await page.locator('.facettes.ouvert').count()) === 1) return;
+  await page.getByRole('button', { name: /^Filtres/ }).click();
+  await attendre(page, '.facettes.ouvert .option', 20_000);
+  await page.waitForTimeout(300);
+}
+
+/** La frise est repliee au chargement, et chaque navigation la replie a
+ *  nouveau : le scenario la rouvre la ou il s'en sert, sans supposer son etat. */
+async function ouvrirFrises(page) {
+  if ((await page.locator('.frise').count()) === 1) return;
+  await page.getByRole('button', { name: 'Afficher les frises' }).click();
+  await attendre(page, '.piste-siecles svg', 20_000);
+  await page.waitForTimeout(400);
+}
+
 async function total(page) {
   const texte = await page.textContent('.chiffres span b');
   return Number.parseInt(texte.replace(/\D/g, ''), 10);
@@ -138,36 +158,55 @@ try {
   );
 
   // --- Le tiroir des filtres est un calque ---------------------------------
-  // Ouvert par defaut des qu'il y a la place de le poser a cote de la carte,
-  // mais il ne lui prend jamais un pixel : c'est ce qui evite tout
-  // redimensionnement du canevas WebGL a chaque bascule.
+  // Referme au chargement a toutes les largeurs, comme la frise : la carte est
+  // ce qu'on vient voir. Ouvert, il ne lui prend jamais un pixel — c'est ce qui
+  // evite tout redimensionnement du canevas WebGL a chaque bascule.
   const largeurCarte = (await page.locator('.maplibregl-canvas').boundingBox()).width;
   verifier(
-    'tiroir ouvert par defaut au large',
+    'tiroir referme par defaut au large',
+    (await page.locator('.facettes.ouvert').count()) === 0
+  );
+  verifier(
+    'le bouton des filtres est pose sur la carte',
+    (await page.locator('.scene > button.filtres').count()) === 1
+  );
+  await page.getByRole('button', { name: /^Filtres/ }).click();
+  await page.waitForTimeout(300);
+  verifier(
+    'le bouton des filtres ouvre le tiroir',
     (await page.locator('.facettes.ouvert').count()) === 1
   );
   verifier(
     'le bouton des filtres s efface quand le tiroir est ouvert',
     (await page.locator('.scene > button.filtres').count()) === 0
   );
+  const largeurOuverte = (await page.locator('.maplibregl-canvas').boundingBox()).width;
+  verifier(
+    'le tiroir ne prend pas de largeur a la carte',
+    Math.abs(largeurOuverte - largeurCarte) < 1,
+    `${largeurCarte} -> ${largeurOuverte} px`
+  );
   await page.locator('.fermer-tiroir').click();
   await page.waitForTimeout(300);
   verifier(
-    'le tiroir se referme au large',
+    'la croix referme le tiroir au large',
     (await page.locator('.facettes.ouvert').count()) === 0
   );
   verifier(
     'le bouton des filtres revient avec la croix',
     (await page.locator('.scene > button.filtres').count()) === 1
   );
-  const largeurRepliee = (await page.locator('.maplibregl-canvas').boundingBox()).width;
-  verifier(
-    'le tiroir ne prend pas de largeur a la carte',
-    Math.abs(largeurRepliee - largeurCarte) < 1,
-    `${largeurCarte} -> ${largeurRepliee} px`
-  );
   await page.getByRole('button', { name: /^Filtres/ }).click();
   await page.waitForTimeout(300);
+
+  // La frise est repliee au chargement elle aussi. Le reste du scenario s'en
+  // sert — croisement avec un siecle, brossage des deux axes — donc on la
+  // rouvre ici, et le repli est eprouve plus bas a son tour.
+  verifier(
+    'frises repliees par defaut au large',
+    (await page.locator('.frise').count()) === 0
+  );
+  await ouvrirFrises(page);
 
   // --- Filtrage croise -----------------------------------------------------
   await page.getByRole('button', { name: 'architecture militaire' }).click();
@@ -630,13 +669,8 @@ try {
   // la carte. Retirer la puce sans l'eteindre laisserait le prochain
   // deplacement reposer la zone aussitot.
   // La case vit dans le tiroir des filtres : restreindre a la zone visible est
-  // un critere, pas un reglage d'affichage. Au large le tiroir est ouvert par
-  // defaut — ne l'ouvrir que s'il ne l'est pas, sinon le bouton flottant, qui
-  // s'efface tant qu'il est ouvert, n'existe pas.
-  if ((await page.locator('.facettes.ouvert').count()) === 0) {
-    await page.getByRole('button', { name: /^Filtres/ }).click();
-    await page.waitForTimeout(320);
-  }
+  // un critere, pas un reglage d'affichage.
+  await ouvrirFiltres(page);
   const zone = page.getByRole('checkbox', { name: /zone visible/ });
   verifier('la case de zone visible est dans le tiroir', (await zone.count()) === 1);
   await zone.check();
@@ -656,6 +690,7 @@ try {
   // L'echelle des siecles est **a bandes** : pas d'`invert`, le pixel se
   // retraduit en balayant les bandes. Un glissement doit poser plusieurs
   // siecles la ou le clic n'en bascule qu'un.
+  await ouvrirFrises(page);
   const piste = await page.locator('.piste-siecles').boundingBox();
   await page.mouse.move(piste.x + piste.width * 0.5, piste.y + piste.height * 0.6);
   await page.mouse.down();
@@ -1125,6 +1160,7 @@ try {
     // l'apercu — d'ou `echelleX` en `$state`.
     await onglet.goto(`${BASE}/?annees=1920-1935`, { waitUntil: 'domcontentloaded' });
     await attendre(onglet, '.chiffres b');
+    await ouvrirFrises(onglet);
     await onglet.waitForTimeout(1500);
     verifier(
       'un lien avec une plage arrive avec son voile',
@@ -1164,6 +1200,7 @@ try {
   );
 
   // Un filtre s'ecrit par remplacement : l'historique ne doit pas gonfler.
+  await ouvrirFiltres(page);
   await page.getByRole('button', { name: 'architecture militaire' }).click();
   await page.waitForFunction(
     () => {
@@ -1180,6 +1217,7 @@ try {
   await attendre(page, '.chiffres b');
   const restaure = await total(page);
   verifier('permalien restaure le filtre', restaure === 1688, `obtenu ${restaure}`);
+  await ouvrirFiltres(page);
   const facetteCochee = await page
     .locator('section:has(.nom-section:text("Domaine")) .option.choisi')
     .count();
@@ -1244,6 +1282,13 @@ try {
   );
   verifier('aucun debordement horizontal', debordement <= 0, `${debordement} px`);
 
+  // Le tiroir ne s'ouvre ni ne se ferme plus au franchissement du seuil : il
+  // ne repond qu'au geste. Le scenario le referme donc avant d'eprouver le
+  // bouton, qui s'efface tant qu'il est ouvert.
+  if ((await page.locator('.facettes.ouvert').count()) === 1) {
+    await page.locator('.fermer-tiroir').click();
+    await page.waitForTimeout(400);
+  }
   await page.getByRole('button', { name: /^Filtres/ }).click();
   await page.waitForTimeout(400);
   verifier('tiroir des filtres ouvert', await page.locator('.facettes.ouvert').count() === 1);
@@ -1361,6 +1406,7 @@ try {
   // du cycle precedent. Mesure a l'appui, le meme filtre Corse coute 91 ms de
   // `sql` quand il succede au corpus entier, 14 ms quand il succede a un autre
   // filtre serre. Le total d'un petit resultat peut donc depasser celui du gros.
+  await ouvrirFiltres(page);
   await page.locator('.nom-section', { hasText: 'Région' }).click();
   await page.waitForTimeout(250);
   await page.locator('.option', { hasText: 'Corse' }).first().click();

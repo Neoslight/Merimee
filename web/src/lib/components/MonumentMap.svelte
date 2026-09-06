@@ -182,19 +182,6 @@
    *  interactive, les masquer supprimerait le clic vers la fiche. */
   const opacitePoints = () => (densite ? 0.12 : OPACITE);
 
-  /**
-   * Le halo ne se lit pas de la meme facon selon le sol, et ce n'est pas une
-   * question de gout : clair sur fond sombre, un aplat a faible alpha fait une
-   * **lueur** ; sombre sur fond clair, il fait une **salissure**. Constate a la
-   * capture — 0,14 sur le grege donnait des taches lavande de 26 px autour des
-   * villes, la ou la meme valeur sur l'ardoise donne le halo attendu.
-   *
-   * C'est une opacite, pas une couleur : elle ne peut pas vivre dans `app.css`,
-   * qui ne porte que des teintes. D'ou la seule branche sur le theme du
-   * composant, et elle est ecrite ici plutot que dispersee.
-   */
-  const opaciteHalo = () => (densite ? 0 : theme.courant === 'clair' ? 0.07 : 0.14);
-
   /** Rampe de densite. Extraite pour que la pose et l'effet de palette lisent
    *  la meme chose : posee seule, elle restait sur l'ancien theme apres une
    *  bascule — la claire et la sombre vont pourtant en sens inverse. */
@@ -331,18 +318,6 @@
       }
     });
     map.addLayer({
-      id: 'monuments-halo',
-      type: 'circle',
-      source: 'monuments',
-      // Halo reserve aux edifices riches en mobilier Palissy.
-      filter: ['>', ['get', 'nb'], 50],
-      paint: {
-        'circle-color': couleurs(),
-        'circle-opacity': opaciteHalo(),
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 7, 12, 26]
-      }
-    });
-    map.addLayer({
       id: 'monuments-points',
       type: 'circle',
       source: 'monuments',
@@ -474,7 +449,6 @@
     carte.setLayoutProperty('monuments-densite', 'visibility', densite ? 'visible' : 'none');
     carte.setPaintProperty('monuments-points', 'circle-opacity', opacitePoints());
     carte.setPaintProperty('monuments-points', 'circle-stroke-opacity', opacitePoints());
-    carte.setPaintProperty('monuments-halo', 'circle-opacity', opaciteHalo());
   });
 
   // Fonds historiques : visibilite et dosage. Une seule carte ancienne a la
@@ -526,8 +500,6 @@
     if (!pret || !carte) return;
     const expression = couleurs();
     carte.setPaintProperty('monuments-points', 'circle-color', expression);
-    carte.setPaintProperty('monuments-halo', 'circle-color', expression);
-    carte.setPaintProperty('monuments-halo', 'circle-opacity', opaciteHalo());
     // `liseret()` n'est pas appele ici : il lit `fond` et `opaciteFond`, ce qui
     // faisait de chaque pas du curseur d'opacite un declencheur de cet effet —
     // donc deux `circle-color` **data-driven** reecrits sur 44 484 points, pour

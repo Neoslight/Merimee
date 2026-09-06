@@ -42,7 +42,7 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `web/src/lib/format.ts` | `romain`, formats de nombres — étaient recopiés dans trois composants |
 | `web/src/service-worker.ts` | cache des actifs hachés uniquement |
 | `web/src/lib/components/` | `MonumentMap`, `FacetPanel`, `Jetons`, `Timeline`, `Matrice`, `DetailPanel` |
-| `web/tests/smoke.mjs` | 124 vérifications en Chromium réel, avec `serveur.mjs` instrumenté |
+| `web/tests/smoke.mjs` | 127 vérifications en Chromium réel, avec `serveur.mjs` instrumenté |
 | `web/tests/apercu-social.mjs` | régénère la vignette Open Graph depuis l'application |
 
 ## Commandes
@@ -55,7 +55,7 @@ cd etl  && python -m merimee_etl.memoire   # compte les illustrations POP, 1,36 
 cd etl  && python -m pytest tests -q    # 64 tests
 cd web  && npm run dev                  # http://localhost:5173
 cd web  && npm run check                # svelte-check, doit rester à 0/0
-cd web  && npm run build && npm run test # build statique + 124 vérifications navigateur
+cd web  && npm run build && npm run test # build statique + 127 vérifications navigateur
 cd web  && npm run apercu               # régénère static/apercu-social.png
 cd web  && npm run deploy               # build /Merimee + push sur gh-pages
 ```
@@ -365,6 +365,21 @@ le groupe médian laisse, donc celui-ci tombe au milieu sans qu'aucune largeur n
   trait des deux SVG est `currentColor`, sinon la règle « toute couleur vit dans
   `app.css` » tomberait avec eux.
 
+**Les deux panneaux repliables sont fermés au chargement, à toutes les largeurs.** Le
+tiroir des filtres s'ouvrait dès qu'il y avait la place de le poser à côté de la carte,
+et la frise dès 900 px : il fallait donc refermer deux calques avant de voir ce qu'on
+vient voir. Ils ne répondent plus qu'au geste, et le seuil de 900 px ne commande plus
+que `etroit` — le voile et la fiche qui referme le tiroir derrière elle. Deux
+conséquences :
+
+- **le démarrage n'émet plus que trois requêtes au lieu de quatorze.** Les effets qui
+  portent facettes, cardinalités et histogrammes dépendent de ces deux drapeaux ; fermés,
+  ils ne partent pas, et l'ouverture les rejoue ;
+- **le franchissement du seuil ne referme plus rien non plus.** Rétrécir une fenêtre
+  laisse le tiroir ouvert sur la carte, voile compris. C'est un état que le geste
+  dénoue, pas une panne — mais le smoke test, lui, doit le refermer avant d'éprouver le
+  bouton flottant, qui s'efface tant que le tiroir est ouvert.
+
 **Le bouton « Filtres » vit au coin de la carte, pas dans la barre.** Il se pose là où
 le tiroir s'ouvre et **s'efface tant qu'il est ouvert** : la croix de l'en-tête du
 tiroir est alors le seul geste de fermeture, et le bouton revient avec elle. Deux
@@ -611,12 +626,15 @@ et non au raisonnement :
 - **l'effet de densité doit reposer l'expression, pas un scalaire.** Il posait `0,82` :
   tel quel, la première bascule de densité écraserait l'interpolation par zoom et les
   points redeviendraient opaques à l'échelle nationale, définitivement ;
-- **le halo (`nb > 50`) change d'opacité avec le thème**, 0,14 en sombre et 0,07 en
-  clair. Ce n'est pas un réglage de goût : clair sur fond sombre, un aplat à faible
-  alpha fait une **lueur** ; sombre sur fond clair, il fait une **salissure**. À 0,14 sur
-  le grège, les taches lavande de 26 px autour des villes dominaient la carte. C'est une
-  opacité et non une couleur, elle ne peut donc pas vivre dans `app.css` : c'est la seule
-  branche sur le thème du composant.
+- **le halo des édifices riches en mobilier a été retiré.** Une couche `circle` de
+  26 px à faible alpha, filtrée `nb > 50`, doublait chaque point concerné d'un cercle
+  semi-opaque : sur les villes, où ces édifices se groupent, les halos se recouvraient
+  et l'agglomérat mangeait la lecture. Le nombre d'objets Palissy reste dit par le
+  **rayon** du point lui-même (`nb > 200` élargit de 1,2 à 3 px selon le zoom), qui ne
+  se superpose pas. Ne pas la remettre : c'est une surcharge visuelle, pas une clé de
+  lecture, et sa seule branche sur le thème — 0,14 en sombre contre 0,07 en clair,
+  parce qu'un aplat à faible alpha fait une **lueur** sur fond sombre et une
+  **salissure** sur fond clair — est partie avec elle.
 
 **Le mode de fusion « produit » n'existe pas sur une couche `circle`**, et il n'y a rien
 à espérer d'un `mix-blend-mode` CSS : il s'appliquerait au **canevas entier**, fond
