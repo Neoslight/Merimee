@@ -218,6 +218,19 @@ Le crédit auteur et la licence sont lus à la volée sur l'API Commons, parce q
 ne les porte pas : ces images sont pour la plupart sous CC-BY-SA, le crédit est une
 obligation. Il n'est jamais bloquant.
 
+**Le cadre épouse le rapport de la photographie**, entre 0,68 et 1,9 : rien n'est rogné
+tant que l'image tient dans ces bornes, et au-delà — un bandeau, un tirage très vertical
+— elle se recadre et **se fait glisser** dans son cadre. Une fiche sans photographie
+s'ouvre directement sur son titre.
+
+**Ce que Wikimedia ignore, la fiche le nomme sans le montrer.** Les 6 692 notices sans
+fichier Commons ne sont pas sans photographie : la base Mémoire du ministère en illustre
+**4 861, soit 72,6 %**, avec 45 122 clichés — de quoi porter la couverture de la fiche,
+photographie ou renvoi, à **96,1 %**. Mais ces images ne sont pas libres (« tous droits
+réservés », « diffusion GrandPalaisRmn Photo ») : elles ne sont pas reprises.
+`python -m merimee_etl.memoire` n'en récolte que le nombre, et la fiche ouvre un renvoi
+vers la Plateforme ouverte du patrimoine, qui les présente.
+
 **Les panneaux flottent, ils ne compressent pas.** La grille d'origine réservait
 `246px | 1fr | 340px` en permanence — dont 340 px pour afficher « Sélectionnez un
 point ». Les deux panneaux sont devenus des calques : la carte garde sa pleine largeur,

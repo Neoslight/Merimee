@@ -78,6 +78,9 @@ DETAILS_SCHEMA = pa.schema([
     ("palissy", _LIST_STR),
     ("renvois", _LIST_STR),
     ("commons", _LIST_STR),
+    # Un nombre, pas des fichiers : les illustrations Mémoire sont sous droits
+    # réservés, la fiche n'en fait qu'un renvoi vers POP. Cf. `memoire.py`.
+    ("memoire", pa.int32()),
 ])
 
 
@@ -112,6 +115,22 @@ def _images_commons() -> dict[str, list[str]]:
                 if row["fichier"] not in fichiers and len(fichiers) < MAX_IMAGES:
                     fichiers.append(row["fichier"])
     return images
+
+
+@lru_cache(maxsize=1)
+def _illustrations_memoire() -> dict[str, int]:
+    """Nombre d'illustrations POP par notice.
+
+    Même contrat que les instantanés photo : produit à part par
+    `python -m merimee_etl.memoire`, absent le compte vaut zéro partout et les
+    artefacts restent valides. La fiche n'affiche alors simplement rien.
+    """
+    chemin = Path(REF_DIR) / "memoire_illustrations.csv"
+    if not chemin.exists():
+        return {}
+    with chemin.open(encoding="utf-8", newline="") as fh:
+        lignes = (ligne for ligne in fh if not ligne.startswith("#"))
+        return {row["reference"]: int(row["images"]) for row in csv.DictReader(lignes)}
 
 
 @dataclass(slots=True)
@@ -247,6 +266,7 @@ def transform(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFram
             "palissy": palissy,
             "renvois": split_multi(row.Renvoi_vers_une_notice_de_la_base_Merimee_ou_Palissy),
             "commons": _images_commons().get(ref, []),
+            "memoire": _illustrations_memoire().get(ref, 0),
         })
 
     report.protections = len(protections)

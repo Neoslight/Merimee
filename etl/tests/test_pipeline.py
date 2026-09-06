@@ -363,6 +363,70 @@ def test_images_absentes_ne_cassent_pas_le_build(tmp_path, monkeypatch):
         build._images_commons.cache_clear()
 
 
+@pytestmark_artifacts
+def test_colonne_memoire_presente(details):
+    # Un entier, jamais nul : la fiche l'affiche sans le tester. Comme pour
+    # `commons`, c'est l'instantané qui est facultatif, pas la colonne.
+    assert "memoire" in details.columns
+    assert (details.memoire >= 0).all()
+
+
+@pytestmark_artifacts
+def test_renvoi_memoire_comble_les_fiches_sans_photo(details):
+    """Le renvoi POP porte sur les notices que Wikimedia laisse vides.
+
+    Mesuré au 2026-09-06 : 6 692 notices sans fichier Commons, dont **4 861
+    illustrées dans Mémoire** — 72,6 %, et 45 122 photographies. C'est ce qui
+    fait passer la couverture de la fiche (photographie ou renvoi) de 85,7 %
+    à 96,1 %. Les chiffres bougent avec les bases tierces, la borne basse
+    suffit à détecter une jointure cassée.
+    """
+    sans_photo = details[details.commons.map(len) == 0]
+    if details.memoire.sum() == 0:
+        pytest.skip("instantané `data/ref/memoire_illustrations.csv` absent")
+    assert sans_photo.memoire.gt(0).sum() > 4_000
+
+
+def test_compte_memoire_par_notice_et_non_par_ligne():
+    """Une ligne Mémoire peut citer plusieurs notices, ou aucune image.
+
+    Quatre pièges dans le même échantillon : la ligne sans fichier ne compte
+    pas, la ligne qui cite deux notices compte pour chacune, la référence
+    hors corpus est ignorée — le fichier couvre aussi Palissy — et une
+    référence répétée dans la même ligne ne compte qu'une fois.
+    """
+    from merimee_etl.memoire import compter
+
+    lignes = [
+        "References_Palissy_Merimee_lien_notice_en_cours|Lien_vers_l_image|Copyright|Droits_de_diffusion",
+        "PA00000001|memoire/A/a.jpg|(c) MPP|",
+        "PA00000001;PA00000002|memoire/B/b.jpg|(c) MPP|",
+        "PA00000002||(c) MPP|",  # notice documentaire, aucun fichier
+        "PM87000711|memoire/C/c.jpg|(c) MPP|",  # Palissy, hors corpus
+        "PA00000002;PA00000002|memoire/D/d.jpg||reproduction interdite",
+    ]
+    par_notice, droits, lues = compter(lignes, {"PA00000001", "PA00000002"})
+
+    assert lues == 5
+    assert dict(par_notice) == {"PA00000001": 2, "PA00000002": 2}
+    # La mention retenue est `Copyright` ; `Droits_de_diffusion` ne prend le
+    # relais que sur les lignes où elle est vide.
+    assert droits["(c) MPP"] == 2
+    assert droits["reproduction interdite"] == 1
+
+
+def test_compte_memoire_absent_ne_casse_pas_le_build(tmp_path, monkeypatch):
+    """Sans instantané, le compte vaut zéro et la fiche n'affiche rien."""
+    from merimee_etl import build
+
+    build._illustrations_memoire.cache_clear()
+    monkeypatch.setattr(build, "REF_DIR", tmp_path)
+    try:
+        assert build._illustrations_memoire() == {}
+    finally:
+        build._illustrations_memoire.cache_clear()
+
+
 # --------------------------------------------------------------------------
 # Index plein texte
 # --------------------------------------------------------------------------

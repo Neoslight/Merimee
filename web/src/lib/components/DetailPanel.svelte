@@ -97,6 +97,81 @@
   const images = $derived((fiche?.commons ?? []).filter((nom) => !cassees.includes(nom)));
   const courante = $derived(images[Math.min(imageChoisie, images.length - 1)] ?? null);
 
+  /**
+   * Le cadre epouse le rapport de la photographie, borne des deux cotes.
+   *
+   * Le 4/3 fixe recadrait tout : une tour en portrait perdait sa fleche, un
+   * phototype en bandeau ses deux bords — au moment precis ou l'image sert a
+   * identifier l'edifice. Sans borne en revanche, un bandeau se reduirait a un
+   * trait et un tirage vertical repousserait le titre hors de l'ecran. Entre
+   * les bornes rien n'est coupe ; au-dela, l'image se recadre et se fait
+   * glisser dans son cadre.
+   */
+  const CADRE_MIN = 0.68; // un tirage vertical, 2/3
+  const CADRE_MAX = 1.9; // un panorama, 16/9
+
+  let rapport = $state<number | null>(null);
+  let cadrageX = $state(50);
+  let cadrageY = $state(50);
+
+  const cadre = $derived(
+    rapport === null ? 4 / 3 : Math.min(CADRE_MAX, Math.max(CADRE_MIN, rapport))
+  );
+  /** Hors bornes : l'image deborde son cadre, donc elle se fait glisser. */
+  const recadree = $derived(rapport !== null && (rapport < CADRE_MIN || rapport > CADRE_MAX));
+
+  // Chaque photographie a son rapport : mesure et cadrage repartent a zero,
+  // sinon la suivante heriterait du cadre de la precedente.
+  $effect(() => {
+    courante;
+    rapport = null;
+    cadrageX = 50;
+    cadrageY = 50;
+  });
+
+  function mesurer(image: HTMLImageElement) {
+    if (image.naturalWidth && image.naturalHeight) {
+      rapport = image.naturalWidth / image.naturalHeight;
+    }
+  }
+
+  /**
+   * Glissement dans un cadre borne.
+   *
+   * `object-position` s'exprime en pourcents de la **part cachee** : le pixel
+   * se convertit donc par cette part, recalculee depuis le rapport reel et la
+   * boite affichee. Une fraction fixe deriverait avec la largeur de la fiche,
+   * qui change de gabarit en gabarit.
+   */
+  let glissement: { x: number; y: number; px: number; py: number } | null = null;
+
+  const borner = (valeur: number) => Math.min(100, Math.max(0, valeur));
+
+  function saisir(event: PointerEvent) {
+    if (!recadree) return;
+    const boite = event.currentTarget as HTMLElement;
+    boite.setPointerCapture(event.pointerId);
+    glissement = { x: event.clientX, y: event.clientY, px: cadrageX, py: cadrageY };
+  }
+
+  function deplacer(event: PointerEvent) {
+    if (!glissement || rapport === null) return;
+    const boite = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const rapportBoite = boite.width / boite.height;
+    // Rendu en `cover` : un seul axe deborde, l'autre est ajuste.
+    const cacheX = rapport > rapportBoite ? boite.height * rapport - boite.width : 0;
+    const cacheY = rapport < rapportBoite ? boite.width / rapport - boite.height : 0;
+    const dx = event.clientX - glissement.x;
+    const dy = event.clientY - glissement.y;
+    // Tirer vers la droite doit decouvrir la gauche : le pourcentage baisse.
+    if (cacheX > 0) cadrageX = borner(glissement.px - (dx / cacheX) * 100);
+    if (cacheY > 0) cadrageY = borner(glissement.py - (dy / cacheY) * 100);
+  }
+
+  function relacher() {
+    glissement = null;
+  }
+
   function signalerCassee(nom: string) {
     if (!cassees.includes(nom)) cassees = [...cassees, nom];
   }
@@ -163,15 +238,27 @@
     <!-- L'image passe en tete de fiche : c'est elle qui identifie l'edifice
          avant son nom. Les deux commandes s'y posent en pastilles, faute de
          place au-dessus. -->
-    <div class="hero">
+    <div class="hero" class:nu={!courante}>
       {#if courante}
         <figure class="photo">
-          <img
-            src={vignette(courante, 640)}
-            alt="Photographie de {fiche.titre}"
-            loading="lazy"
-            onerror={() => signalerCassee(courante)}
-          />
+          <div class="cadre" class:glissable={recadree} style="aspect-ratio: {cadre}">
+            <!-- Les gestes sont portes par l'image et non par le cadre : un
+                 `<div>` qui ecoute le pointeur reclame un role ARIA, et aucun
+                 ne decrit honnetement un cadre de photographie. L'image, elle,
+                 remplit exactement ce cadre — la boite mesuree est la meme. -->
+            <img
+              src={vignette(courante, 800)}
+              alt="Photographie de {fiche.titre}"
+              loading="lazy"
+              draggable="false"
+              style="object-fit: {recadree ? 'cover' : 'contain'};
+                     object-position: {cadrageX}% {cadrageY}%"
+              onload={(e) => mesurer(e.currentTarget as HTMLImageElement)}
+              onerror={() => signalerCassee(courante)}
+              onpointerdown={saisir} onpointermove={deplacer}
+              onpointerup={relacher} onpointercancel={relacher}
+            />
+          </div>
           {#if images.length > 1}
             <div class="bande">
               {#each images as nom, i (nom)}
@@ -188,18 +275,9 @@
             <a href={pageFichier(courante)} target="_blank" rel="noreferrer">
               {credit?.licence || 'Wikimedia Commons'}
             </a>
+            {#if recadree}<span class="cadrage">glisser pour cadrer</span>{/if}
           </figcaption>
         </figure>
-      {:else}
-        <!-- Une notice sur six n'a pas d'image. La plaque la nomme au lieu de
-             laisser un trou, mais elle **dit** l'absence : ni animation, ni
-             icone brisee, ni degrade, rien qui puisse passer pour un
-             chargement en cours. -->
-        <div class="plaque">
-          <strong>{fiche.denominations[0] ?? fiche.titre}</strong>
-          {#if fiche.domaines.length}<span>{fiche.domaines.join(', ')}</span>{/if}
-          <em>aucune photographie sur Wikimedia Commons</em>
-        </div>
       {/if}
 
       <button class="pastille fermer" onclick={onclose} aria-label="Fermer la fiche">
@@ -245,6 +323,15 @@
         <a href={popUrl(fiche.reference)} target="_blank" rel="noreferrer">
           Notice POP {fiche.reference} ↗
         </a>
+        <!-- Les campagnes photographiques du ministere couvrent la plupart des
+             notices que Wikimedia ignore, mais elles sont sous droits reserves :
+             on les compte et on y renvoie, on ne les reproduit pas. -->
+        {#if fiche.memoire}
+          <a class="renvoi-photo" href={popUrl(fiche.reference)} target="_blank" rel="noreferrer">
+            {fiche.memoire}
+            {fiche.memoire > 1 ? 'photographies' : 'photographie'} sur POP ↗
+          </a>
+        {/if}
       </p>
     </header>
 
@@ -385,6 +472,20 @@
     position: relative;
   }
 
+  /* Sans photographie, la fiche s'ouvre sur son titre. Le cadre « aucune
+     photographie » occupait un tiers du panneau pour ne rien dire que la
+     fiche ne dise deja : la denomination et le domaine sont juste dessous.
+     Reste la hauteur des deux pastilles, qui se posaient sur l'image — et
+     leur filet, sans lequel elles disparaitraient sur le fond du panneau. */
+  .hero.nu {
+    height: 62px;
+  }
+
+  .hero.nu .pastille {
+    border: 1px solid var(--bord);
+    box-shadow: none;
+  }
+
   /* Pastilles posees sur l'image : il n'y a pas de place au-dessus, et une
      barre d'outils dediee couterait une rangee pour deux commandes. */
   .pastille {
@@ -516,6 +617,21 @@
     transition: all var(--t-rapide);
   }
 
+  /* Second renvoi vers la meme page : il repond a une autre question — « ou
+     sont les photographies que Wikimedia n'a pas ? » — mais il ne doit pas
+     peser autant que le premier, d'ou une pilule sans filet. */
+  .actions a.renvoi-photo,
+  .actions a.renvoi-photo:hover {
+    border-color: transparent;
+    padding-left: 2px;
+    padding-right: 2px;
+    font-weight: 500;
+  }
+
+  .actions a.renvoi-photo {
+    color: var(--texte-faible);
+  }
+
   .actions a:hover {
     border-color: var(--inscrit);
     color: var(--inscrit-texte);
@@ -527,58 +643,38 @@
     padding: 10px 10px 0;
   }
 
-  /* Meme rapport que la photo qu'elle remplace : passer d'une notice illustree
-     a une autre qui ne l'est pas ne doit pas faire sauter la fiche. */
-  .plaque {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    aspect-ratio: 4 / 3;
-    margin: 10px 10px 0;
-    padding: 18px;
-    border-radius: var(--r-m);
-    background: var(--fond-creux);
-    /* La hachure dit que la surface est vide par nature, pas en attente. */
-    background-image: repeating-linear-gradient(
-      135deg,
-      rgb(var(--voile) / 5%) 0 1px,
-      transparent 1px 10px
-    );
-    text-align: center;
-  }
-
-  .plaque strong {
-    font-family: var(--police-titre);
-    font-size: 20px;
-    font-weight: 500;
-    line-height: 1.25;
-    color: var(--texte);
-  }
-
-  .plaque span {
-    font-size: 11px;
-    color: var(--texte-faible);
-  }
-
-  .plaque em {
-    margin-top: 4px;
-    font-style: normal;
-    font-size: 10px;
-    letter-spacing: 0.04em;
-    color: var(--texte-tenu);
-  }
-
-  /* Rapport fixe : sans lui, chaque image qui arrive pousse la fiche entiere
+  /* Le cadre porte le rapport, l'image le remplit : c'est lui qu'on mesure
+     pour convertir un glissement en cadrage, et lui qui reserve la place
+     avant que l'image arrive — sinon chaque photographie pousserait la fiche
      vers le bas au moment ou on commence a la lire. */
-  .photo > img {
+  .cadre {
     display: block;
     width: 100%;
     aspect-ratio: 4 / 3;
-    object-fit: cover;
     border-radius: var(--r-m);
     background: var(--fond-creux);
+    overflow: hidden;
+  }
+
+  .cadre > img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    /* Le glissement natif de l'image ferait concurrence au notre. */
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+
+  /* Seule une image hors bornes se fait glisser : la main ne s'ouvre que
+     lorsqu'il y a quelque chose a decouvrir. `touch-action` doit ceder le
+     geste au doigt, mais uniquement dans ce cas — ailleurs la fiche defile. */
+  .cadre.glissable {
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .cadre.glissable:active {
+    cursor: grabbing;
   }
 
   .bande {
@@ -615,6 +711,11 @@
     padding: 8px 12px 0;
     font-size: 10px;
     color: var(--texte-tenu);
+  }
+
+  .cadrage {
+    margin-left: auto;
+    font-style: italic;
   }
 
   .auteur {

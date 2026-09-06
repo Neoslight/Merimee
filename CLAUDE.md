@@ -24,11 +24,13 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `data/raw/merimee.csv` | source, **non versionnée** (100 Mo) |
 | `data/ref/*.csv` | décisions éditoriales, **versionnées** : alias d'auteurs, corrections de vocabulaire |
 | `data/ref/wikidata_images.csv` | instantané tiers, 2,4 Mo — pas une décision éditoriale, cf. plus bas |
+| `data/ref/memoire_illustrations.csv` | instantané tiers, 554 Ko : un nombre par notice, **jamais une image** |
 | `etl/merimee_etl/wikidata.py` | récupère cet instantané, **jamais appelé par le pipeline** |
 | `etl/merimee_etl/` | pipeline : `load` → `normalize` → `parse` → `build`, piloté par `cli` |
 | `etl/merimee_etl/texte.py` | index plein texte des historiques, **dégrade en silence** sans `fts` |
 | `etl/merimee_etl/commons.py` | second instantané photo, séparé de `wikidata.py` — lancé à part |
-| `etl/tests/test_pipeline.py` | 60 tests : unitaires sur les cas tordus + intégration sur les artefacts |
+| `etl/merimee_etl/memoire.py` | compte les illustrations POP **sans les reprendre** — lancé à part |
+| `etl/tests/test_pipeline.py` | 64 tests : unitaires sur les cas tordus + intégration sur les artefacts |
 | `etl/out/rejets.csv` | segments hors-format rencontrés, jamais supprimés silencieusement |
 | `web/src/lib/db/` | `duckdb.ts` (bootstrap, fragments), `queries.ts` (requêtes), `shards.ts` (hachage), `texte.ts` (BM25) |
 | `web/src/lib/state/filters.svelte.ts` | état des filtres + construction du prédicat SQL |
@@ -38,7 +40,7 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `web/src/lib/format.ts` | `romain`, formats de nombres — étaient recopiés dans trois composants |
 | `web/src/service-worker.ts` | cache des actifs hachés uniquement |
 | `web/src/lib/components/` | `MonumentMap`, `FacetPanel`, `Jetons`, `Timeline`, `Matrice`, `DetailPanel` |
-| `web/tests/smoke.mjs` | 114 vérifications en Chromium réel, avec `serveur.mjs` instrumenté |
+| `web/tests/smoke.mjs` | 119 vérifications en Chromium réel, avec `serveur.mjs` instrumenté |
 | `web/tests/apercu-social.mjs` | régénère la vignette Open Graph depuis l'application |
 
 ## Commandes
@@ -47,10 +49,11 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 cd etl  && python -m merimee_etl        # ~11 s, écrit web/static/data/
 cd etl  && python -m merimee_etl.wikidata  # rafraîchit l'instantané des photos
 cd etl  && python -m merimee_etl.commons   # complète par les fichiers citant la notice
-cd etl  && python -m pytest tests -q    # 60 tests
+cd etl  && python -m merimee_etl.memoire   # compte les illustrations POP, 1,36 Go lus en flux
+cd etl  && python -m pytest tests -q    # 64 tests
 cd web  && npm run dev                  # http://localhost:5173
 cd web  && npm run check                # svelte-check, doit rester à 0/0
-cd web  && npm run build && npm run test # build statique + 114 vérifications navigateur
+cd web  && npm run build && npm run test # build statique + 119 vérifications navigateur
 cd web  && npm run apercu               # régénère static/apercu-social.png
 cd web  && npm run deploy               # build /Merimee + push sur gh-pages
 ```
@@ -537,16 +540,41 @@ C'est ce qui garde le pipeline hors-ligne et les tests sans réseau. Trois cons�
   le porte pas. La plupart de ces images sont sous CC-BY-SA : **le crédit est une
   obligation**. Il n'est jamais bloquant, et son échec laisse le lien vers la page du
   fichier, qui porte l'information complète ;
-- une notice sur six n'a pas d'image : la section montre alors une **plaque nommée** —
-  dénomination, domaine, et la mention « aucune photographie sur Wikimedia Commons » —
-  au même rapport 4/3 que la photo qu'elle remplace. Ce qu'elle ne fait pas, c'est
-  ressembler à un chargement : ni animation, ni icône brisée, ni dégradé. La règle
-  antérieure (« la section disparaît ») a été **inversée volontairement** ; le cadre
-  gris muet qu'elle interdisait, lui, reste interdit.
+- une notice sur sept n'a pas d'image, et la fiche **s'ouvre alors sur son titre**. La
+  plaque nommée qui tenait cette place — dénomination, domaine, « aucune photographie
+  sur Wikimedia Commons » — occupait un tiers du panneau pour répéter ce que la fiche
+  donne deux lignes plus bas. Ne reste que la bande des deux pastilles, qui se posaient
+  sur l'image, et un filet sans lequel elles disparaîtraient sur le fond du panneau. La
+  règle antérieure (« la section disparaît ») est donc **rétablie**, et l'absence se dit
+  autrement : par le renvoi POP, cf. plus bas. Le cadre gris muet, lui, reste interdit.
 
 Le magasin de certificats par défaut de Python sous Windows a rendu un
 `CERTIFICATE_VERIFY_FAILED: certificate has expired` sur ce point d'entrée ; le module
 passe par `certifi` quand il est installé.
+
+**Le cadre épouse la photographie, entre deux bornes.** Le rapport 4/3 fixe recadrait
+tout : une tour en portrait perdait sa flèche, un phototype en bandeau ses deux bords —
+au moment précis où l'image sert à identifier l'édifice. Le cadre suit donc le rapport
+réel du fichier, borné à **0,68 et 1,9**. Sans borne, un bandeau se réduirait à un trait
+et un tirage vertical repousserait le titre hors de l'écran ; entre les bornes,
+`object-fit: contain` sur un cadre au même rapport ne coupe rien ; au-delà, l'image
+passe en `cover` et **se fait glisser**. Trois points à ne pas défaire :
+
+- **`object-position` s'exprime en pourcents de la part cachée**, pas de la largeur : le
+  pixel se convertit par cette part, recalculée depuis le rapport réel et la boîte
+  affichée. Une fraction fixe dériverait avec la largeur de la fiche, qui change d'un
+  gabarit à l'autre ;
+- **les gestes sont portés par l'image, pas par le cadre.** Un `<div>` qui écoute le
+  pointeur réclame un rôle ARIA, et aucun ne décrit honnêtement un cadre de
+  photographie ; l'image remplit exactement ce cadre, la boîte mesurée est la même ;
+- **`touch-action: none` n'est posé que sur une image hors bornes.** Partout ailleurs le
+  doigt doit continuer à faire défiler la fiche.
+
+Les bornes ne sont pas théoriques : sur **240 fichiers de l'instantané mesurés**,
+**25 en sortent** — 10 %, du dolmen photographié en bandeau (2,5) au clocher cadré à
+0,53. Le test mesure la boîte du cadre contre le rapport naturel du fichier, à 3 % près,
+vérifie que le mode de remplissage suit la règle de bornes, et **glisse réellement** sur
+un fichier hors bornes pour voir `object-position` bouger.
 
 **Le pont Wikidata n'est pas étroit : les photographies manquantes n'existent pas.**
 **46 618 items portent déjà un `P380`** sur 46 760 notices — les 7 204 fiches sans image
@@ -569,12 +597,45 @@ Le geosearch rend `BENOIT HAMON.jpg` pour la préfecture de Nanterre et
 `Église (Salins-les-Bains).jpg` pour une « Demeure ». Corroborer par le titre ne filtre
 presque rien (25 → 22) : le nom de commune figure dans la plupart des noms de fichiers,
 il atteste **le lieu, pas le sujet**. Or une fiche affirme quelque chose en montrant une
-photographie, et la plaque nommée vaut mieux qu'une image fausse. **Le geosearch est
+photographie, et ne rien montrer vaut mieux qu'une image fausse. **Le geosearch est
 écarté**, comme PMTiles : décision close, chiffres à l'appui.
 
 `commons.py` filtre en plus par la forme du nom (`.jpg/.png/.tif`, rejet de
 `location_map`, `blason`, `logo`, `MH_disparu`…) — le piège mesuré sur les images de
 tête frwiki, où 172 « images » cachaient 13 photographies.
+
+**Le troisième pont ne rapporte que des nombres.** Les 6 692 notices sans fichier
+Commons ne sont pas dépourvues de photographie : la base **Mémoire** — les campagnes du
+ministère de la Culture, celles qui illustrent POP — en couvre **4 861, soit 72,6 %,
+avec 45 122 clichés**. La couverture de la fiche, photographie ou renvoi, passe donc de
+**85,7 % à 96,1 %** ; il reste 1 831 notices sans rien. Sur le corpus entier, Mémoire
+illustre 39 377 notices et 779 673 images.
+
+**Et pourtant rien n'est repris.** Ces images ne sont pas libres : sur les 779 673 lignes
+illustrées, **90 403 portent une mention** et elle est restrictive — « reproduction
+soumise à autorisation du titulaire des droits d'exploitation » 77 495 fois,
+« reproduction interdite » 85, « diffusion normale » 89. L'export tait les 88 % restants,
+mais POP les affiche : sur 47 notices illustrées relevées à la main, **546 crédits,
+aucun libre** — « tous droits réservés », « diffusion GrandPalaisRmn Photo ». Les
+afficher serait une reproduction non autorisée sur un site tiers, quel que soit le
+crédit affiché — c'est la différence avec Commons, dont les CC-BY-SA n'exigent que
+l'attribution. `memoire.py` ne récolte donc qu'un **compte par notice**, et la fiche
+n'en fait qu'un renvoi vers POP, qui les montre chez lui. Décision prise sur ces
+chiffres ; la rouvrir demanderait des mentions libres en nombre, que la passe imprime à
+chaque fois. Trois points de mise en œuvre :
+
+- **la source est lue en flux, jamais écrite.** Le jeu « Mémoire – illustration Mérimée
+  et Palissy » (data.gouv.fr, ODbL) pèse **1,36 Go** ; à 30 Mo/s mesurés la passe coûte
+  moins d'une minute, contre 6 692 pages POP à interroger une à une. Le disque n'en
+  garde que `data/ref/memoire_illustrations.csv`, 554 Ko ;
+- **une ligne Mémoire peut citer plusieurs notices** (`PA00099871;IA19000868`), et le
+  fichier couvre aussi Palissy : le compte se fait par notice **du corpus**, une seule
+  fois par ligne, et les lignes sans `Lien_vers_l_image` ne comptent pas ;
+- **l'export tait les droits, POP non.** `Copyright` est vide partout où
+  `Droits_de_diffusion` l'est — les deux colonnes ont été comptées tour à tour et
+  rendent le même décompte. La mention complète se lit sur la notice POP, jamais dans le
+  CSV ; l'absence de mention dans l'export **ne veut pas dire image libre**, et les deux
+  colonnes sont comptées pour ne pas dépendre de celle que le ministère remplira demain.
 
 **Les rejets sont signalés, pas supprimés.** Un segment de date illisible produit
 quand même un événement (année nulle) et une ligne dans `etl/out/rejets.csv`.

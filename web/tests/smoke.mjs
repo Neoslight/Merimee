@@ -874,11 +874,41 @@ try {
     await onglet.goto(`${BASE}/?ref=PA00097411`, { waitUntil: 'domcontentloaded' });
     await attendre(onglet, '.fiche .fermer');
     await onglet.waitForTimeout(600);
-    const source = await onglet.getAttribute('.photo > img', 'src');
+    const source = await onglet.getAttribute('.photo .cadre img', 'src');
     verifier(
       'la fiche illustree porte une image Commons',
       /commons\.wikimedia\.org\/wiki\/Special:FilePath\//.test(source ?? ''),
       source ?? 'aucune image'
+    );
+
+    // Le cadre epouse le rapport de la photographie, borne des deux cotes :
+    // c'est ce qui remplace le 4/3 fixe, qui recadrait tout. Mesure
+    // geometrique — boite du cadre contre dimensions naturelles du fichier.
+    const geometriePhoto = await onglet.evaluate(() => {
+      const img = document.querySelector('.photo .cadre img');
+      const cadre = document.querySelector('.photo .cadre');
+      if (!img || !cadre) return null;
+      const boite = cadre.getBoundingClientRect();
+      return {
+        boite: boite.width / boite.height,
+        naturel: img.naturalWidth / img.naturalHeight,
+        remplissage: getComputedStyle(img).objectFit
+      };
+    });
+    const attendu = geometriePhoto ? Math.min(1.9, Math.max(0.68, geometriePhoto.naturel)) : 0;
+    verifier(
+      'le cadre epouse le rapport de la photographie',
+      Boolean(geometriePhoto) && Math.abs(geometriePhoto.boite - attendu) / attendu < 0.03,
+      geometriePhoto
+        ? `cadre ${geometriePhoto.boite.toFixed(2)} pour ${geometriePhoto.naturel.toFixed(2)} attendu ${attendu.toFixed(2)}`
+        : 'aucun cadre'
+    );
+    // Entre les bornes, rien n'est coupe : `contain` sur un cadre au meme
+    // rapport remplit exactement, sans bande ni rognage.
+    verifier(
+      'une photographie dans les bornes n est pas rognee',
+      geometriePhoto?.remplissage === (geometriePhoto.naturel < 0.68 || geometriePhoto.naturel > 1.9 ? 'cover' : 'contain'),
+      `${geometriePhoto?.remplissage} pour un rapport de ${geometriePhoto?.naturel.toFixed(2)}`
     );
     // Le credit peut venir du reseau ou non : le lien de repli, lui, est
     // toujours rendu. C'est lui qui rend la licence atteignable.
@@ -903,9 +933,10 @@ try {
       lienFiche.split('?')[1] ?? lienFiche
     );
 
-    // Une notice sur six n'a pas d'image. La plaque la nomme, mais elle **dit**
-    // l'absence : aucune image, aucune animation, rien qui puisse passer pour
-    // un chargement en cours.
+    // Une notice sur six n'a pas d'image, et la fiche s'ouvre alors sur son
+    // titre : le cadre « aucune photographie » occupait un tiers du panneau
+    // pour ne rien dire que la fiche ne dise deja. Ne reste que la bande des
+    // deux pastilles, qui se posaient sur l'image.
     await onglet.goto(`${BASE}/?ref=PA67000108`, { waitUntil: 'domcontentloaded' });
     await attendre(onglet, '.fiche .fermer');
     await onglet.waitForTimeout(600);
@@ -914,11 +945,79 @@ try {
       (await onglet.locator('.photo').count()) === 0,
       `${await onglet.locator('.photo').count()} figure(s)`
     );
-    const plaque = onglet.locator('.plaque');
+    const nu = await onglet.evaluate(() => {
+      const hero = document.querySelector('.fiche .hero');
+      const titre = document.querySelector('.fiche header h2');
+      return {
+        nu: hero?.classList.contains('nu') ?? false,
+        hauteur: hero?.getBoundingClientRect().height ?? 0,
+        titre: titre?.getBoundingClientRect().top ?? 0,
+        pastilles: document.querySelectorAll('.fiche .hero .pastille').length
+      };
+    });
     verifier(
-      'une plaque nommee remplace la photo absente',
-      (await plaque.count()) === 1 && (await plaque.locator('img').count()) === 0,
-      ((await plaque.textContent()) ?? '').replace(/\s+/g, ' ').trim().slice(0, 70)
+      'la fiche sans photo s ouvre sur son titre',
+      nu.nu && nu.hauteur < 80 && nu.pastilles === 2,
+      `bande de ${Math.round(nu.hauteur)} px, ${nu.pastilles} pastilles, titre a ${Math.round(nu.titre)} px`
+    );
+    // 4 861 des 6 692 notices sans fichier Commons sont illustrees dans
+    // Memoire. Ces images etant sous droits reserves, la fiche les compte et
+    // y renvoie ; elle ne les reproduit pas. Le renvoi est donc la seule
+    // trace de leur existence, et il porte le nombre.
+    const renvoi = onglet.locator('.fiche .renvoi-photo');
+    const libelle = ((await renvoi.textContent()) ?? '').replace(/\s+/g, ' ').trim();
+    verifier(
+      'le renvoi POP compte les photographies que Commons ignore',
+      (await renvoi.count()) === 1 &&
+        /^\d+ photographies? sur POP/.test(libelle) &&
+        ((await renvoi.getAttribute('href')) ?? '').includes('PA67000108'),
+      libelle || 'aucun renvoi'
+    );
+
+    // Une photographie plus verticale que la borne basse : le cadre s'arrete a
+    // 0,68 et l'image se recadre, au lieu d'etre rognee sans recours.
+    // PA00107796 mesure 960x1803, soit 0,53 ; 25 fichiers sur 240 mesures dans
+    // l'instantane sortent des bornes, ce n'est pas un cas de laboratoire.
+    await onglet.goto(`${BASE}/?ref=PA00107796`, { waitUntil: 'domcontentloaded' });
+    await attendre(onglet, '.photo .cadre img');
+    await onglet.waitForTimeout(1800);
+    const bornee = await onglet.evaluate(() => {
+      const cadre = document.querySelector('.photo .cadre');
+      const img = document.querySelector('.photo .cadre img');
+      const boite = cadre.getBoundingClientRect();
+      return {
+        rapport: boite.width / boite.height,
+        naturel: img.naturalWidth / img.naturalHeight,
+        remplissage: getComputedStyle(img).objectFit,
+        position: getComputedStyle(img).objectPosition
+      };
+    });
+    verifier(
+      'une photographie hors bornes est bornee, pas rognee au hasard',
+      Math.abs(bornee.rapport - 0.68) < 0.02 &&
+        bornee.naturel < 0.68 &&
+        bornee.remplissage === 'cover',
+      `cadre ${bornee.rapport.toFixed(2)} pour un fichier a ${bornee.naturel.toFixed(2)}, ${bornee.remplissage}`
+    );
+
+    // Et elle se fait glisser : c'est ce qui remplace le recadrage impose.
+    // `object-position` s'exprime en pourcents de la part cachee, donc le
+    // deplacement doit changer la valeur calculee, pas seulement le curseur.
+    const boiteImage = await onglet.locator('.photo .cadre img').boundingBox();
+    const cx = boiteImage.x + boiteImage.width / 2;
+    const cy = boiteImage.y + boiteImage.height / 2;
+    await onglet.mouse.move(cx, cy);
+    await onglet.mouse.down();
+    await onglet.mouse.move(cx, cy - 90, { steps: 6 });
+    await onglet.mouse.up();
+    await onglet.waitForTimeout(200);
+    const apres = await onglet.evaluate(
+      () => getComputedStyle(document.querySelector('.photo .cadre img')).objectPosition
+    );
+    verifier(
+      'glisser recadre la photographie dans son cadre',
+      apres !== bornee.position,
+      `${bornee.position} -> ${apres}`
     );
 
     // Un lien portant `annees=` doit arriver avec son voile de brossage : c'est
