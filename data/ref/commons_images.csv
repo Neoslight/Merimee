@@ -1,0 +1,532 @@
+# Instantané Wikimedia Commons : fichiers dont la page cite la référence Mérimée.
+# Généré par `python -m merimee_etl.commons`, jamais à la main.
+# Complète `wikidata_images.csv` ; ce n'est pas une décision éditoriale.
+reference,fichier
+PA00078016,Eglise - Fonts baptismaux - Allibaudières - Médiathèque de l'architecture et du patrimoine - APMH00009782.jpg
+PA00078016,Eglise - Vierge et l'Enfant - Allibaudières - Médiathèque de l'architecture et du patrimoine - APMH00009783.jpg
+PA00078036,Bar-sur-Aube (10) Portail 4 Rue Saint-Pierre.jpg
+PA00078170,Nogent-sur-Seine hospice.jpg
+PA00078292,Croix de cimetière - Vanlay - Médiathèque de l'architecture et du patrimoine - APMH00031888.jpg
+PA00078292,Croix de cimetière - Vanlay - Médiathèque de l'architecture et du patrimoine - APMH00031892.jpg
+PA00078292,Croix de cimetière - Vanlay - Médiathèque de l'architecture et du patrimoine - APMH00031893.jpg
+PA00078417,Mézières - Préfecture - 2.jpg
+PA00078417,Prefecture 05462.JPG
+PA00078417,Prefecture 05463.JPG
+PA00078604,Eglise - Porche - Bussy-Lettrée - Médiathèque de l'architecture et du patrimoine - APMH00026755.jpg
+PA00078799,Reims 2011 (6).JPG
+PA00078843,51507 SAINTE MENEHOULD 1 (5) 01.jpg
+PA00078843,51507 SAINTE MENEHOULD 1 (5) 02.jpg
+PA00078857,SEZANNE place du Champ Benoist.jpg
+PA00078979,Ceffonds (52) Croix de cimetière.jpg
+PA00079002,Châteauvillain - Tour de l'Auditoire.jpg
+PA00079017,2012 août 0207 vieille maison à Chaumont.jpg
+PA00079018,2012 août 0207 vieille maison à Chaumont.jpg
+PA00079062,"Germainvilliers, Croix de chemin.jpg"
+PA00080366,04046 1 LE CHAFFAUT SAINT JURSON (3).jpg
+PA00080366,Château du Chaffaut St Jurson 04510.jpg
+PA00080765,Menton - Hôtel Winter Palace depuis l'avenue général Leclerc.jpg
+PA00080889,Borne du Premier Empire à La Turbie - photo MH.jpg
+PA00080896,Maison - Façade sur rue - Turbie (La) - Médiathèque de l'architecture et du patrimoine - APMH00012443.jpg
+PA00080908,Oppidum des Encourdoules - site archeologique.jpg
+PA00080908,Oppidum des Encourdoules.jpg
+PA00081225,Remparts - Baux-de-Provence (Les) - Médiathèque de l'architecture et du patrimoine - APMH00010210.jpg
+PA00081225,Remparts - Baux-de-Provence (Les) - Médiathèque de l'architecture et du patrimoine - APMH00010212.jpg
+PA00081225,Remparts - Baux-de-Provence (Les) - Médiathèque de l'architecture et du patrimoine - APMH00010213.jpg
+PA00081535,Provence me sept.08 031a.jpg
+PA00081624,Thermes antiques (restes) - Vue intérieure d'une salle - Fréjus - Médiathèque de l'architecture et du patrimoine - APMH00001264.jpg
+PA00081728,Saint-Zacharie 20210606 155336.jpg
+PA00082078,Vue vers le Luberon.JPG
+PA00082932,09 NAQ - Dordogne - Sarlat-la-Canéda (2024-04-23 12-04-59).jpg
+PA00083267,MH-Bordeaux-15.jpg
+PA00083272,Bordeaux-MH-6 cours de l'Intendance.jpg
+PA00083279,MH-Bordeaux-16.jpg
+PA00083282,Bordeaux-MH-07.jpg
+PA00083288,Bordeaux-MH-4 place du Parlement.jpg
+PA00083289,Bordeaux-MH-5 place du Parlement.jpg
+PA00083399,Bordeaux-MH-09.jpg
+PA00083405,Bordeaux-MH-14.jpg
+PA00083437,Bordeaux-MH-29 place Gambetta.jpg
+PA00083458,Bordeaux-MH-4 cours Georges Clemenceau.jpg
+PA00083459,Bordeaux-MH-5 cours Georges Clemenceau.jpg
+PA00083460,Bordeaux-MH-68 cours de l'Intendance.jpg
+PA00083462,Bordeaux-MH-72 cours de l'Intendance.jpg
+PA00083463,Bordeaux-MH-74 cours de l'Intendance.jpg
+PA00083466,Bordeaux-MH-13.jpg
+PA00083467,Bordeaux-MH-109 rue Porte Dijeaux.jpg
+PA00083468,Bordeaux-MH-111 rue Porte Dijeaux.jpg
+PA00083470,Bordeaux-MH-05.jpg
+PA00083733,Maison dite maison gothique - Vue d'ensemble - Saint-Emilion - Médiathèque de l'architecture et du patrimoine - APMH00034092.jpg
+PA00083870,Bordeaux-MH-Ravalement du 21 rue Raze.jpg
+PA00084410,Mehatseko Bizkarra harrespil.jpg
+PA00084410,Mehatseko Lepoa harrespil.jpg
+PA00084955,"Cloître des Récollets, galerie ouest - Saverne 67.JPG"
+PA00084955,Saverne CouventRécollets 56.JPG
+PA00084955,Saverne CouventRécollets 60.JPG
+PA00085693,"Steinbrunn-le-Bas, Manoir seigneurial MH.jpg"
+PA00085802,Paris 146 rue Saint-Honoré.JPG
+PA00085802,Paris 148 rue Saint-Honoré.JPG
+PA00085802,Paris 150-148 rue Saint-Honoré.JPG
+PA00086256,"Hôtel de Fieubet,Hôtel de la Valette,Ecole Massillon - Façade - Paris 04 - Médiathèque de l'architecture et du patrimoine - APMH00037576.jpg"
+PA00086256,P1220216 Paris IV hotel Fieubet detail rwk.jpg
+PA00086256,P1220217 Paris IV hotel Fieubet detail rwk.jpg
+PA00086655,Institut Pasteur (Bâtiment Duclaux).JPG
+PA00086655,"Institut Pasteur, Paris 1.jpg"
+PA00086655,Musée Pasteur.JPG
+PA00087458,"Houdan (77), maison, 66 Grande-Rue.jpg"
+PA00087502,"Pavillon, Maisons-Laffitte.JPG"
+PA00087573,"Villa Savoye, Poissy éléments de décoration circulaires.jpg"
+PA00087652,Tessancourt sur Aubette Porterie de la ferme d Orzeau.jpg
+PA00087705,20 rue d'Anjou Versailles.jpg
+PA00087706,22-32 rue d'Anjou Versailles.jpg
+PA00087710,40-42 rue d'Anjou Versailles.jpg
+PA00087711,43 rue d'Anjou Versailles.jpg
+PA00087712,48-50 rue d'Anjou Versailles.jpg
+PA00087743,52 rue Royale Versailles.jpg
+PA00087747,59 rue Royale Versailles.jpg
+PA00087748,63 rue Royale Versailles.jpg
+PA00088647,Lycée Saint-Louis - Photo de groupe - visite de la section norvégienne du lycée Pierre Corneille de Rouen - Paris - Médiathèque de l'architecture et du patrimoine - APZ0007860.jpg
+PA00088647,Lycée Saint-Louis.jpg
+PA00089333,Minihy-Tréguier Manoir de Mézaubran.jpg
+PA00089526,"Manoir de Boisfeuillet (Pluduno, Côtes-d'Armor).jpg"
+PA00089827,Dolmen de Cosquiérou ar Earc'h.jpg
+PA00090143,Dolmen de Brucou.jpg
+PA00090146,344 Névez.jpg
+PA00090190,Plomeur (29) Pointe de la Torche Allée couverte 01.jpg
+PA00090190,Plomeur (29) Pointe de la Torche Allée couverte 02.jpg
+PA00090190,"Pointe de la Torche, Finistère.jpg"
+PA00090211,Pierre cultuelle gauloise - Ploudaniel.jpg
+PA00090286,Dolmen du Moulin René.jpg
+PA00090293,Pont Aven-Puits.jpg
+PA00090309,Porspoder (29) Grand menhir de l'île Melon.JPG
+PA00090915,Vitré - 26 rue Baudrairie 01.jpg
+PA00091003,Auray - place Saint-Sauveur.jpg
+PA00091003,Rue Saint René 6 Saint Saveur 1.jpg
+PA00091122,Carnac alignement Menec 2018.jpg
+PA00091165,Dolmens de Kerorang.jpg
+PA00091166,Dolmen de Roc'h an Ezel.jpg
+PA00091167,Dolmen Er Mar.jpg
+PA00091168,Dolmens de Parc Guren.jpg
+PA00091283,Maison forte Hennebont.png
+PA00091525,Monuments mégalithiques du Morbihan. Plouharnel - F. Gaillard - btv1b8432890p (27 of 31).jpg
+PA00091675,Menhir de Clos et Bé.jpg
+PA00091676,Menhir de Pen-guen.jpg
+PA00091705,St-PHILIBERT Men-Milene.jpg
+PA00091868,Maison rue Charles Faucon à Arlanc.jpg
+PA00091869,La motte castrale de Cours.jpg
+PA00091869,Motte féodale de Cours à Arlanc.jpg
+PA00091869,Motte féodale de Cours.jpg
+PA00091986,"Basique du Port, Clermont-Ferrand, Puy de Dôme 01.jpg"
+PA00091996,Fontaine Urbain II and Notre Dame Assomption - Clermont-Ferrand.jpg
+PA00091996,Fontaine Urbain II and Notre Dame Assomption 2 - Clermont-Ferrand.jpg
+PA00091996,Fontaine Urbain II and Notre Dame Assomption 6 - Clermont-Ferrand.jpg
+PA00092094,Eglise de Courtesserre - Choeur - Courpière - Médiathèque de l'architecture et du patrimoine - APMH00035086.jpg
+PA00092197,Maisons - Montaigut-en-Combraille - Médiathèque de l'architecture et du patrimoine - APMH00035439.jpg
+PA00092224,MAISON DES MARCHANDS À OLLIERGUES PUY DE DÔME 63.jpg
+PA00092349,Château des martinanches puy de dome.jpg
+PA00092349,Château des martinanches.jpg
+PA00092349,Le château des martinanches.jpg
+PA00092418,Place du marchidial - sauxillanges.jpg
+PA00092424,Pierre des quatre curés - Face nord.jpg
+PA00092424,Pierre des quatre curés - Face ouest.jpg
+PA00092543,Château de Beauvezeix.jpg
+PA00092553,Eglise - Travées de la nef - Neuville - Médiathèque de l'architecture et du patrimoine - APMH00035426.jpg
+PA00092585,Maison du Bailli Aurec-sur-Loire.jpg
+PA00093067,Eglise Saint-Patrocle;Prieuré (ancien) - Ensemble ouest et entrée de l'ancien monastère - Colombier - Médiathèque de l'architecture et du patrimoine - APMH00000915.jpg
+PA00093509,Château d'Escorailles - Tour Nord - 1.JPG
+PA00093509,Château d'Escorailles - Tour Nord - 2.JPG
+PA00093509,Château d'Escorailles - Tour Nord-Ouest ouverte de lierre.JPG
+PA00093513,Palmont Castle (1).jpg
+PA00093513,Palmont Castle (2).jpg
+PA00093513,Palmont Castle (3).jpg
+PA00093603,Castle of St-Chamant (1).jpg
+PA00093603,Castle of St-Chamant (3).jpg
+PA00093603,Castle of St-Chamant (5).jpg
+PA00093619,Saint-Flour place d'Armes 5.jpg
+PA00093679,Maison rue des Templiers à Salers (15) - 01.jpg
+PA00093709,Granite wayside cross in Vebret (2).jpg
+PA00093709,Granite wayside cross in Vebret (3).jpg
+PA00093709,Granite wayside cross in Vebret (5).jpg
+PA00094347,Arma Christi cross in Gratens (1).jpg
+PA00094894,Castle of Pouylebon (1).jpg
+PA00094949,Timber framed houses in Tillac (10).jpg
+PA00094949,Timber framed houses in Tillac (4).jpg
+PA00094949,Timber framed houses in Tillac (7).jpg
+PA00095032,Cajarc chapelle des mariniers.jpg
+PA00095330,Tumulus l'Estaque (cne d'Avezac-Prat-Lahitte).jpg
+PA00095439,Square tower in Trie-sur-Baise (1).jpg
+PA00095439,Square tower in Trie-sur-Baise (2).jpg
+PA00095632,81240 SAINT ANDRE 1.jpg
+PA00095821,82121 MONTAUBAN 1 (3)N°10 20.jpg
+PA00095828,82121 MONTAUBAN 1 (4) N020 30.jpg
+PA00096807,Dolmen dit La Pierre Levée ou La Grosse Pierre - Graçay - Médiathèque de l'architecture et du patrimoine - APMH00008309.jpg
+PA00096872,Eglise Saint-Laurent - Sagonne - Médiathèque de l'architecture et du patrimoine - APMH00021939.jpg
+PA00096872,Eglise Saint-Laurent - Sagonne - Médiathèque de l'architecture et du patrimoine - APMH00021940.jpg
+PA00096872,Eglise Saint-Laurent - Vue intérieure du choeur - Sagonne - Médiathèque de l'architecture et du patrimoine - APMH00021718.jpg
+PA00096887,Eglise Saint-Paul - Portail de la façade ouest - Saint-Georges-de-Poisieux - Médiathèque de l'architecture et du patrimoine - APMH00021693.jpg
+PA00096964,Église Saint-Pierre-et-Saint-Paul d'Armenonville le 9 septembre 2015 - 01.jpg
+PA00096964,Église Saint-Pierre-et-Saint-Paul d'Armenonville le 9 septembre 2015 - 08.jpg
+PA00096964,Église Saint-Pierre-et-Saint-Paul d'Armenonville le 9 septembre 2015 - 12.jpg
+PA00097031,Châteaudun - police municipale (01).jpg
+PA00097035,Châteaudun - place du 18-Octobre (02).jpg
+PA00097036,Châteaudun - place du 18-Octobre (02).jpg
+PA00097036,Châteaudun - place du 18-Octobre (03).jpg
+PA00097037,Châteaudun - place du 18-Octobre (02).jpg
+PA00097037,Châteaudun - place du 18-Octobre (03).jpg
+PA00097038,Châteaudun - place du 18-Octobre (02).jpg
+PA00097038,Châteaudun - place du 18-Octobre (03).jpg
+PA00097039,Châteaudun - place du 18-Octobre (02).jpg
+PA00097039,Châteaudun - place du 18-Octobre (03).jpg
+PA00097040,Châteaudun - place du 18-Octobre (02).jpg
+PA00097040,Châteaudun - place du 18-Octobre (04).jpg
+PA00097043,Châteaudun - place du 18-Octobre (05).jpg
+PA00097044,Châteaudun - place du 18-Octobre (06).jpg
+PA00097045,Châteaudun - place du 18-Octobre (06).jpg
+PA00097046,Châteaudun - place du 18-Octobre (06).jpg
+PA00097047,Châteaudun - place du 18-Octobre (07).jpg
+PA00097048,Châteaudun - place du 18-Octobre (07).jpg
+PA00097049,Châteaudun - place du 18-Octobre (08).jpg
+PA00097050,Châteaudun - place du 18-Octobre (08).jpg
+PA00097051,Châteaudun - place du 18-Octobre (08).jpg
+PA00097052,Châteaudun - place du 18-Octobre (11).jpg
+PA00097056,Châteaudun - place du 18-Octobre (14).jpg
+PA00097056,Châteaudun - place du 18-Octobre (15).jpg
+PA00097057,Châteaudun - place du 18-Octobre (15).jpg
+PA00097058,Châteaudun - place du 18-Octobre (15).jpg
+PA00097059,Châteaudun - place du 18-Octobre (15).jpg
+PA00097060,Châteaudun - place du 18-Octobre (15).jpg
+PA00097061,Châteaudun - place du 18-Octobre (15).jpg
+PA00097160,Montigny-Le-Gannelon Porte Roland Maison des Gardes.jpg
+PA00097272,Menhir dit la Pierre Levée de Boisy ou de Bellevue - Vue d'ensemble - Saumur - Médiathèque de l'architecture et du patrimoine - APMH00004938.jpg
+PA00097327,Manoir de Marteau-2.jpg
+PA00097337,Déols - 29 rue du Pont-Perrin.jpg
+PA00097415,Dolmen dit de Chardy - Vue d'ensemble - Orsennes - Médiathèque de l'architecture et du patrimoine - APMH00004993.jpg
+PA00097456,Théâtre Argentomagus.jpg
+PA00097480,L'église de Vendœuvres.jpg
+PA00097481,Château - Cour - galerie d'arcades - Veuil - Médiathèque de l'architecture et du patrimoine - APMH00003380.jpg
+PA00097481,Château - Cour - vue intérieure de la galerie - Veuil - Médiathèque de l'architecture et du patrimoine - APMH00003379.jpg
+PA00097481,Château - Façade sur les fossés et tour d'angle - Veuil - Médiathèque de l'architecture et du patrimoine - APMH00003378.jpg
+PA00097498,Valençay - rendez-vous de chasse de la Garenne 01.jpg
+PA00097498,Valençay - rendez-vous de chasse de la Garenne 02.jpg
+PA00097498,Valençay - rendez-vous de chasse de la Garenne 03.jpg
+PA00097611,Candes-Saint-Martin maison canoniale 2-4 rue Mairie.jpg
+PA00098104,Savonnières - Manoir Plessis.jpg
+PA00098201,Tours - Rue Manceau.jpg
+PA00098382,Maison en pans de bois - Façade sur rue - Blois - Médiathèque de l'architecture et du patrimoine - APMH00004355A.jpg
+PA00098382,Maison en pans de bois - Façade sur rue - Blois - Médiathèque de l'architecture et du patrimoine - APMH00004355B.jpg
+PA00098423,Abbaye de Cornilly (ancienne) - Chapelle - Contres - Médiathèque de l'architecture et du patrimoine - APMH00010039.jpg
+PA00098423,Abbaye de Cornilly (ancienne) - Côté sud - Contres - Médiathèque de l'architecture et du patrimoine - APMH00010034.jpg
+PA00098423,Abbaye de Cornilly (ancienne) - Galerie en bois - Contres - Médiathèque de l'architecture et du patrimoine - APMH00010038.jpg
+PA00098475,"Manoir de Beauregard - Vue d'ensemble, côté tour - Méhers - Médiathèque de l'architecture et du patrimoine - APMH00001701.jpg"
+PA00098494,Fortifications de ville (vestiges) appelées les Vieilles Prisons - Vue d'ensemble - Mondoubleau - Médiathèque de l'architecture et du patrimoine - APMH00004393.jpg
+PA00098523,Château de la Morinière - Vue d'ensemble avec le pavillon d'angle - Mur-de-Sologne - Médiathèque de l'architecture et du patrimoine - APMH00004375.jpg
+PA00098535,Polissoir - Vue d'ensemble - Nourray - Médiathèque de l'architecture et du patrimoine - APMH00005013.jpg
+PA00098570,Portal of the Hotel de la Prevote in Saint-Aignan.jpg
+PA00098834,Olivet - château du Rondon.jpg
+PA00098993,Croix de cimetière - Vue d'ensemble - Puiseaux - Médiathèque de l'architecture et du patrimoine - APMH00002266.jpg
+PA00099148,Carrière romaine Cavallo.jpg
+PA00099406,EVREUX GOMEL FRAD027 6NUM 3PL1106 0045 E.jpg
+PA00099442,Guiseniers - Arche ancienne.JPG
+PA00099726,Collonges-la-rouge mairie pradigue.JPG
+PA00099739,02-23 Collonges la Rouge - maison PA00099739.jpg
+PA00099977,Drouillat - Corps de ferme.jpg
+PA00100020,Le pont roman sur la petite Creuse. Boussac.jpg
+PA00100057,Франции 16.jpg
+PA00100057,Франции 17.jpg
+PA00100057,Франции 22.jpg
+PA00100130,Dolmen de l’oppidum de châteauvieux. Juillet 2021.jpg
+PA00100130,Rocher de la Vierge. Oppidum de Châteauvieux. Décembre 2020.jpg
+PA00100308,"Maison Romanet, Eymoutiers.jpg"
+PA00100373,LIMOGES COUR DU TEMPLE (1).jpg
+PA00100373,LIMOGES COUR DU TEMPLE (2).jpg
+PA00100373,LIMOGES VERS LA COUR DU TEMPLE.jpg
+PA00100437,Sainte-Anne-Saint-Priest.jpg
+PA00100481,Tour d'Echizadour (1).jpg
+PA00100481,Tour d'Echizadour (2).jpg
+PA00100507,Chateau-pennevayre-verneuil.jpg
+PA00100532,Sépulture de François-Guillaume-Eugène CHATARD de FARGEAS - Cimetière Montmartre.jpg
+PA00100793,Chapelle Saint-Julien de Petit-Quevilly2.JPG
+PA00100902,48 rue aux Ours à Rouen. Une des rares demeures de cette rue qui ne soit pas à pans de bois.jpg
+PA00100902,48 rue aux Ours à Rouen.jpg
+PA00100903,49-51 rue aux Ours à Rouen.jpg
+PA00100911,"Immeuble 6, rue Saint-Romain.jpg"
+PA00100958,139 rue du Gros Horloge à Rouen.jpg
+PA00100958,141 rue du Gros Horloge à Rouen.jpg
+PA00100960,Rouen - rue du Gros-Horloge 03.jpg
+PA00100965,Rouen - rue du Gros-Horloge 04.jpg
+PA00101078,Bois des Moutiers 2017 04.jpg
+PA00101078,Domaine du Bois des Moutiers - Façade et jardin.jpg
+PA00101078,Le Bois des Moutiers 3.jpg
+PA00101120,ROUEN AITRE SAINT MACLOU (7) 01.jpg
+PA00101120,ROUEN AITRE SAINT MACLOU (7) 02.jpg
+PA00101253,Eglise - Abside et clocher - Marigny - Médiathèque de l'architecture et du patrimoine - APMH00027048.jpg
+PA00101253,"Eglise - Clocher, côté sud-est - Marigny - Médiathèque de l'architecture et du patrimoine - APMH00001682.jpg"
+PA00101253,Eglise - Ensemble nord-ouest - Marigny - Médiathèque de l'architecture et du patrimoine - APMH00001683.jpg
+PA00101347,Vue générale de Juillac.png
+PA00101376,"Eglise - Clocher, côté nord - Tallud (Le) - Médiathèque de l'architecture et du patrimoine - APMH00031141.jpg"
+PA00101376,"Eglise - Clocher, côté sud - Tallud (Le) - Médiathèque de l'architecture et du patrimoine - APMH00031142.jpg"
+PA00101403,Pigeonnier du Pruneau à Bessines.jpg
+PA00101415,Breuil Malicorne.JPG
+PA00101747,Maison 3 rue Saint-Martin (1).jpg
+PA00101747,Maison 3 rue Saint-Martin (2).jpg
+PA00101747,Maison 3 rue Saint-Martin (3).jpg
+PA00102033,20170807 225 salins-les-bains.jpg
+PA00102072,Crois pâté Frasne 4.jpg
+PA00102131,Tour des Annonciades Champlitte.JPG
+PA00102190,13 rue Menans in Gy (1).jpg
+PA00102190,13 rue Menans in Gy (2).jpg
+PA00102190,13 rue Menans in Gy (3).jpg
+PA00102788,Amphithéâtre gallo-romain de Narbonne001.JPG
+PA00102788,Amphithéâtre gallo-romain de Narbonne008.JPG
+PA00102788,Amphithéâtre gallo-romain de Narbonne011.JPG
+PA00104287,Chassenon Thermes Four 2012.jpg
+PA00104580,09 NAQ - Charente - Bassac (2017-05-03 11-41-11).jpg
+PA00104580,Eglise - Ensemble nord-est - Bassac - Médiathèque de l'architecture et du patrimoine - APMH00000294.jpg
+PA00104580,Eglise - Façade ouest - Bassac - Médiathèque de l'architecture et du patrimoine - APMH00000295.jpg
+PA00104726,Facade Sud bis (low).jpg
+PA00105255,Saintes (17) Maison de la Juridiction Consulaire 201.jpg
+PA00105342,Menhir dit La Pierre-Fade - Vue d'ensemble - Availles-Limouzine - Médiathèque de l'architecture et du patrimoine - APMH00004926.jpg
+PA00105399,Eglise Notre Dame - Châtellerault.JPG
+PA00105406,Eglise Saint-Pierre - Vue intérieure de la nef vers l'entrée - Chaunay - Médiathèque de l'architecture et du patrimoine - APMH00022142.jpg
+PA00105406,Eglise Saint-Pierre - Vue intérieure de la nef vers le choeur - Chaunay - Médiathèque de l'architecture et du patrimoine - APMH00022141.jpg
+PA00105496,Domaine de la Réauté - Château - Ligugé - Médiathèque de l'architecture et du patrimoine - APMH00006444.jpg
+PA00105496,Domaine de la Réauté - Château - Ligugé - Médiathèque de l'architecture et du patrimoine - APMH00006445.jpg
+PA00105496,Domaine de la Réauté - Ligugé - Médiathèque de l'architecture et du patrimoine - APMH00009094.jpg
+PA00105561,Château de la Tour-de-Naintré à Naintré le 17 juillet 2017.jpg
+PA00105606,Poitiers (86) Hôtel Berthelot - Extérieur - 01.jpg
+PA00105606,Poitiers (86) Hôtel Berthelot - Extérieur - 04.jpg
+PA00105606,Poitiers (86) Hôtel Berthelot - Extérieur - 05.jpg
+PA00105616,Hôtel des Trois-Piliers à Poitiers.jpg
+PA00105625,Hôtel de la Bidolière (ancien) ; Maison romane - Façade sur rue - Poitiers - Médiathèque de l'architecture et du patrimoine - APMH00022087.jpg
+PA00105639,15 rue Cloche-Perse à Poitiers.jpg
+PA00105655,Poitiers - Prévôté.jpg
+PA00105655,"Prévôté (ancienne) - Façade sur la rue, ensemble - Poitiers - Médiathèque de l'architecture et du patrimoine - APMH00024632.jpg"
+PA00105655,Prévôté (ancienne) - Lucarne - Poitiers - Médiathèque de l'architecture et du patrimoine - APMH00011657.jpg
+PA00105719,Maison du 15ème siècle - Façade sur rue - Sanxay - Médiathèque de l'architecture et du patrimoine - APMH00006891.jpg
+PA00105720,Maison - Façade sur rue - Sanxay - Médiathèque de l'architecture et du patrimoine - APMH00006892.jpg
+PA00105875,Polissoir de la rivière du Petit Carbet 01.jpg
+PA00105875,Polissoir de la rivière du Petit Carbet 02.jpg
+PA00105875,Roches Gravées du Site Archéologique de Trois-Rivières 03.jpg
+PA00106042,Observatoire Hablainville.jpg
+PA00106065,"Rue de l'Église, Liverdun 01.jpg"
+PA00106351,F54 Université-Pont-à-Mousson façade.jpg
+PA00106365,St Supplet ossuaire.JPG
+PA00106366,Ancien prieure Sancy.JPG
+PA00106392,Maison 30 rue Gouvion st Cyr 35650.jpg
+PA00106406,23 rue du General-Foy in Toul.jpg
+PA00106406,"Maison, 23 rue du Général-Foy, Toul - 8082.jpg"
+PA00106437,Ferme de Léomont près de Vitrimont détruite par les Allemands(Presse-Agence Rol).jpg
+PA00106437,Ruine de la ferme de Léomont près de Lunéville(Presse-Agence Rol).jpg
+PA00106495,Bazincourt-sur-Saulx (Meuse) château.jpg
+PA00106496,Rétable de l'Assomption.JPG
+PA00106546,Lavoir Lacroix Meuse.JPG
+PA00106563,Louppy-sur-Loison L’église de la Madeleine.JPG
+PA00106592,Château de Charmois - ferme fortifiée - Mouzay.jpg
+PA00106592,Mouzay-meuse-charmois-le-chateau-cpa.jpg
+PA00106639,Musée européen de la bière Conseil Général de la Meuse (extérieur).jpg
+PA00106639,Musée européen de la bière Conseil Général de la Meuse (intérieur).jpg
+PA00106690,Contrisson (Meuse) maison à pans de bois.jpg
+PA00106713,Mognéville (Meuse) maison à pans de bois A.jpg
+PA00106718,DSCN0560b.jpg
+PA00106729,Chapelle Preisch.jpg
+PA00106729,Ossuaire de Barst.jpg
+PA00106743,Chapelle cimetiere Cattenom.JPG
+PA00106753,Dolving-pont sur le Landbach-01.jpg
+PA00106753,Dolving-pont sur le Landbach-02.jpg
+PA00106774,Ossuaire de Grosbliederstroff.jpg
+PA00106780,Chapelle De Wendel Hayange.jpg
+PA00106780,Chapelle des De Wendel Hayange.jpg
+PA00106790,Insming ossuaire.JPG
+PA00106827,Metz - ancienne école royale d'artillerie.jpg
+PA00106827,Metz - école d'artillerie.JPG
+PA00106940,Phalsbourg (Moselle) Place d'Armes 06 MH.jpg
+PA00106949,Phalsbourg (Moselle) Place d'Armes 16 MH.jpg
+PA00106950,Phalsbourg (Moselle) Place d'Armes 17 MH.jpg
+PA00106951,Phalsbourg (Moselle) Place d'Armes 18 MH.jpg
+PA00106952,Phalsbourg (Moselle) Place d'Armes 19 MH.jpg
+PA00106953,Phalsbourg (Moselle) Place d'Armes 21 MH.jpg
+PA00106954,Phalsbourg (Moselle) Place d'Armes 22 MH.jpg
+PA00106955,Phalsbourg (Moselle) Place d'Armes 23-24 MH.jpg
+PA00106956,Phalsbourg (Moselle) Place d'Armes 25 MH.jpg
+PA00106957,Phalsbourg (Moselle) Place d'Armes 26 MH.jpg
+PA00106959,Phalsbourg (Moselle) Place d'Armes 27 MH.jpg
+PA00106960,Phalsbourg (Moselle) Place d'Armes 28-29 MH.jpg
+PA00106961,Phalsbourg (Moselle) Place d'Armes 28-29 MH.jpg
+PA00106962,Phalsbourg (Moselle) Place d'Armes 30 MH.jpg
+PA00106965,Phalsbourg (Moselle) Place d'Armes 31 MH.jpg
+PA00106969,F Moselle Bitche Eguelshardt border stone1 back.jpg
+PA00106969,F Moselle Bitche Eguelshardt border stone3 front back.jpg
+PA00106969,F Moselle Bitche Eguelshardt border stone3.jpg
+PA00107062,Maison du Clement.JPG
+PA00107067,Maison Bonert Hellimer.jpg
+PA00107111,PA00107111.Croix de village de Châtenois.jpg
+PA00107116,"Châtillon-sur-Saône, Maison 8 rue de l’Assaut MH.jpg"
+PA00107144,"Épinal, La Place des Vosges et la Rue du Pont (maison au n° 2).jpg"
+PA00107146,"Épinal, La Place des Vosges et la Rue du Pont (maison au n° 4).jpg"
+PA00107148,"Immeuble au n° 6 place des Vosges, Épinal.jpg"
+PA00107171,"Fréville, Croix monumentale.jpg"
+PA00107197,"Martigny-les-Bains, vestiges d'ensemble thermal.jpg"
+PA00107216,Prieuré - Porte - Neufchâteau - Médiathèque de l'architecture et du patrimoine - APMH00025035.jpg
+PA00107266,Pont de rollainville.JPG
+PA00107291,"Saint-Ouen-lès-Parey, Croix de chemin MH.jpg"
+PA00107307,"Le Val-d’Ajol, Croix de Larrière.jpg"
+PA00107308,Le Val-d'Ajol Croix de Jaranceau.png
+PA00107309,Le Val-d'Ajol Croix des chênes.png
+PA00107316,Viocourt-Croix de cimetière (détail).jpg
+PA00107316,Viocourt-Croix de cimetière.jpg
+PA00107317,"Viocourt, Croix de chemin.jpg"
+PA00107326,Théâtre de Mirecourt (Vosges).jpg
+PA00107338,They-sous-Montfort Tir aux pigeons de Vittel.png
+PA00107338,"They-sous-Montfort, Tir aux pigeons dépendant de la station thermale de Vittel.jpg"
+PA00107370,Bergues.- Ancienne gendarmerie PA00107370.jpg
+PA00107432,"Clairfayts (Nord, Fr) chapelle Huart (tN.D. de N.D de Carpe), 1853.jpg"
+PA00107434,Les tombeaux des seigneurs de Comines- Jean de la Clyte (+1443) et Jeanne de Ghistelles (1431).jpg
+PA00107439,Condé-sur-l'Escaut l'enceinte espagnole PA00107439 (2) Fotor.jpg
+PA00107439,Condé-sur-l'Escaut l'enceinte espagnole PA00107439.jpg
+PA00107448,Douai - Salles d'Anchin - 4.jpg
+PA00107448,Douai - Salles d'Anchin - 6.jpg
+PA00107448,Salle d'Anchin de Douai.jpg
+PA00107503,Eppe-Sauvage Oratoire A Notre-Dame-de-Walcourt « PA00107503.jpg
+PA00107741,Maroilles vestige de l'abbaye.jpg
+PA00107782,Ramousies Ferme de Rempsies et l'oratoire dédié à plusieurs Saints (2).jpg
+PA00107782,Ramousies Ferme de Rempsies et l'oratoire dédié à plusieurs Saints.jpg
+PA00107833,Strazeele.- Emplacement de l'ancienne motte féodale.jpg
+PA00107997,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026225.jpg
+PA00107998,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026225.jpg
+PA00108000,Immeubles - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026247.jpg
+PA00108001,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026225.jpg
+PA00108004,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026228.jpg
+PA00108005,Arras n° 8 Grand place.jpg
+PA00108006,Immeuble - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026226.jpg
+PA00108006,Immeuble - Caves - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026227.jpg
+PA00108006,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026228.jpg
+PA00108008,Immeubles - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026229.jpg
+PA00108008,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026228.jpg
+PA00108009,"Arras - immeuble, 12 Grand-Place - 20190915033019.jpg"
+PA00108009,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026230.jpg
+PA00108010,Immeubles - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026229.jpg
+PA00108011,"Arras - immeuble, 14 Grand-Place - 20190915033025.jpg"
+PA00108011,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026230.jpg
+PA00108012,Immeubles - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026229.jpg
+PA00108013,"Arras - immeuble, 16 Grand-Place - 20190915033035.jpg"
+PA00108013,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026230.jpg
+PA00108018,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026231.jpg
+PA00108018,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026232.jpg
+PA00108020,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026231.jpg
+PA00108020,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026232.jpg
+PA00108021,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026231.jpg
+PA00108021,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026232.jpg
+PA00108023,"Arras - immeuble, 28 Grand-Place - 20190915033159.jpg"
+PA00108023,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026233.jpg
+PA00108025,"Arras - immeuble, 30 Grand-Place - 20190915033202.jpg"
+PA00108025,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026233.jpg
+PA00108026,"Arras - immeuble, 30bis Grand-Place - 20190915033206.jpg"
+PA00108028,"Arras - immeuble, 32 Grand-Place - 20190915033224.jpg"
+PA00108028,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026233.jpg
+PA00108028,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026234.jpg
+PA00108029,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026235.jpg
+PA00108030,"Arras - immeuble, 34 Grand-Place - 20190915033237.jpg"
+PA00108030,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026234.jpg
+PA00108032,"Arras - immeuble, 36 Grand-Place - 20190915033259.jpg"
+PA00108032,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026234.jpg
+PA00108033,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026235.jpg
+PA00108034,"Arras - immeuble, 40 Grand-Place - 20190915033417.jpg"
+PA00108042,"Arras - immeuble, 50 Grand-Place - 20190915033513.jpg"
+PA00108044,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026237.jpg
+PA00108046,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026237.jpg
+PA00108050,Arras immeubles de la Grand Place n° 55 à 61.jpg
+PA00108050,Arras immeubles de la Grand'Place du n° 55 au 61.jpg
+PA00108052,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026239.jpg
+PA00108052,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026240.jpg
+PA00108054,ARRAS (2) GRAND PLACE 3.jpg
+PA00108054,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026239.jpg
+PA00108054,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026240.jpg
+PA00108056,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026239.jpg
+PA00108056,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026240.jpg
+PA00108057,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026239.jpg
+PA00108057,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026240.jpg
+PA00108058,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026239.jpg
+PA00108058,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026240.jpg
+PA00108079,ARRAS (6).jpg
+PA00108081,Immeubles - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026249.jpg
+PA00108083,Immeubles - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026249.jpg
+PA00108085,Immeubles - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026249.jpg
+PA00108085,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026250.jpg
+PA00108089,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026250.jpg
+PA00108091,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026250.jpg
+PA00108110,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026252.jpg
+PA00108112,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026253.jpg
+PA00108112,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026254.jpg
+PA00108114,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026253.jpg
+PA00108114,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026254.jpg
+PA00108115,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026253.jpg
+PA00108115,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026254.jpg
+PA00108116,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026254.jpg
+PA00108117,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026254.jpg
+PA00108118,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026255.jpg
+PA00108120,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026255.jpg
+PA00108121,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026256.jpg
+PA00108121,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026255.jpg
+PA00108122,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026256.jpg
+PA00108123,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026256.jpg
+PA00108124,Immeubles - De droite à gauche - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026256.jpg
+PA00108125,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026257.jpg
+PA00108126,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026257.jpg
+PA00108139,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026241.jpg
+PA00108140,Immeubles - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026242.jpg
+PA00108140,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026243.jpg
+PA00108141,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026241.jpg
+PA00108142,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026243.jpg
+PA00108142,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026244.jpg
+PA00108144,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026244.jpg
+PA00108144,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026246.jpg
+PA00108147,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026246.jpg
+PA00108150,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026245.jpg
+PA00108151,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026246.jpg
+PA00108152,Immeubles - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026247.jpg
+PA00108152,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026245.jpg
+PA00108153,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026246.jpg
+PA00108155,Immeubles - De gauche à droite - Arras - Médiathèque de l'architecture et du patrimoine - APMH00026246.jpg
+PA00108245,Beffroi - Musée du Beffroi - crypte souterraine sous l'emplacement du Beffroi - caves voûtées aménagées en musée - Calais - Médiathèque de l'architecture et du patrimoine - APDU000362.jpg
+PA00108245,Beffroi - Vue du beffroi et du Musée - Calais - Médiathèque de l'architecture et du patrimoine - APDU000378.jpg
+PA00108245,"Grande Place - le Beffroi, le Musée et la Tour des Guetteurs - Calais - Médiathèque de l'architecture et du patrimoine - APDU000381.jpg"
+PA00108390,Saint-Amand - Médiathèque de l'architecture et du patrimoine - APZ0008406.jpg
+PA00108400,Saint-Martin-Boulogne - Ferme de Moulin-l'Abbé dit Manoir des Abbés de Notre-Dame-de-Boulogne - Bas-relief au-dessus d'une porte - Médiathèque de l'architecture et du patrimoine - APMH00013180.jpg
+PA00108400,Saint-Martin-Boulogne - Manoir des abbés de Notre-Dame-de-Boulogne - Bâtiment principal - Pignon et tourelle - Médiathèque de l'architecture et du patrimoine - APMH00029103.jpg
+PA00108400,Saint-Martin-Boulogne - Manoir des abbés de Notre-Dame-de-Boulogne - Bâtiment principal- pignon et tourelle - Médiathèque de l'architecture et du patrimoine - APMH00029104.jpg
+PA00108964,Prieuré d'Avrillé (ancien) - Beaufort - Médiathèque de l'architecture et du patrimoine - APMH00009929.jpg
+PA00109064,Menhir dit La Pierre des Hommes - Ensemble nord-est - Coron - Médiathèque de l'architecture et du patrimoine - APMH00004968.jpg
+PA00109064,Menhir dit La Pierre des Hommes - Ensemble sud-est - Coron - Médiathèque de l'architecture et du patrimoine - APMH00004967.jpg
+PA00109082,"Château de Pocé - Châtelet, côté sud - Distré - Médiathèque de l'architecture et du patrimoine - APMH00001004.jpg"
+PA00109082,Château de Pocé - Vue d'ensemble - Distré - Médiathèque de l'architecture et du patrimoine - APMH00001003.jpg
+PA00109105,Château de la Tour-du-Pin (restes) - Fontaine-Guérin - Médiathèque de l'architecture et du patrimoine - APMH00010025.jpg
+PA00109113,Fontevraud-l'Abbaye - 4 place des Plantagenêts 01.jpg
+PA00109113,Fontevraud-l'Abbaye - 4 place des Plantagenêts 02.jpg
+PA00109113,Fontevraud-l'Abbaye - 4 place des Plantagenêts 03.jpg
+PA00109314,Dolmen dit La Petite Pierre Couverte - Vue d'ensemble - Saumur - Médiathèque de l'architecture et du patrimoine - APMH00007514.jpg
+PA00109314,Dolmen dit la Petite Pierre Couverte - Vue d'ensemble - Saumur - Médiathèque de l'architecture et du patrimoine - APMH00004939.jpg
+PA00109335,"Saumur (49) Maison, 6 rue Basse Saint-Pierre - Extérieur - 01.jpg"
+PA00109335,"Saumur (49) Maison, 6 rue Basse Saint-Pierre - Extérieur - 02.jpg"
+PA00109541,Laval - maison du Coq-Hardy 01.jpg
+PA00109541,Laval - maison du Pou-Volant 01.jpg
+PA00109541,Laval - maison du Pou-Volant 03.jpg
+PA00109551,FrancePaysDeLaLoireLavalPresbytereHotelBoulain.jpg
+PA00109551,Laval - presbytère Saint-Vénérand 01.jpg
+PA00109551,Laval - presbytère Saint-Vénérand 02.jpg
+PA00109592,Coudray lever de soleil.jpg
+PA00109709,Logis Graslin.jpg
+PA00110011,Château de la Chéronne.jpg
+PA00110364,Cherbourg - Abbaye du Voeu (2).JPG
+PA00110364,Cherbourg - Abbaye du Voeu (3).JPG
+PA00110364,Cherbourg - Abbaye du Voeu (4).JPG
+PA00110675,Jardin botanique du château de Vauville 3.JPG
+PA00110675,Jardin botanique du château de Vauville.JPG
+PA00110675,JardinVauville-GrandEspace.JPG
+PA00110867,FranceNormandieMortagneAuPercheMaisonATourelle.jpg
+PA00110867,Un coin de la place Notre-Dame à Mortagne-au-Perche.jpg
+PA00110868,Maison des comtes du perche.jpg
+PA00112087,Maison - Façade sur rue - Auxonne - Médiathèque de l'architecture et du patrimoine - APMH00019903.jpg
+PA00112261,College des GODRANS.jpg
+PA00112261,Collège des Godrans (ancien) ; Ecole de droit (ancienne) - Dijon - Médiathèque de l'architecture et du patrimoine - APMH00019478.jpg
+PA00112261,Collège des Godrans La Porte 03.jpg
+PA00112337,Dijon Hotel 5 rue Vaillant.jpg
+PA00112337,Hôtel 5ter rue Vaillant à Dijon.JPG
