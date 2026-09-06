@@ -60,12 +60,17 @@
     type: 'FeatureCollection',
     features: []
   });
-  let facettes = $state<Partial<Record<FacetKey, Compte[]>>>({});
-  let barresSiecles = $state<BarreSiecle[]>([]);
-  let barresAnnees = $state<BarreAnnee[]>([]);
-  let cardinaux = $state<Partial<Record<FacetKey, number>>>({});
-  let compteurs = $state<Totaux | null>(null);
-  let resultats = $state<Ligne[]>([]);
+  // Meme regle que `pointsCarte` ci-dessus, et pour la meme raison : ces six
+  // valeurs sont reaffectees en bloc a chaque cycle et jamais modifiees en
+  // place. En `$state`, Svelte posait des proxies recursifs sur les huit
+  // listes de facettes, les 200 lignes de resultats et les 186 barres
+  // d'annees, a chaque frappe, pour une reactivite dont personne ne se sert.
+  let facettes = $state.raw<Partial<Record<FacetKey, Compte[]>>>({});
+  let barresSiecles = $state.raw<BarreSiecle[]>([]);
+  let barresAnnees = $state.raw<BarreAnnee[]>([]);
+  let cardinaux = $state.raw<Partial<Record<FacetKey, number>>>({});
+  let compteurs = $state.raw<Totaux | null>(null);
+  let resultats = $state.raw<Ligne[]>([]);
   // L'URL est lue avant le premier cycle de requetes : un lien partage ne doit
   // pas provoquer un aller-retour « corpus complet puis filtre ».
   const initial = decoder(browser ? location.search : '');
@@ -79,7 +84,7 @@
   // ecrit l'URL, et le fond en fait partie. Son opacite, elle, reste dans le
   // composant — dosage de lecture, pas etat d'exploration.
   let fond = $state<FondHistorique | null>(initial.fond);
-  let croisement = $state<DonneesMatrice>({ cellules: [], ecartees: 0 });
+  let croisement = $state.raw<DonneesMatrice>({ cellules: [], ecartees: 0 });
   let terme = $state(initial.filtres.texte || initial.filtres.recherche);
 
   // Cible de la saisie. Les deux recherches s'excluent : `search_key` est
@@ -145,43 +150,96 @@
   const signature = $derived(JSON.stringify(filters));
 
   let jeton = 0;
+  let jetonFacettes = 0;
+  let jetonFrise = 0;
+  let jetonMatrice = 0;
 
+  /** Un echec n'est signale que s'il concerne encore le cycle en cours. */
+  function echec(vivant: () => boolean) {
+    return (e: unknown) => {
+      if (!vivant()) return;
+      erreur = e instanceof Error ? e.message : String(e);
+      chargement = false;
+    };
+  }
+
+  // Le nuage de points est le seul resultat que l'oeil suit en continu. Il
+  // partait dans le meme `Promise.all` que les facettes et les cardinalites :
+  // repondant en 12 ms, il attendait quand meme le maillon le plus lent du lot,
+  // les huit requetes partageant une connexion unique et donc s'y serialisant.
+  // Il a desormais son propre aller-retour et s'affiche des qu'il repond.
   $effect(() => {
     signature;
-    // La matrice croise monuments et protections : elle ne se calcule que
-    // lorsqu'elle est a l'ecran.
-    const veutMatrice = vue === 'matrice';
     const mien = ++jeton;
     chargement = true;
-    Promise.all([
-      points(filters),
-      totaux(filters),
-      histogrammeSiecles(filters),
-      histogrammeProtections(filters),
-      liste(filters),
-      Promise.all(FACETTES.map((cle) => facette(filters, cle))),
-      cardinalites(filters),
-      veutMatrice ? matrice(filters) : Promise.resolve(croisement)
-    ])
-      .then(([pts, tot, sie, ann, lst, fac, card, mat]) => {
-        // Une requete lente ne doit jamais ecraser un resultat plus recent.
+    points(filters)
+      .then((pts) => {
         if (mien !== jeton) return;
         pointsCarte = pts;
+      })
+      .catch(echec(() => mien === jeton));
+    Promise.all([totaux(filters), liste(filters)])
+      .then(([tot, lst]) => {
+        if (mien !== jeton) return;
         compteurs = tot;
-        barresSiecles = sie;
-        barresAnnees = ann;
         resultats = lst;
-        facettes = Object.fromEntries(FACETTES.map((cle, i) => [cle, fac[i]]));
-        cardinaux = card;
-        croisement = mat;
         erreur = null;
         chargement = false;
       })
-      .catch((e) => {
-        if (mien !== jeton) return;
-        erreur = e instanceof Error ? e.message : String(e);
-        chargement = false;
-      });
+      .catch(echec(() => mien === jeton));
+  });
+
+  // Les facettes et leurs cardinalites alimentent un tiroir repliable, ferme
+  // par defaut sous 900 px : neuf requetes sur quatorze partaient pour un
+  // panneau que personne ne regarde. L'effet depend de `facettesOuvertes`,
+  // donc ouvrir le tiroir le rejoue — rien ne s'affiche perime.
+  $effect(() => {
+    signature;
+    if (!facettesOuvertes) return;
+    const mien = ++jetonFacettes;
+    Promise.all([
+      Promise.all(FACETTES.map((cle) => facette(filters, cle))),
+      cardinalites(filters)
+    ])
+      .then(([fac, card]) => {
+        if (mien !== jetonFacettes) return;
+        facettes = Object.fromEntries(FACETTES.map((cle, i) => [cle, fac[i]]));
+        cardinaux = card;
+      })
+      .catch(echec(() => mien === jetonFacettes));
+  });
+
+  // Meme regle pour la frise, repliable a toutes les largeurs et fermee au
+  // premier ecran sur telephone.
+  $effect(() => {
+    signature;
+    if (!friseOuverte) return;
+    const mien = ++jetonFrise;
+    Promise.all([histogrammeSiecles(filters), histogrammeProtections(filters)])
+      .then(([sie, ann]) => {
+        if (mien !== jetonFrise) return;
+        barresSiecles = sie;
+        barresAnnees = ann;
+      })
+      .catch(echec(() => mien === jetonFrise));
+  });
+
+  // `vue` etait lu dans le corps de l'effet principal, ce qui en faisait une
+  // dependance de l'effet **entier** : basculer carte -> liste relancait les
+  // quatorze requetes sans qu'aucun filtre ait bouge. La matrice a donc son
+  // propre effet, le seul a dependre de `vue`. Il ne lit plus `croisement` non
+  // plus — l'ancien `Promise.resolve(croisement)` faisait de l'effet principal
+  // un lecteur de ce qu'il ecrivait lui-meme.
+  $effect(() => {
+    signature;
+    if (vue !== 'matrice') return;
+    const mien = ++jetonMatrice;
+    matrice(filters)
+      .then((m) => {
+        if (mien !== jetonMatrice) return;
+        croisement = m;
+      })
+      .catch(echec(() => mien === jetonMatrice));
   });
 
   // --- Permalien -----------------------------------------------------------
@@ -564,7 +622,13 @@
   .app {
     display: flex;
     flex-direction: column;
+    /* `100vh` compte la bande que la barre d'adresse mobile recouvre : au
+       repli de celle-ci pendant un defilement, la scene changeait de hauteur,
+       ce qui redimensionnait le canevas et reconstruisait les deux frises.
+       `dvh` suit la hauteur reellement visible ; `vh` reste en repli pour les
+       navigateurs qui ne la connaissent pas. */
     height: 100vh;
+    height: 100dvh;
   }
 
   /* Une rangee qui s'enroule, pas une grille a colonnes fixes : les compteurs
@@ -961,6 +1025,10 @@
     inset: 0;
     z-index: 3;
     overflow-y: auto;
+    /* Sans cela, tirer vers le bas en haut de la liste remonte au navigateur
+       et declenche le pull-to-refresh : rechargement complet du wasm et perte
+       de l'exploration en cours. */
+    overscroll-behavior: contain;
     background: var(--fond);
   }
 

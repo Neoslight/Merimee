@@ -256,6 +256,32 @@ filtre serré. Conséquence pour le smoke test — le total d'un petit résultat
 celui du gros, et la comparaison des deux régimes porte donc sur `collection`, seul poste
 qui suive le volume.
 
+**Le `setData` qui suit un `setStyle` a l'air gratuit. Il ne l'est pas.** L'effet qui
+pose les points lit `pret`, donc se rejoue après chaque bascule de thème et repose des
+points que `poserCouches()` vient de poser — 15 ms en apparence perdues. **Ne pas les
+économiser.** Mesuré : avec un garde `points === dernierNuagePosé`, la source GeoJSON
+reste sur le chargement pendant ouvert par `addSource` ; deux bascules rapprochées la
+retirent en plein vol et MapLibre remonte `AbortError: signal is aborted without reason`
+en console. Le `setData` redondant, lui, supersède ce chargement et l'annulation reste
+interne. **Trois vérifications tombent sans lui** — dont `deux bascules rapides ne
+laissent qu un style`, écrite exactement pour ce cas.
+
+**`liseret()` a son propre effet, et c'est le seul endroit tenable.** Il croise le fond
+posé (`fond`, `opaciteFond`) et la palette : le loger dans l'un des deux effets voisins
+fait chaque fois du tort. Dans celui de la **palette**, chaque pas du curseur d'opacité
+du fond historique devenait déclencheur de deux `circle-color` **data-driven** sur
+44 484 points, pour une couleur inchangée — une saccade pendant l'interaction. Dans
+celui des **fonds**, la palette devenait dépendance, et une bascule de thème rejouait
+`setLayoutProperty` sur les couches raster : les tuiles repartaient, le `setStyle`
+suivant les annulait, et l'`AbortError` ci-dessus remontait. Seul, il ne pose qu'une
+couleur scalaire.
+
+**`pixelRatio` est plafonné à 2.** Sans l'option, MapLibre suit `devicePixelRatio` : sur
+un téléphone à 3x le canevas compose **neuf fois** les pixels CSS à chaque image de
+déplacement, pour 44 484 cercles à liseré. L'écart visible est marginal, le fill-rate
+économisé ne l'est pas. Invisible en test — Chromium sans tête annonce un ratio de 1,
+comme il annonce `prefers-color-scheme: light`.
+
 ## Règles de conception
 
 **Colonnes `LIST` plutôt que tables de liaison.** Domaines, siècles, dénominations,
@@ -618,7 +644,59 @@ referme. `decoder` valide toute valeur : l'URL est éditable à la main et ses c
 finissent dans `lit()`.
 
 **Un jeton monotone annule les résultats obsolètes** dans `+page.svelte` : une
-requête lente ne doit jamais écraser une plus récente.
+requête lente ne doit jamais écraser une plus récente. Il **écarte le résultat, il ne
+retire pas le travail** : le moteur a déjà payé la requête quand on jette sa réponse.
+C'est pourquoi tout ce qui suit vise à ne pas l'émettre, jamais à l'annuler —
+`cancelSent()` existe sur la connexion, mais avec un `Promise.all` en vol il coupe
+aussi bien la requête périmée que celle qui vient de partir.
+
+**Le cycle de requêtes est éclaté en quatre effets, et le découpage suit ce que l'œil
+regarde.** Les quatorze requêtes partaient dans un seul `Promise.all`, dont un seul
+`.then` affectait tout. Quatre conséquences, toutes corrigées ensemble :
+
+- **le nuage de points a son propre aller-retour.** Il répond en 12 ms mais attendait le
+  maillon le plus lent du lot, les requêtes partageant une connexion unique et s'y
+  sérialisant. C'est le seul résultat que l'œil suit en continu ;
+- **les facettes et leurs cardinalités sont conditionnées à `facettesOuvertes`**, les
+  deux histogrammes à `friseOuverte`. Sous 900 px les deux panneaux sont fermés au
+  premier écran : neuf requêtes sur quatorze partaient pour un DOM que personne ne
+  regarde. L'effet **dépend** de l'état d'ouverture, donc ouvrir le panneau le rejoue —
+  rien ne s'affiche périmé, et aucun rafraîchissement explicite n'est à écrire ;
+- **`vue` ne déclenche plus que la matrice.** Il était lu dans le corps de l'effet
+  principal, ce qui en faisait une dépendance de l'effet **entier** : basculer carte →
+  liste relançait les quatorze requêtes sans qu'aucun filtre ait bougé. Au passage,
+  l'ancien `Promise.resolve(croisement)` faisait de cet effet un lecteur de ce qu'il
+  écrivait lui-même ;
+- **six états sont passés en `$state.raw`** — `facettes`, `barresSiecles`,
+  `barresAnnees`, `cardinaux`, `compteurs`, `resultats` — pour la raison déjà écrite au
+  dessus de `pointsCarte` : réaffectés en bloc, jamais mutés en place.
+
+Mesuré de la frappe jusqu'au compteur, six termes, médiane : **téléphone 276 → 218 ms,
+bureau 284 → 215 ms**. Les 180 ms de débounce étant constantes des deux côtés, le
+travail réel passe de **96 → 38 ms** et de **104 → 35 ms**.
+
+**Le curseur Palissy était le seul filtre lié directement à `filters`.** Un
+`<input type="range">` émet `input` à **chaque pas franchi** : un glissement de 0 à 500
+par pas de 10 pouvait empiler cinquante cycles complets sur la connexion unique. Il
+écrit donc dans un état local — affiché sans délai — qui ne descend dans `filters`
+qu'après 180 ms, le même délai que la recherche et la recherche de facette. Le second
+effet, qui recopie `filters` vers la poignée, existe pour `reset()` et le retrait de la
+puce ; il lit `filters` sous `untrack`, sinon l'écriture différée rejouerait l'effet qui
+l'a produite.
+
+**Trois défauts mobiles n'ont rien à voir avec les requêtes.** Ils se tenaient et se
+corrigent ensemble :
+
+- **`height: 100dvh`, avec `100vh` en repli.** `vh` compte la bande que la barre
+  d'adresse recouvre : à son repli pendant un défilement, la scène changeait de hauteur,
+  ce qui redimensionnait le canevas WebGL **et** reconstruisait les graphiques Plot ;
+- **`overscroll-behavior: contain`** sur les quatre conteneurs défilants — liste, tiroir
+  de facettes, sa liste d'options imbriquée, fiche. Sans lui, tirer vers le bas en haut
+  de l'un d'eux remonte au navigateur et déclenche le pull-to-refresh : **rechargement
+  complet du wasm et perte de l'exploration en cours** ;
+- **le `ResizeObserver` de la frise et celui de la matrice ne retiennent qu'une mesure
+  par image.** Chaque mesure retenue reconstruit intégralement le graphique
+  (`Plot.plot()` puis `replaceChildren`), pas seulement son échelle.
 
 **La matrice retire un filtre par axe.** `buildWhere` accepte une liste de clés
 à exclure ; `matrice()` en passe deux (`siecles`, `anneeProtection`), sinon
@@ -767,6 +845,41 @@ mesurée), pas le *quoi*.
 
 ## Reste à faire
 
+- **Observable Plot en chargement différé.** Mesuré sur le build : le nœud de page est
+  un chunk **unique de 1,33 Mo / 378 Ko gzip** qui porte MapLibre, Plot et Arrow
+  ensemble, et **aucun `import()` dynamique n'existe dans `web/src`**. Tout part avant
+  que `boot()` puisse commencer. Plot pèse 209 Ko minifié (~65 Ko gzip) et n'est utile
+  qu'à la frise et à la matrice — or la frise est **fermée par défaut sous 900 px**.
+  Le sortir du chemin critique demande de charger `Timeline` et `Matrice` derrière un
+  `import()`, avec le clignotement que cela suppose à la première ouverture. Ne pas s'y
+  mettre sans mesurer l'amorçage avant/après : le poste dominant reste le wasm.
+- **Le wasm n'est découvrable qu'après exécution du JS.** `duckdb.ts` l'importe en
+  `?url` : le scanner de préchargement du navigateur ne voit jamais les 7,5 Mo gzip, qui
+  font donc la queue derrière le téléchargement **et le parse** du chunk ci-dessus, au
+  lieu de se recouvrir avec lui. Un `<link rel="preload" as="fetch" crossorigin>` le
+  corrigerait, mais le nom est haché : cela demande un script d'après-build.
+- **Colonnes mortes dans les Parquet.** Jamais lues par le navigateur (vérifié par
+  grep) : `cog` (106 Ko), `annee_premiere_protection` et `annee_derniere_protection`
+  (71 Ko), `siecle_min` (25 Ko), `techniques_decor` (21 Ko), `zones_protection`,
+  `nb_protections`, `departement`, `typologie_dossier` — **239 Ko, soit 10 % de
+  `monuments.parquet`**, plus `statut` et `partiel` dans `protections.parquet` (9 Ko) et
+  `cadre_etude` dans les fragments. Le fichier étant la seule granularité de
+  chargement, ces octets sont payés à chaque premier écran. Les retirer se fait dans
+  `MONUMENTS_SCHEMA` / `PROTECTIONS_SCHEMA`, pas dans le `SELECT` du navigateur — et
+  demande de vérifier qu'aucune assertion de `test_pipeline.py` ne les vise.
+- **Le prédicat plein texte est réinjecté dans chaque requête du cycle.**
+  `clauseTexte()` est inliné tel quel par `buildWhere()` : le scan `postings` + jointure
+  `docs` + `GROUP BY/HAVING` est refait par chaque requête, en mono-thread, sur une
+  connexion unique. Le résoudre une fois par cycle dans une table temporaire plafonnée à
+  24 819 lignes devrait le rendre négligeable. **À instrumenter avant de corriger** :
+  `mesures.svelte.ts` ne couvre aujourd'hui que la chaîne des points.
+- **Cibles tactiles sous 44 px** sur les commandes les plus manipulées au doigt :
+  pastilles de la fiche et bascule de thème à 34 px, croix du tiroir à 30 px, croix de
+  la frise à 26 px. C'est un arbitrage avec la densité voulue du produit, pas un
+  oubli — d'où le renvoi ici plutôt qu'une correction silencieuse.
+- **Les `:hover` s'appliquent au tactile et y restent collés** jusqu'au tap suivant, sur
+  les pilules de facette et les puces de filtres notamment. Les envelopper dans
+  `@media (hover: hover) and (pointer: fine)` les rendrait au pointeur seul.
 - Export CSV de la sélection courante, et liste paginée au-delà des 200 lignes.
 - Filtres « figures » préréglés (Vauban, Guimard, Le Corbusier) en un clic, au-dessus
   de la facette auteurs existante. Devenus de simples liens depuis les permaliens.

@@ -382,6 +382,11 @@
       // pastille « i » se posait sur la legende. La fiche, qui l'en avait
       // chassee, ne la recouvre plus — `--marge-droite` l'ecarte.
       attributionControl: false,
+      // Sans plafond, MapLibre suit `devicePixelRatio` : sur un telephone a 3x,
+      // le canevas compose neuf fois les pixels CSS a chaque image de
+      // deplacement, pour 44 484 cercles a lisere. Deux suffisent — l'ecart
+      // visible est marginal, le fill-rate economise ne l'est pas.
+      pixelRatio: Math.min(window.devicePixelRatio ?? 1, 2),
       // La rotation n'apporte rien a une carte de points et transforme le
       // moindre glissement a deux doigts en desorientation sur telephone.
       dragRotate: false,
@@ -434,6 +439,17 @@
 
   // Les points arrivent apres chaque changement de filtre : `setData` suffit,
   // la couche et son style restent en place.
+  //
+  // `pret` etant une dependance, cet effet se rejoue aussi apres chaque
+  // `setStyle`, et repose alors des points que `poserCouches` vient de poser :
+  // 15 ms de `setData` en apparence gratuites. **Ne pas les economiser.**
+  // Mesure : avec un garde `points === dernierNuagePose`, la source reste sur
+  // le chargement pendant ouvert par `addSource` ; deux bascules de theme
+  // rapprochees la retirent en plein vol et MapLibre remonte
+  // « AbortError: signal is aborted without reason » en console. Le `setData`
+  // redondant, lui, supersede ce chargement et l'annulation reste interne.
+  // Trois verifications tombent sans lui — dont `deux bascules rapides ne
+  // laissent qu un style`, ecrite exactement pour ce cas.
   $effect(() => {
     const source = pret ? (carte?.getSource('monuments') as maplibregl.GeoJSONSource) : null;
     if (!source) return;
@@ -470,8 +486,20 @@
       carte.setLayoutProperty(`fond-${h.cle}`, 'visibility', fond === h.cle ? 'visible' : 'none');
       carte.setPaintProperty(`fond-${h.cle}`, 'raster-opacity', opaciteFond / 100);
     }
-    // Le lisere clair des points s'efface sur un aplat beige : il bascule au
-    // sombre des que la carte ancienne l'emporte.
+  });
+
+  // Le lisere clair des points s'efface sur un aplat beige : il bascule au
+  // sombre des que la carte ancienne l'emporte. Il a son propre effet, et ce
+  // n'est pas un rangement : `liseret()` croise le fond pose et la palette, or
+  // le loger dans l'un des deux autres effets fait chaque fois du tort.
+  // Dans celui de la palette, le curseur d'opacite du fond devenait
+  // declencheur de deux `circle-color` **data-driven** sur 44 484 points.
+  // Dans celui des fonds, la palette devenait dependance, et une bascule de
+  // theme rejouait `setLayoutProperty` sur les couches raster : les tuiles
+  // repartaient, le `setStyle` suivant les annulait, et l'AbortError
+  // remontait en console. Seul, il ne pose qu'une couleur scalaire.
+  $effect(() => {
+    if (!pret || !carte) return;
     carte.setPaintProperty('monuments-points', 'circle-stroke-color', liseret());
   });
 
@@ -500,7 +528,11 @@
     carte.setPaintProperty('monuments-points', 'circle-color', expression);
     carte.setPaintProperty('monuments-halo', 'circle-color', expression);
     carte.setPaintProperty('monuments-halo', 'circle-opacity', opaciteHalo());
-    carte.setPaintProperty('monuments-points', 'circle-stroke-color', liseret());
+    // `liseret()` n'est pas appele ici : il lit `fond` et `opaciteFond`, ce qui
+    // faisait de chaque pas du curseur d'opacite un declencheur de cet effet —
+    // donc deux `circle-color` **data-driven** reecrits sur 44 484 points, pour
+    // une couleur inchangee. Il vit dans l'effet des fonds historiques, qui
+    // porte deja ces deux dependances.
     carte.setPaintProperty('monuments-selection', 'circle-stroke-color', palette.carteSelection);
     carte.setPaintProperty('monuments-densite', 'heatmap-color', rampeChaleur());
     etatCarte.chaleurHaute = palette.chaleur4;

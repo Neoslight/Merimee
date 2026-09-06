@@ -445,6 +445,9 @@
 <style>
   .fiche {
     overflow-y: auto;
+    /* En feuille du bas sur telephone, la fiche est une modale : son geste de
+       defilement ne remonte pas a la page. */
+    overscroll-behavior: contain;
     background: var(--fond-carte);
     padding: 0 0 8px;
   }

@@ -293,6 +293,16 @@ input {
   font-family: inherit;
 }
 
+button,
+a {
+  /* Le rectangle de surbrillance au tap deborde des pilules et des pastilles
+     rondes : les etats `:active` et `:focus-visible` portent deja le retour.
+     `manipulation` retire le delai de 300 ms et empeche qu'un double-tap sur
+     une grille d'options dense soit lu comme un zoom. */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
 a {
   color: var(--accent);
   text-decoration: none;

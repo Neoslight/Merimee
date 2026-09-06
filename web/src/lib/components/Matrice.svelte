@@ -18,13 +18,26 @@
   let largeur = $state(900);
   let hauteur = $state(460);
 
+  // Cf. `Timeline` : chaque mesure retenue reconstruit les ~410 marques SVG de
+  // la matrice. Celle-ci suit aussi la **hauteur**, donc tout ce qui fait
+  // varier la scene la redessine — on n'en retient qu'une mesure par image.
   $effect(() => {
+    let trame = 0;
     const observateur = new ResizeObserver(([entree]) => {
-      largeur = Math.max(420, entree.contentRect.width);
-      hauteur = Math.max(280, entree.contentRect.height);
+      const l = Math.max(420, entree.contentRect.width);
+      const h = Math.max(280, entree.contentRect.height);
+      if (trame) cancelAnimationFrame(trame);
+      trame = requestAnimationFrame(() => {
+        trame = 0;
+        largeur = l;
+        hauteur = h;
+      });
     });
     observateur.observe(boite);
-    return () => observateur.disconnect();
+    return () => {
+      if (trame) cancelAnimationFrame(trame);
+      observateur.disconnect();
+    };
   });
 
   // Une cellule deja retenue par les filtres courants : elle est cerclee plutot

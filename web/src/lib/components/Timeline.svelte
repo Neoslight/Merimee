@@ -52,17 +52,34 @@
   let bornesSiecle: ((siecle: number) => { gauche: number; largeur: number } | null) | null =
     null;
 
+  // Chaque mesure retenue reconstruit integralement le graphique Plot
+  // (`Plot.plot()` puis `replaceChildren`), pas seulement son echelle. Un
+  // redimensionnement de fenetre en glisse continue, ou l'ouverture d'un
+  // panneau qui rogne la piste, emet une rafale de notifications : on n'en
+  // retient qu'une par image.
   $effect(() => {
+    let trame = 0;
+    let siecles: number | null = null;
+    let annees: number | null = null;
     const observateur = new ResizeObserver((entrees) => {
       for (const entree of entrees) {
         const mesure = Math.max(320, entree.contentRect.width);
-        if (entree.target === boiteSiecles) largeurSiecles = mesure;
-        else largeurAnnees = mesure;
+        if (entree.target === boiteSiecles) siecles = mesure;
+        else annees = mesure;
       }
+      if (trame) return;
+      trame = requestAnimationFrame(() => {
+        trame = 0;
+        if (siecles !== null) largeurSiecles = siecles;
+        if (annees !== null) largeurAnnees = annees;
+      });
     });
     observateur.observe(boiteSiecles);
     observateur.observe(boiteAnnees);
-    return () => observateur.disconnect();
+    return () => {
+      if (trame) cancelAnimationFrame(trame);
+      observateur.disconnect();
+    };
   });
 
   // Axe 1 : epoque de construction. Clic = bascule d'un siecle, glissement =

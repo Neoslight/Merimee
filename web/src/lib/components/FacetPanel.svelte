@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { facette, type Compte } from '$lib/db/queries';
   import { filters, toggle, type FacetKey } from '$lib/state/filters.svelte';
 
@@ -79,6 +80,30 @@
     return () => clearTimeout(minuteur);
   });
 
+  // Le curseur Palissy etait le seul filtre du produit lie directement a
+  // `filters`. Un `<input type="range">` emet `input` a chaque pas franchi :
+  // un glissement de 0 a 500 par pas de 10 pouvait empiler cinquante cycles de
+  // requetes sur la connexion unique, que le jeton monotone ecarte a
+  // l'affichage mais dont le moteur paie chaque execution. Il ecrit donc dans
+  // un etat local — affiche sans delai — qui ne descend dans `filters` qu'apres
+  // 180 ms, le meme delai que la recherche de facette ci-dessus.
+  let nbPalissyLocal = $state(filters.nbPalissy);
+
+  $effect(() => {
+    const vise = nbPalissyLocal;
+    // `filters` est lu hors dependance : sans cela l'ecriture differee
+    // rejouerait l'effet qui l'a produite.
+    if (vise === untrack(() => filters.nbPalissy)) return;
+    const minuteur = setTimeout(() => (filters.nbPalissy = vise), 180);
+    return () => clearTimeout(minuteur);
+  });
+
+  // `reset()` et le retrait de la puce ecrivent dans `filters` sans passer par
+  // le curseur : la poignee doit les suivre.
+  $effect(() => {
+    nbPalissyLocal = filters.nbPalissy;
+  });
+
   function basculerSection(cle: FacetKey) {
     const suivant = new Set(ouvertes);
     if (suivant.has(cle)) suivant.delete(cle);
@@ -157,7 +182,7 @@
   <section class="palissy">
     <label for="palissy">
       Mobilier Palissy associé
-      <em>{filters.nbPalissy > 0 ? `≥ ${filters.nbPalissy}` : 'tous'}</em>
+      <em>{nbPalissyLocal > 0 ? `≥ ${nbPalissyLocal}` : 'tous'}</em>
     </label>
     <input
       id="palissy"
@@ -165,7 +190,7 @@
       min="0"
       max="500"
       step="10"
-      bind:value={filters.nbPalissy}
+      bind:value={nbPalissyLocal}
     />
     <p>Isoler les édifices qui abritent un grand nombre d'objets classés.</p>
   </section>
@@ -174,6 +199,8 @@
 <style>
   .panneau {
     overflow-y: auto;
+    /* Cf. `.liste` : un tiroir modal ne rend pas son geste a la page. */
+    overscroll-behavior: contain;
     background: var(--fond-carte);
     padding: 4px 22px 28px;
     transition: opacity var(--t-rapide);
@@ -283,6 +310,9 @@
     padding: 0;
     max-height: 268px;
     overflow-y: auto;
+    /* Liste defilante imbriquee dans `.panneau`, lui-meme defilant : sans
+       confinement, arriver au bout de l'une passe le geste a l'autre. */
+    overscroll-behavior: contain;
   }
 
   .option {
