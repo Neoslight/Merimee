@@ -41,6 +41,7 @@
     type Vue,
     type VueCarte
   } from '$lib/state/permalien';
+  import { charger, indexTexte, preparer } from '$lib/state/texte.svelte';
   import { appliquer, basculer, theme } from '$lib/state/theme.svelte';
   import { amorcage, LIBELLES } from '$lib/state/amorcage.svelte';
   import { browser } from '$app/environment';
@@ -79,7 +80,16 @@
   // composant — dosage de lecture, pas etat d'exploration.
   let fond = $state<FondHistorique | null>(initial.fond);
   let croisement = $state<DonneesMatrice>({ cellules: [], ecartees: 0 });
-  let terme = $state(initial.filtres.recherche);
+  let terme = $state(initial.filtres.texte || initial.filtres.recherche);
+
+  // Cible de la saisie. Les deux recherches s'excluent : `search_key` est
+  // instantanee et ne vise que titre, commune et departement ; les historiques
+  // demandent 3,8 Mo d'index. Les reunir couterait une union de deux predicats
+  // de couts incomparables pour un gain nul — il n'existe pas de titre qui
+  // contienne « jube ».
+  type Cible = 'titres' | 'historiques';
+  let cible = $state<Cible>(initial.filtres.texte ? 'historiques' : 'titres');
+  let jetonTexte = 0;
 
   // Position de depart de la carte, portee par le lien partage et par lui seul.
   const cadrageInitial = initial.cadrage;
@@ -95,13 +105,33 @@
     appliquer(theme.courant);
   });
 
-  // La recherche interroge une colonne pre-normalisee (minuscules, sans
-  // accents) : un LIKE sur 46 760 lignes repond en quelques ms, aucun index
-  // full-text n'est necessaire.
+  // Deux chemins depuis le meme champ. Sur les titres, un LIKE sur une colonne
+  // pre-normalisee repond en quelques ms. Sur les historiques, l'index se
+  // charge au premier usage, puis le lexique traduit les mots en identifiants
+  // avant que `filters.texte` ne declenche le cycle — cet ordre est ce que
+  // `poserTermes` exige.
   $effect(() => {
     const saisie = terme;
-    const minuteur = setTimeout(() => {
-      filters.recherche = replier(saisie);
+    const mode = cible;
+    const minuteur = setTimeout(async () => {
+      const mien = ++jetonTexte;
+      if (mode === 'titres') {
+        await preparer('');
+        if (mien !== jetonTexte) return;
+        filters.texte = '';
+        filters.recherche = replier(saisie);
+        return;
+      }
+      filters.recherche = '';
+      if (!(await charger())) {
+        // Index absent de ce deploiement : on revient aux titres plutot que de
+        // laisser un mode qui ne peut rien rendre.
+        if (mien === jetonTexte) cible = 'titres';
+        return;
+      }
+      await preparer(saisie);
+      if (mien !== jetonTexte) return;
+      filters.texte = replier(saisie);
     }, 180);
     return () => clearTimeout(minuteur);
   });
@@ -187,7 +217,8 @@
     selection = etat.selection;
     vue = etat.vue;
     fond = etat.fond;
-    terme = etat.filtres.recherche;
+    cible = etat.filtres.texte ? 'historiques' : 'titres';
+    terme = etat.filtres.texte || etat.filtres.recherche;
   });
 
   // Le presse-papier peut etre refuse (contexte non securise, permission) :
@@ -215,7 +246,7 @@
   // de la page, seule a connaitre les deux.
   function retirerJeton(puce: Jeton) {
     retirer(puce.cle, puce.valeur);
-    if (puce.cle === 'recherche') terme = '';
+    if (puce.cle === 'recherche' || puce.cle === 'texte') terme = '';
     if (puce.cle === 'bbox') vueCarte?.delierVue();
   }
 
@@ -303,12 +334,29 @@
       {/each}
     </nav>
 
-    <input
-      class="recherche"
-      type="search"
-      placeholder="Rechercher un édifice, une commune, un département…"
-      bind:value={terme}
-    />
+    <div class="champ">
+      <input
+        class="recherche"
+        type="search"
+        placeholder={cible === 'historiques'
+          ? 'Chercher dans les historiques : jubé, machicoulis…'
+          : 'Rechercher un édifice, une commune, un département…'}
+        bind:value={terme}
+      />
+      <!-- Le bouton annonce ce qu'il engage, comme ceux des fonds historiques
+           annoncent le poids de leurs tuiles : l'index pèse 3,8 Mo. -->
+      <button
+        class="cible"
+        class:actif={cible === 'historiques'}
+        aria-pressed={cible === 'historiques'}
+        aria-busy={indexTexte.etat === 'chargement'}
+        disabled={indexTexte.etat === 'indisponible'}
+        title={indexTexte.etat === 'indisponible'
+          ? 'Index plein texte absent de ce déploiement'
+          : 'Chercher dans le texte des historiques — 3,8 Mo au premier usage'}
+        onclick={() => (cible = cible === 'historiques' ? 'titres' : 'historiques')}
+      >Historiques</button>
+    </div>
 
     <div class="chiffres">
       {#if compteurs}
@@ -363,13 +411,32 @@
               <h3>
                 {compteurs ? nf.format(compteurs.total) : '—'} notices
                 {#if compteurs && compteurs.total > resultats.length}
-                  <em>(200 premières, les plus riches en mobilier)</em>
+                  <em>
+                    (200 premières, {filters.texte
+                      ? 'les plus pertinentes'
+                      : 'les plus riches en mobilier'})
+                  </em>
                 {/if}
               </h3>
               {#if compteurs}
                 <p>
                   {nf.format(compteurs.total - compteurs.geolocalises)} sans coordonnées,
                   absentes de la carte
+                </p>
+              {/if}
+              <!-- Le plafond de la recherche plein texte se dit : une notice sur
+                   deux ne porte aucun historique, et un résultat vide serait
+                   autrement indiscernable d'un filtre trop serré. -->
+              {#if cible === 'historiques' && indexTexte.stats}
+                <p class="portee">
+                  Recherche dans les {nf.format(indexTexte.stats.n)} notices qui portent
+                  un historique.
+                  {#if indexTexte.inconnus.length}
+                    <b>
+                      {indexTexte.inconnus.map((mot) => `« ${mot} »`).join(', ')}
+                      n'apparaî{indexTexte.inconnus.length > 1 ? 'ssent' : 't'} dans aucun.
+                    </b>
+                  {/if}
                 </p>
               {/if}
             </header>
@@ -509,10 +576,57 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .recherche {
-    flex: 1 1 220px;
+  /* Le champ et sa bascule tiennent ensemble dans la rangee qui s'enroule :
+     separes, le bouton partait a la ligne des compteurs. */
+  .champ {
+    display: flex;
+    flex: 1 1 260px;
+    align-items: center;
+    gap: 6px;
     min-width: 0;
-    max-width: 420px;
+    max-width: 480px;
+  }
+
+  .cible {
+    flex: 0 0 auto;
+    height: 40px;
+    padding: 0 14px;
+    background: transparent;
+    border: 1px solid var(--bord);
+    border-radius: var(--r-pilule);
+    color: var(--texte-tenu);
+    font-size: 12px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      border-color var(--t-rapide),
+      color var(--t-rapide);
+  }
+
+  .cible:hover:not(:disabled) {
+    color: var(--texte);
+    border-color: var(--inscrit);
+  }
+
+  .cible.actif {
+    background: var(--plein-fond);
+    border-color: var(--plein-fond);
+    color: var(--plein-texte);
+  }
+
+  .cible[aria-busy='true'] {
+    opacity: 0.6;
+    cursor: progress;
+  }
+
+  .cible:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .recherche {
+    flex: 1 1 auto;
+    min-width: 0;
     height: 40px;
     padding: 0 16px 0 38px;
     background:
@@ -751,6 +865,13 @@
     margin: 3px 0 0;
     font-size: 11px;
     color: var(--texte-faible);
+  }
+
+  /* Le mot introuvable est la seule chose que l'utilisateur doit lire ici :
+     il porte l'encre pleine, le reste de la ligne reste tenu. */
+  .portee b {
+    color: var(--texte);
+    font-weight: 500;
   }
 
   .liste ul {

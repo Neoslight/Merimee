@@ -49,27 +49,33 @@ export function connection(): Promise<duckdb.AsyncDuckDBConnection> {
   return ready;
 }
 
-const fragmentsCharges = new Set<number>();
+const enregistres = new Set<string>();
+
+/**
+ * Rend un fichier de `static/data/` interrogeable sous le nom `nom`, une fois.
+ *
+ * duckdb-wasm telecharge tout Parquet en entier, mais **une seule fois** : le
+ * tampon reste ensuite en memoire, et `read_parquet` sur le meme nom ne ressort
+ * plus sur le reseau. C'est ce qui rend acceptables les chargements a la
+ * demande — un fragment de fiche, l'index plein texte.
+ */
+export async function enregistrer(nom: string, chemin: string): Promise<void> {
+  await connection();
+  if (enregistres.has(nom)) return;
+  await instance!.registerFileURL(nom, fichier(chemin), duckdb.DuckDBDataProtocol.HTTP, false);
+  enregistres.add(nom);
+}
 
 /**
  * Enregistre a la demande le fragment de `details` contenant une notice, et
  * renvoie le nom sous lequel l'interroger.
  *
- * Chaque fragment pese ~320 Ko et n'est telecharge qu'une fois : consulter
- * une fiche ne rapatrie pas les 10 Mo de textes longs.
+ * Chaque fragment pese ~320 Ko : consulter une fiche ne rapatrie pas les 10 Mo
+ * de textes longs.
  */
 export async function fragmentDetails(numero: number): Promise<string> {
-  await connection();
   const nom = `details_${numero}.parquet`;
-  if (!fragmentsCharges.has(numero)) {
-    await instance!.registerFileURL(
-      nom,
-      fichier(`details/${numero}.parquet`),
-      duckdb.DuckDBDataProtocol.HTTP,
-      false
-    );
-    fragmentsCharges.add(numero);
-  }
+  await enregistrer(nom, `details/${numero}.parquet`);
   return nom;
 }
 

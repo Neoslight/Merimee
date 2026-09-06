@@ -361,3 +361,80 @@ def test_images_absentes_ne_cassent_pas_le_build(tmp_path, monkeypatch):
         assert build._images_commons() == {}
     finally:
         build._images_commons.cache_clear()
+
+
+# --------------------------------------------------------------------------
+# Index plein texte
+# --------------------------------------------------------------------------
+
+pytestmark_index = pytest.mark.skipif(
+    not (OUT_DIR / "texte" / "postings.parquet").exists(),
+    reason="index plein texte absent : extension `fts` indisponible",
+)
+
+
+@pytest.fixture(scope="module")
+def lexique() -> pd.DataFrame:
+    return pd.read_parquet(OUT_DIR / "texte" / "lexique.parquet")
+
+
+@pytest.fixture(scope="module")
+def postings() -> pd.DataFrame:
+    return pd.read_parquet(OUT_DIR / "texte" / "postings.parquet")
+
+
+@pytestmark_index
+def test_index_couvre_exactement_les_historiques(details):
+    docs = pd.read_parquet(OUT_DIR / "texte" / "docs.parquet")
+    attendu = details.historique.fillna("").str.len().gt(0).sum()
+    assert len(docs) == attendu
+    assert docs.reference.is_unique
+
+
+@pytestmark_index
+def test_lexique_replie_les_flexions(lexique):
+    formes = dict(zip(lexique.forme, lexique.terme))
+    # C'est ce qui dispense le navigateur d'embarquer un stemmer : singulier et
+    # pluriel désignent le même terme.
+    assert formes["mascaron"] == formes["mascarons"]
+    assert formes["retable"] == formes["retables"]
+    assert "jube" in formes
+
+
+@pytestmark_index
+def test_postings_comptent_les_notices_attendues(lexique, postings, details):
+    """L'oracle est le corpus lui-même, pas l'index.
+
+    34 notices citent « jubé » dans leur historique — la 35e le cite dans
+    `precision_protection`, qui n'est pas indexé.
+    """
+    terme = dict(zip(lexique.forme, lexique.terme))["jube"]
+    indexees = postings.loc[postings.terme == terme, "doc"].nunique()
+    reelles = (
+        details.historique.fillna("")
+        .str.normalize("NFD")
+        .str.encode("ascii", "ignore")
+        .str.decode("ascii")
+        .str.lower()
+        .str.contains("jube")
+        .sum()
+    )
+    assert indexees == reelles == 34
+
+
+@pytestmark_index
+def test_postings_tries_par_terme(postings):
+    # Le tri conditionne l'élagage par statistiques Parquet côté navigateur :
+    # sans lui, chaque recherche balaierait 1,6 M de lignes.
+    assert postings.terme.is_monotonic_increasing
+
+
+def test_index_absent_ne_casse_pas_le_pipeline(tmp_path):
+    """Sans fragments `details`, la construction rend `None` sans lever.
+
+    Même contrat que l'instantané Wikidata : une dépendance externe absente
+    laisse le pipeline valide, elle ne l'interrompt pas.
+    """
+    from merimee_etl import texte
+
+    assert texte.construire(tmp_path) is None

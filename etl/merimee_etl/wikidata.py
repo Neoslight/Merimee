@@ -30,7 +30,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .config import OUT_DIR, REF_DIR
+from .config import MAX_IMAGES, OUT_DIR, REF_DIR
 
 ENDPOINT = "https://query.wikidata.org/sparql"
 
@@ -48,11 +48,6 @@ SELECT ?ref ?img WHERE {
 AGENT = "MerimeeDashboard/1.0 (https://github.com/Neoslight/Merimee)"
 
 PREFIXE = "http://commons.wikimedia.org/wiki/Special:FilePath/"
-
-# Trois suffisent à une bande d'aperçu. Une notice en porte parfois une
-# douzaine, dont les vues de détail : les garder toutes gonflerait les
-# fragments sans rien apporter à la lecture.
-MAX_IMAGES = 3
 
 SORTIE = Path(REF_DIR) / "wikidata_images.csv"
 

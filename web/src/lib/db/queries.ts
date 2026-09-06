@@ -1,8 +1,16 @@
 /** Requetes du tableau de bord. Un scan complet coute ~46 760 lignes : inutile
  *  de materialiser des vues intermediaires, DuckDB repond en quelques ms. */
 import { fragmentDetails, query, queryArrow, lit } from './duckdb';
+import { scoreTexte } from './texte';
+import { indexTexte } from '$lib/state/texte.svelte';
 import { fragmentDe } from './shards';
-import { buildWhere, replier, type FacetKey, type Filters } from '$lib/state/filters.svelte';
+import {
+  buildWhere,
+  replier,
+  termesTexte,
+  type FacetKey,
+  type Filters
+} from '$lib/state/filters.svelte';
 import { mesures } from '$lib/state/mesures.svelte';
 
 export interface Compte {
@@ -274,8 +282,31 @@ export interface Ligne {
   nb_palissy: number;
 }
 
-/** Liste laterale : inclut les 2 276 notices sans coordonnees, absentes de la carte. */
+/** Sous-requete de classement, `null` des que le mode plein texte n'est pas
+ *  actif ou que rien n'a ete resolu. */
+function ordreTexte(f: Filters): string | null {
+  const termes = termesTexte();
+  if (!f.texte || !termes?.length || !indexTexte.stats) return null;
+  return scoreTexte(termes, indexTexte.stats);
+}
+
+/**
+ * Liste laterale : inclut les 2 276 notices sans coordonnees, absentes de la carte.
+ *
+ * En mode plein texte l'ordre change : c'est le seul endroit ou le classement
+ * BM25 se voit. La carte et les facettes n'ont besoin que de l'appartenance,
+ * et scorer pour elles serait payer un tri que personne ne lit.
+ */
 export async function liste(f: Filters, limite = 200): Promise<Ligne[]> {
+  const ordre = ordreTexte(f);
+  if (ordre) {
+    return query<Ligne>(`
+      SELECT m.reference, m.titre, m.commune, m.departement_nom, m.statut, m.nb_palissy
+      FROM monuments m JOIN ${ordre} s USING (reference)
+      WHERE ${buildWhere(f)}
+      ORDER BY s.score DESC, m.titre ASC LIMIT ${limite}
+    `);
+  }
   return query<Ligne>(`
     SELECT reference, titre, commune, departement_nom, statut, nb_palissy
     FROM monuments WHERE ${buildWhere(f)}

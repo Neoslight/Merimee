@@ -115,9 +115,11 @@ Trois détails que GitHub Pages impose :
 | `monuments.parquet` | 46 760 notices × 29 colonnes, dont les champs multivalués en colonnes `LIST` | 2,3 Mo |
 | `protections.parquet` | 51 640 actes de protection datés | 0,4 Mo |
 | `details/0-31.parquet` | textes longs, liens, mobilier, photographies — 32 fragments | 11,2 Mo au total |
+| `texte/*.parquet` | index plein texte des historiques : postings, lexique, longueurs | 3,8 Mo au total |
 
 Les deux premiers sont matérialisés en table au démarrage. Les fragments de
-`details` sont chargés à la demande, un seul par fiche consultée.
+`details` sont chargés à la demande, un seul par fiche consultée ; l'index plein texte
+l'est au premier usage du mode « historiques », et jamais sinon.
 
 ## Décisions structurantes
 
@@ -156,6 +158,20 @@ seule notice — la longue traîne est précisément ce qu'on vient chercher. La
 recherche descend maintenant dans DuckDB, avec `strip_accents` pour ignorer les
 accents sans stocker de colonne repliée. Une valeur cochée reste listée même hors
 résultat : sans cela on ne pourrait plus la décocher.
+
+**La recherche plein texte est indexée à l'ETL, scorée dans le navigateur.** Le champ
+de la barre vise par défaut `search_key` — titre, commune, département — et répond en
+quelques millisecondes. Un bouton le fait viser les **historiques** : 15,1 Mo de texte
+libre où vivent les termes qu'on ne trouvait nulle part, machicoulis (550 notices),
+mascaron (118), jubé (34). L'indexation, elle, ne se fait pas côté client : elle
+supposerait d'y rapatrier les 12 Mo de fragments, et coûte 2,2 s en natif multi-thread
+quand le bundle wasm retenu est mono-thread. `merimee_etl/texte.py` produit donc
+l'index — postings triés par terme, plus un lexique des 45 826 formes du corpus qui
+dispense d'embarquer un stemmer : `mascaron` et `mascarons` désignent le même terme.
+Le navigateur ne fait que compter et scorer, BM25 en SQL, quelques dizaines de
+millisecondes. Le plafond est dit à l'écran : **24 819 notices sur 46 760 portent un
+historique**, et un mot que le lexique ignore est nommé plutôt que rendu par un
+résultat vide.
 
 **Deux palettes, un seul endroit.** MapLibre et Observable Plot reçoivent des chaînes,
 pas des `var()` : leurs couleurs sont donc déclarées en CSS comme les autres et relues

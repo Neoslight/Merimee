@@ -257,6 +257,68 @@ try {
   const champ = await page.inputValue('.recherche');
   verifier('la puce de recherche vide aussi le champ', champ === '', `« ${champ} »`);
 
+  // --- Recherche plein texte dans les historiques ---------------------------
+  // L'index pese 3,8 Mo : il ne doit partir qu'au premier usage du mode, jamais
+  // au demarrage. Le compteur d'octets du serveur en fait foi.
+  const octetsTexte = () =>
+    [...octets].filter(([c]) => c.startsWith('/data/texte/'))
+               .reduce((somme, [, n]) => somme + n, 0);
+  verifier('aucun octet d index plein texte au demarrage', octetsTexte() === 0,
+           `${octetsTexte()} o`);
+
+  const attendreTotal = (attendu) =>
+    page.waitForFunction((n) => {
+      const el = document.querySelector('.chiffres span b');
+      return el && el.textContent.replace(/\D/g, '') === String(n);
+    }, attendu, { timeout: 30_000 });
+
+  await page.locator('.bascule button', { hasText: 'Liste' }).click();
+  await page.locator('button.cible').click();
+  await page.fill('.recherche', 'jubé');
+  // 34 est l'oracle : `historique LIKE '%jube%'` sur les fragments en compte 34,
+  // le 35e est dans `precision_protection`, qui n'est pas indexe.
+  await attendreTotal(34);
+  verifier('« jube » trouve les 34 historiques qui le citent',
+           (await total(page)) === 34);
+  verifier('les trois fichiers d index sont demandes',
+           [...octets.keys()].filter((c) => c.startsWith('/data/texte/')).length === 3,
+           `${(octetsTexte() / 1048576).toFixed(1)} Mo`);
+
+  // Le classement BM25 se voit ici et nulle part ailleurs : la carte et les
+  // facettes n'ont besoin que de l'appartenance.
+  const premier = await page.locator('.liste li .nom').first().textContent();
+  verifier('le classement BM25 met Vitteaux en tete',
+           premier.includes("Saint-Germain-d'Auxerre"), premier);
+
+  verifier('le permalien porte le terme plein texte',
+           page.url().includes('texte=jube') && !page.url().includes('q='),
+           page.url().split('?')[1] ?? '');
+
+  // Le lexique des formes remplace un stemmer cote navigateur : singulier et
+  // pluriel doivent designer le meme terme.
+  await page.fill('.recherche', 'mascarons');
+  await attendreTotal(118);
+  const pluriel = await total(page);
+  await page.fill('.recherche', 'mascaron');
+  await attendreTotal(118);
+  verifier('singulier et pluriel donnent le meme corpus',
+           pluriel === (await total(page)), `${pluriel} notices`);
+
+  // Un mot absent du lexique n'existe dans aucun historique : la reponse
+  // honnete est zero notice, accompagnee de la raison. Rendre le corpus entier
+  // serait pire — le filtre paraitrait pose sans agir.
+  await page.fill('.recherche', 'zzzintrouvable');
+  await attendreTotal(0);
+  const portee = (await page.textContent('.portee')).replace(/\s+/g, ' ');
+  verifier('un mot inconnu se dit au lieu de rendre zero en silence',
+           portee.includes('zzzintrouvable') && portee.includes('24 819'), portee.trim());
+
+  // Retour a l'etat neutre pour la suite : mode titres, champ vide, vue carte.
+  await page.locator('.jetons button:not(.raz)').first().click();
+  await page.locator('button.cible').click();
+  await page.locator('.bascule button', { hasText: 'Carte' }).click();
+  await attendreTotal(46760);
+
   // --- Recherche a l'interieur d'une facette --------------------------------
   // `Baltard Victor` (5 notices) est hors des 40 valeurs les plus frequentes
   // parmi 7 040 auteurs : le trouver prouve que la recherche descend dans
@@ -923,6 +985,15 @@ try {
   // Arrow, la conversion en objets intermediaires a disparu. Le releve reste
   // pour que la regression se voie — les plafonds sont larges, ils signalent,
   // ils n'arbitrent plus.
+  // Le bouton de remise a zero ne s'affiche qu'avec des filtres poses, et son
+  // libelle est « effacer N filtres ». Une version anterieure visait « Tout
+  // effacer » et ravalait l'echec : le regime suivant heritait alors du filtre
+  // precedent sans que rien ne le signale.
+  const effacerTout = async () => {
+    const raz = page.locator('.jetons button.raz');
+    if (await raz.count()) await raz.click();
+  };
+
   const releve = async (etiquette) => {
     const m = await page.evaluate(() => ({ ...window.__mesures }));
     const total = m.sql + m.collection + m.rendu;
@@ -931,7 +1002,7 @@ try {
   };
 
   await page.locator('.bascule button', { hasText: 'Carte' }).click();
-  await page.getByRole('button', { name: /^Tout effacer/ }).click().catch(() => {});
+  await effacerTout();
   await page.waitForTimeout(900);
   const pleinCorpus = await releve('corpus entier');
   verifier(
@@ -957,6 +1028,24 @@ try {
     filtre.n < pleinCorpus.n && filtre.collection < pleinCorpus.collection,
     `${filtre.n} points, GeoJSON ${filtre.collection.toFixed(1)} ms contre ${pleinCorpus.collection.toFixed(0)} ms`
   );
+
+  // Troisieme regime : le meme cycle sous filtre plein texte. Aucune mesure
+  // nouvelle n'est necessaire — la clause part dans la requete des points, donc
+  // `sql` porte deja le cout du balayage des postings.
+  await effacerTout();
+  await page.waitForTimeout(600);
+  await page.locator('button.cible').click();
+  await page.fill('.recherche', 'machicoulis');
+  await page.waitForTimeout(1600);
+  const texte = await releve('plein texte');
+  verifier(
+    'le balayage des postings reste sous la seconde',
+    texte.total < 1000 && texte.n > 400,
+    `${texte.n} points en ${texte.total.toFixed(0)} ms`
+  );
+  await page.locator('button.cible').click();
+  await page.fill('.recherche', '');
+  await page.waitForTimeout(600);
 
   verifier('aucune erreur console', erreursConsole.length === 0, erreursConsole.slice(0, 3).join(' | '));
 

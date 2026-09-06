@@ -3,6 +3,7 @@ data/raw/
 etl/out/
 web/static/data/*.parquet
 web/static/data/details/
+web/static/data/texte/
 
 # Python
 __pycache__/

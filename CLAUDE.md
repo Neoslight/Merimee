@@ -26,9 +26,11 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `data/ref/wikidata_images.csv` | instantané tiers, 2,4 Mo — pas une décision éditoriale, cf. plus bas |
 | `etl/merimee_etl/wikidata.py` | récupère cet instantané, **jamais appelé par le pipeline** |
 | `etl/merimee_etl/` | pipeline : `load` → `normalize` → `parse` → `build`, piloté par `cli` |
-| `etl/tests/test_pipeline.py` | 55 tests : unitaires sur les cas tordus + intégration sur les artefacts |
+| `etl/merimee_etl/texte.py` | index plein texte des historiques, **dégrade en silence** sans `fts` |
+| `etl/merimee_etl/commons.py` | second instantané photo, séparé de `wikidata.py` — lancé à part |
+| `etl/tests/test_pipeline.py` | 60 tests : unitaires sur les cas tordus + intégration sur les artefacts |
 | `etl/out/rejets.csv` | segments hors-format rencontrés, jamais supprimés silencieusement |
-| `web/src/lib/db/` | `duckdb.ts` (bootstrap, fragments), `queries.ts` (requêtes), `shards.ts` (hachage) |
+| `web/src/lib/db/` | `duckdb.ts` (bootstrap, fragments), `queries.ts` (requêtes), `shards.ts` (hachage), `texte.ts` (BM25) |
 | `web/src/lib/state/filters.svelte.ts` | état des filtres + construction du prédicat SQL |
 | `web/src/lib/state/permalien.ts` | sérialisation de l'état dans l'URL (`encoder` / `decoder`) |
 | `web/src/lib/state/amorcage.svelte.ts` | phase et octets du démarrage, lus par l'écran d'attente |
@@ -36,7 +38,7 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `web/src/lib/format.ts` | `romain`, formats de nombres — étaient recopiés dans trois composants |
 | `web/src/service-worker.ts` | cache des actifs hachés uniquement |
 | `web/src/lib/components/` | `MonumentMap`, `FacetPanel`, `Jetons`, `Timeline`, `Matrice`, `DetailPanel` |
-| `web/tests/smoke.mjs` | 91 vérifications en Chromium réel, avec `serveur.mjs` instrumenté |
+| `web/tests/smoke.mjs` | 99 vérifications en Chromium réel, avec `serveur.mjs` instrumenté |
 | `web/tests/apercu-social.mjs` | régénère la vignette Open Graph depuis l'application |
 
 ## Commandes
@@ -44,10 +46,11 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 ```bash
 cd etl  && python -m merimee_etl        # ~11 s, écrit web/static/data/
 cd etl  && python -m merimee_etl.wikidata  # rafraîchit l'instantané des photos
-cd etl  && python -m pytest tests -q    # 55 tests
+cd etl  && python -m merimee_etl.commons   # complète par les fichiers citant la notice
+cd etl  && python -m pytest tests -q    # 60 tests
 cd web  && npm run dev                  # http://localhost:5173
 cd web  && npm run check                # svelte-check, doit rester à 0/0
-cd web  && npm run build && npm run test # build statique + 91 vérifications navigateur
+cd web  && npm run build && npm run test # build statique + 99 vérifications navigateur
 cd web  && npm run apercu               # régénère static/apercu-social.png
 cd web  && npm run deploy               # build /Merimee + push sur gh-pages
 ```
@@ -237,6 +240,47 @@ elle, fouille tout.** Filtrer en JavaScript la liste déjà rapatriée laissait
 le `LIKE` dans DuckDB via `strip_accents(lower(...))`, et **épingle les valeurs
 cochées** : sans cela, saisir un terme rendrait impossible de les décocher.
 
+**La recherche a deux cibles, et un bouton dit laquelle.** `search_key` — titre,
+commune, département — répond instantanément par un `LIKE` sur une colonne
+pré-normalisée. Les **historiques** demandent un index de 3,8 Mo, chargé au premier
+usage du mode et jamais au démarrage. Les deux s'excluent : les réunir coûterait une
+union de deux prédicats de coûts incomparables, pour un gain nul — il n'existe pas de
+titre qui contienne « jubé ». Le bouton **annonce le poids** qu'il engage, comme ceux
+des fonds historiques annoncent celui de leurs tuiles.
+
+**L'index plein texte est précalculé par l'ETL, jamais par le navigateur.** Mesuré
+avant d'écrire quoi que ce soit : l'extension `fts` existe bien pour la cible wasm
+(`extensions.duckdb.org/v1.4.x/wasm_eh/fts.duckdb_extension.wasm`, 200, 480 Ko), mais
+`create_fts_index` côté client suppose d'avoir **tout le texte**, donc de rapatrier les
+**32 fragments `details`, 12 Mo**, et coûte **2,2 s en natif multi-thread** quand le
+bundle retenu est `eh`, **mono-thread** par contrainte d'hébergement. La charger à
+l'exécution ferait en plus dépendre le site d'un CDN tiers, ce que `duckdb.ts` évite
+délibérément. Ne pas rouvrir.
+
+`etl/merimee_etl/texte.py` écrit donc trois Parquet dans `web/static/data/texte/` —
+postings 3,3 Mo, lexique 0,3 Mo, longueurs 0,2 Mo — et le navigateur ne fait que
+scorer. Quatre points à ne pas défaire :
+
+- **le lexique remplace un stemmer côté client.** L'index porte des radicaux Snowball
+  (`jub`, `machicoul`) ; `lexique.parquet` y rattache les 45 826 formes rencontrées dans
+  le corpus, si bien que `mascaron` et `mascarons` désignent le même terme sans une
+  ligne de linguistique dans le bundle ;
+- **aucun seuil de fréquence** sur l'index. Couper les mots courants ferait gagner
+  0,6 Mo et casserait les requêtes à plusieurs mots : la sémantique est **ET**, donc
+  « église romane » échouerait sur son premier mot ;
+- **les postings sont triés par terme**, en groupes de 100 000 lignes. C'est ce tri qui
+  permet aux statistiques Parquet d'écarter le reste : sans lui, chaque recherche
+  balaierait 1,6 M de lignes ;
+- **`null` et `[]` ne disent pas la même chose** dans `termesResolus`
+  (`filters.svelte.ts`) : `null`, c'est « pas encore résolu », et le filtre s'efface le
+  temps d'un aller-retour ; `[]`, c'est « résolu, aucun mot connu », et la réponse est
+  alors zéro notice. Confondre les deux ferait clignoter le corpus entier à chaque
+  frappe, ou rendrait un mot introuvable indiscernable d'un filtre trop serré.
+
+**Le plein texte a un plafond structurel : 24 819 notices sur 46 760 portent un
+historique.** La vue liste le dit quand le mode est actif, et nomme les mots que le
+lexique ne connaît pas. Sans ces deux phrases, un résultat vide ressemble à un bug.
+
 **Les facettes s'évaluent sans leur propre filtre.** `buildWhere(filtres, except)` —
 retirer ce mécanisme fait tomber à zéro toutes les options non cochées et tue le
 filtrage croisé. `queries.facette()` passe systématiquement la clé en `except`.
@@ -345,12 +389,15 @@ choisir une cellule réduirait la matrice à cette seule cellule. Les couples
 même décennie compterait deux fois. Les siècles antérieurs au 10e sortent des
 axes mais leur nombre est affiché sous le graphique.
 
-**Les photographies viennent d'un instantané, pas d'une requête vivante.** La base
+**Les photographies viennent d'instantanés, pas d'une requête vivante.** La base
 Mérimée ne porte **aucun lien vers une image** : ni colonne Mémoire, ni Wikidata, ni
-fichier. Le seul pont est Wikidata (`P380` identifiant Mérimée → `P18` image), et il
-couvre **39 556 notices sur 46 760, soit 84,6 %**. `python -m merimee_etl.wikidata`
-écrit `data/ref/wikidata_images.csv` ; `python -m merimee_etl` **ne l'appelle jamais**,
-il se contente de la colonne `commons` des fragments — vide si l'instantané est absent.
+fichier. Le premier pont est Wikidata (`P380` identifiant Mérimée → `P18` image), et il
+couvre **39 556 notices sur 46 760, soit 84,6 %**. Le second est Commons, par les
+fichiers dont la page **cite la référence**. `python -m merimee_etl.wikidata` et
+`python -m merimee_etl.commons` écrivent deux fichiers **séparés** dans `data/ref/` —
+deux bases tierces de fiabilité différente, dont l'une doit pouvoir être régénérée ou
+jetée sans toucher l'autre ; `python -m merimee_etl` **ne les appelle jamais**, il se
+contente de la colonne `commons` des fragments — vide si les instantanés sont absents.
 C'est ce qui garde le pipeline hors-ligne et les tests sans réseau. Trois conséquences :
 
 - le fichier est versionné dans `data/ref/` mais **ce n'est pas une décision
@@ -369,6 +416,29 @@ C'est ce qui garde le pipeline hors-ligne et les tests sans réseau. Trois cons�
 Le magasin de certificats par défaut de Python sous Windows a rendu un
 `CERTIFICATE_VERIFY_FAILED: certificate has expired` sur ce point d'entrée ; le module
 passe par `certifi` quand il est installé.
+
+**Le pont Wikidata n'est pas étroit : les photographies manquantes n'existent pas.**
+**46 618 items portent déjà un `P380`** sur 46 760 notices — les 7 204 fiches sans image
+n'ont pas d'item manquant, elles n'ont pas de `P18`. Trois routes ont été mesurées sur
+échantillon avant d'en retenir une seule :
+
+| route | rendement | ce que ça vaut |
+|---|---|---|
+| image de tête d'article frwiki | 172/300 « images », **13 vraies photos** | cartes de localisation, blasons, `MH_disparu.svg` |
+| `insource:"PA…"` sur Commons | **11/100**, confirmé à 14/120 en production | le fichier **cite la notice** |
+| geosearch 150 m | 44/100 | **sujet non vérifié** |
+| items sans P18 mais avec `P373` | 224 | négligeable |
+
+Le geosearch rend `BENOIT HAMON.jpg` pour la préfecture de Nanterre et
+`Église (Salins-les-Bains).jpg` pour une « Demeure ». Corroborer par le titre ne filtre
+presque rien (25 → 22) : le nom de commune figure dans la plupart des noms de fichiers,
+il atteste **le lieu, pas le sujet**. Or une fiche affirme quelque chose en montrant une
+photographie, et la plaque nommée vaut mieux qu'une image fausse. **Le geosearch est
+écarté**, comme PMTiles : décision close, chiffres à l'appui.
+
+`commons.py` filtre en plus par la forme du nom (`.jpg/.png/.tif`, rejet de
+`location_map`, `blason`, `logo`, `MH_disparu`…) — le piège mesuré sur les images de
+tête frwiki, où 172 « images » cachaient 13 photographies.
 
 **Les rejets sont signalés, pas supprimés.** Un segment de date illisible produit
 quand même un événement (année nulle) et une ligne dans `etl/out/rejets.csv`.
@@ -398,7 +468,9 @@ mesurée), pas le *quoi*.
 - Export CSV de la sélection courante, et liste paginée au-delà des 200 lignes.
 - Filtres « figures » préréglés (Vauban, Guimard, Le Corbusier) en un clic, au-dessus
   de la facette auteurs existante. Devenus de simples liens depuis les permaliens.
-- Exploitation NLP des 23,6 Mo de texte libre (`historique`, `precision_protection`).
+- Exploitation NLP des 23,6 Mo de texte libre. **L'indexation lexicale est faite**
+  (`texte.py`, BM25) sur les 15,1 Mo d'`historique` ; ce qui reste est l'extraction
+  d'entités, et `precision_protection` — 6,7 Mo de langue d'arrêtés — n'est pas indexé.
 - **Repères d'histoire sur les frises.** Attention, ils ne vont pas sur la même piste :
   Guerre de Cent Ans et Révolution sur l'axe *construction*, 1840 (première liste
   Mérimée), 1913 (loi) et 1962 (Malraux) sur l'axe *protection*. Les mélanger sur une

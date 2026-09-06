@@ -12,7 +12,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from .config import COMPRESSION, DETAILS_ROW_GROUP, DETAILS_SHARDS, REF_DIR
+from .config import COMPRESSION, DETAILS_ROW_GROUP, DETAILS_SHARDS, MAX_IMAGES, REF_DIR
 from .normalize import normalize_text, normalize_vocab, search_key, split_multi, split_vocab
 from .parse import (classify_statut, merge_auteurs, palissy_ids, parse_auteurs,
                     parse_coords, parse_links, parse_protections, parse_siecles)
@@ -81,25 +81,36 @@ DETAILS_SCHEMA = pa.schema([
 ])
 
 
+# Deux instantanés, deux provenances, dans cet ordre. Wikidata relie l'image à
+# la notice par une propriété (`P380` -> `P18`) ; Commons ne fait que constater
+# qu'un fichier cite la référence. Le premier passe donc devant le second.
+_INSTANTANES = ("wikidata_images.csv", "commons_images.csv")
+
+
 @lru_cache(maxsize=1)
 def _images_commons() -> dict[str, list[str]]:
     """Noms de fichiers Wikimedia Commons, par notice.
 
-    L'instantané est produit à part par `python -m merimee_etl.wikidata` : le
-    pipeline ne va jamais sur le réseau. Absent, la colonne vaut la liste vide
-    partout et les artefacts restent valides — c'est ce qui permet aux tests de
-    tourner hors-ligne.
+    Les instantanés sont produits à part (`python -m merimee_etl.wikidata`, puis
+    `python -m merimee_etl.commons`) : le pipeline ne va jamais sur le réseau.
+    Absents, la colonne vaut la liste vide partout et les artefacts restent
+    valides — c'est ce qui permet aux tests de tourner hors-ligne.
     """
-    path = Path(REF_DIR) / "wikidata_images.csv"
     images: dict[str, list[str]] = defaultdict(list)
-    if not path.exists():
-        return images
-    with path.open(encoding="utf-8", newline="") as fh:
-        # Les lignes de tête expliquent la provenance du fichier : elles ne
-        # sont pas des données.
-        lignes = (ligne for ligne in fh if not ligne.startswith("#"))
-        for row in csv.DictReader(lignes):
-            images[row["reference"]].append(row["fichier"])
+    for nom in _INSTANTANES:
+        path = Path(REF_DIR) / nom
+        if not path.exists():
+            continue
+        with path.open(encoding="utf-8", newline="") as fh:
+            # Les lignes de tête expliquent la provenance du fichier : elles ne
+            # sont pas des données.
+            lignes = (ligne for ligne in fh if not ligne.startswith("#"))
+            for row in csv.DictReader(lignes):
+                fichiers = images[row["reference"]]
+                # Le plafond vaut pour la notice, pas pour la source : deux
+                # instantanés ne doivent pas faire six vignettes.
+                if row["fichier"] not in fichiers and len(fichiers) < MAX_IMAGES:
+                    fichiers.append(row["fichier"])
     return images
 
 

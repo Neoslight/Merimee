@@ -7,6 +7,7 @@
  * devient inutilisable.
  */
 import { lit, litList } from '$lib/db/duckdb';
+import { clauseTexte } from '$lib/db/texte';
 import { romain } from '$lib/format';
 
 export type FacetKey =
@@ -22,6 +23,7 @@ export type FacetKey =
   | 'anneeProtection'
   | 'nbPalissy'
   | 'recherche'
+  | 'texte'
   | 'bbox';
 
 export interface Filters {
@@ -37,6 +39,10 @@ export interface Filters {
   anneeProtection: [number, number] | null;
   nbPalissy: number;
   recherche: string;
+  /** Terme cherche dans les historiques. Distinct de `recherche`, qui ne vise
+   *  que titre, commune et departement : les deux n'ont ni le meme cout ni le
+   *  meme sens, et le bouton de la barre choisit lequel la saisie alimente. */
+  texte: string;
   bbox: [number, number, number, number] | null;
 }
 
@@ -69,11 +75,40 @@ export function filtresVides(): Filters {
     anneeProtection: null,
     nbPalissy: 0,
     recherche: '',
+    texte: '',
     bbox: null
   };
 }
 
 export const filters = $state<Filters>(filtresVides());
+
+/**
+ * Identifiants de terme du filtre plein texte.
+ *
+ * Troisieme etat miroir hors de `filters`, apres le champ de la barre et le
+ * suivi de vue de la carte. Il vit ici plutot que dans `filters` pour deux
+ * raisons : l'URL doit porter le mot saisi et non des entiers opaques, et
+ * `JSON.stringify(filters)` sert de signature au cycle de requetes — les
+ * identifiants derivant du terme, les y ajouter ne ferait que doubler la cle.
+ *
+ * **A poser avant `filters.texte`**, jamais apres : c'est l'ecriture du terme
+ * qui declenche le cycle, et il doit trouver les identifiants en place.
+ *
+ * `null` et `[]` ne disent pas la meme chose : `null`, c'est « pas encore
+ * resolu » — index en cours de chargement — et le filtre s'efface plutot que
+ * de vider l'ecran le temps d'un aller-retour ; `[]`, c'est « resolu, aucun
+ * mot connu », et la reponse honnete est alors zero notice.
+ */
+let termesResolus: number[] | null = null;
+
+export function poserTermes(termes: readonly number[] | null): void {
+  termesResolus = termes === null ? null : [...termes];
+}
+
+/** Lus par `queries.liste()`, qui en tire le classement BM25. */
+export function termesTexte(): readonly number[] | null {
+  return termesResolus;
+}
 
 /** Colonne `LIST` -> `list_has_any`, sans jointure ni table de liaison. */
 function listeClause(colonne: string, valeurs: readonly string[]): string | null {
@@ -109,6 +144,15 @@ const CLAUSES: Record<FacetKey, (f: Filters) => string | null> = {
     const mots = f.recherche.trim().split(/\s+/).filter(Boolean);
     if (!mots.length) return null;
     return mots.map((mot) => `search_key LIKE ${lit(`%${mot}%`)}`).join(' AND ');
+  },
+  // Le predicat ne porte pas le terme mais les identifiants que le lexique lui
+  // a fait correspondre, poses par `poserTermes`. Tant qu'ils manquent — index
+  // en cours de chargement, ou mot absent du corpus — la clause s'efface : un
+  // terme introuvable ne doit pas vider le tableau de bord en silence, c'est la
+  // vue liste qui le dit.
+  texte: (f) => {
+    if (!f.texte || termesResolus === null) return null;
+    return termesResolus.length ? clauseTexte(termesResolus) : 'FALSE';
   },
   bbox: (f) =>
     f.bbox
@@ -148,6 +192,7 @@ export function toggleSiecle(siecle: number): void {
 
 export function reset(): void {
   Object.assign(filters, filtresVides());
+  termesResolus = null;
 }
 
 /** Nombre de filtres actifs, pour l'affichage du bouton de remise a zero. */
@@ -192,6 +237,11 @@ export function jetonsActifs(f: Filters): Jeton[] {
       jetons.push({ cle, libelle: `≥ ${f.nbPalissy} objets` });
     } else if (cle === 'recherche' && f.recherche) {
       jetons.push({ cle, libelle: `« ${f.recherche} »` });
+    } else if (cle === 'texte' && f.texte) {
+      // Libelle distinct de celui de la recherche par titre : les deux puces
+      // seraient autrement indiscernables, pour un lecteur d'ecran comme pour
+      // Playwright en mode strict.
+      jetons.push({ cle, libelle: `historiques : « ${f.texte} »` });
     } else if (cle === 'bbox' && f.bbox) {
       jetons.push({ cle, libelle: 'zone visible' });
     }
@@ -222,6 +272,9 @@ export function retirer(cle: FacetKey, valeur?: string): void {
     filters.nbPalissy = 0;
   } else if (cle === 'recherche') {
     filters.recherche = '';
+  } else if (cle === 'texte') {
+    filters.texte = '';
+    termesResolus = null;
   } else if (cle === 'bbox') {
     filters.bbox = null;
   }

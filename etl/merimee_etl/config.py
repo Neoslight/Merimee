@@ -77,3 +77,14 @@ PROTECTION_YEAR_MAX = 2030
 DETAILS_SHARDS = 32
 DETAILS_ROW_GROUP = 2_000
 COMPRESSION = "zstd"
+
+# Trois vignettes suffisent à une bande d'aperçu. Une notice en porte parfois
+# une douzaine, dont les vues de détail : les garder toutes gonflerait les
+# fragments sans rien apporter à la lecture. Le plafond vaut pour la notice, pas
+# pour la source — deux instantanés ne doivent pas faire six vignettes.
+MAX_IMAGES = 3
+
+# L'index plein texte est trié par terme : des groupes de lignes de cette taille
+# donnent aux statistiques Parquet de quoi écarter tout ce qui ne concerne pas
+# les termes cherchés, et évitent au navigateur de matérialiser 1,6 M de lignes.
+TEXTE_ROW_GROUP = 100_000

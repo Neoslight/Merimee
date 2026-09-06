@@ -87,6 +87,11 @@ export function encoder(etat: EtatPartage, cadrage?: VueCarte | null): string {
   }
   for (const siecle of etat.filtres.siecles) p.append('siecle', String(siecle));
   if (etat.filtres.recherche) p.set('q', etat.filtres.recherche);
+  // Parametre distinct de `q` : les deux recherches ne visent pas le meme
+  // corpus, et un lien doit rouvrir la bonne. Elles s'excluent a la saisie,
+  // mais une URL ecrite a la main peut porter les deux — les deux s'appliquent
+  // alors, sans que rien ne casse.
+  if (etat.filtres.texte) p.set('texte', etat.filtres.texte);
   if (etat.filtres.anneeProtection) p.set('annees', etat.filtres.anneeProtection.join('-'));
   if (etat.filtres.nbPalissy > 0) p.set('objets', String(etat.filtres.nbPalissy));
   if (etat.vue !== 'carte') p.set('vue', etat.vue);
@@ -130,6 +135,7 @@ export function decoder(chaine: string): EtatPartage & { cadrage: VueCarte | nul
     .filter((n): n is number => n !== null && n >= SIECLE_MIN && n <= SIECLE_MAX);
 
   filtres.recherche = (p.get('q') ?? '').trim();
+  filtres.texte = (p.get('texte') ?? '').trim();
 
   const bornes = (p.get('annees') ?? '').split('-');
   if (bornes.length === 2) {

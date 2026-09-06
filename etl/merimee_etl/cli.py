@@ -11,6 +11,7 @@ from pathlib import Path
 from .build import transform, write_artifacts
 from .config import OUT_DIR, RAW_CSV, REPORT_DIR
 from .load import load_raw
+from .texte import construire as construire_index
 
 
 def _human(size: int) -> str:
@@ -39,6 +40,14 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"écriture {args.out} ...")
     sizes = write_artifacts(monuments, protections, details, args.out)
+
+    # Absent si `duckdb` ou l'extension `fts` manque : la recherche plein texte
+    # n'est alors pas proposée, et rien d'autre ne change.
+    index = construire_index(args.out)
+    if index:
+        sizes.update(index)
+    else:
+        print("index plein texte non construit (duckdb ou extension fts absente)")
 
     args.report.mkdir(parents=True, exist_ok=True)
     rejets_path = args.report / "rejets.csv"
