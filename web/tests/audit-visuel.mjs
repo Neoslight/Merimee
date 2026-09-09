@@ -14,7 +14,7 @@
  *
  * Usage : npm run audit   (exige un `npm run build` prealable)
  */
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { chromium } from 'playwright';
 import { demarrer } from './serveur.mjs';
 
@@ -22,8 +22,19 @@ const chemin = (u) => new URL(u, import.meta.url).pathname.replace(/^\/([A-Za-z]
 const SORTIE = chemin('../.audit-screenshots');
 const RELEVES = `${SORTIE}/releves`;
 
-rmSync(SORTIE, { recursive: true, force: true });
+/**
+ * La passe efface **ce qu'elle produit**, pas le dossier.
+ *
+ * Un `rmSync` sur `SORTIE` est la version courte, et elle emporte tout ce qu'on
+ * pose a cote — le rapport d'audit ecrit apres la premiere passe a disparu a la
+ * seconde, sans un mot. Un script qui detruit ce qu'il n'a pas ecrit est un
+ * piege : on ne s'en apercoit qu'apres avoir perdu quelque chose.
+ */
+rmSync(RELEVES, { recursive: true, force: true });
 mkdirSync(RELEVES, { recursive: true });
+for (const nom of readdirSync(SORTIE)) {
+  if (nom.endsWith('.png') || nom === 'journal.txt') rmSync(`${SORTIE}/${nom}`, { force: true });
+}
 
 // Port distinct de celui de `smoke.mjs` : les deux doivent pouvoir tourner cote a cote.
 const { serveur, url: BASE } = await demarrer(chemin('../build'), 4181);
