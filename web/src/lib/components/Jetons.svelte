@@ -22,12 +22,12 @@
     <!-- Le nom accessible porte l'action, pas la seule valeur : sans cela une
          puce « architecture militaire » et l'option de meme nom dans le panneau
          de facettes deviennent deux boutons indiscernables. -->
-    <button aria-label="Retirer le filtre {jeton.libelle}" onclick={() => onretirer(jeton)}>
+    <button class="frappe-44-v" aria-label="Retirer le filtre {jeton.libelle}" onclick={() => onretirer(jeton)}>
       <span>{jeton.libelle}</span>
       <i aria-hidden="true">×</i>
     </button>
   {/each}
-  <button class="raz" onclick={onreset}>
+  <button class="raz frappe-44-v" onclick={onreset}>
     effacer {actifs} filtre{actifs > 1 ? 's' : ''}
   </button>
 </div>

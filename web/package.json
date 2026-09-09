@@ -11,7 +11,8 @@
     "test": "node tests/smoke.mjs",
     "build:pages": "cross-env BASE_PATH=Merimee vite build",
     "deploy": "npm run build:pages && gh-pages -d build --nojekyll --no-history -m \"deploy: build statique\"",
-    "apercu": "node tests/apercu-social.mjs"
+    "apercu": "node tests/apercu-social.mjs",
+    "audit": "node tests/audit-visuel.mjs"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.6",

@@ -28,6 +28,7 @@
     filters,
     jetonsActifs,
     replier,
+    poserSaisie,
     reset,
     retirer,
     toggleSiecle,
@@ -124,6 +125,9 @@
     const mode = cible;
     const minuteur = setTimeout(async () => {
       const mien = ++jetonTexte;
+      // La saisie brute est posee avant le filtre : c'est elle que la puce
+      // affiche, et le filtre est ce qui declenche le cycle.
+      poserSaisie(saisie);
       if (mode === 'titres') {
         await preparer('');
         if (mien !== jetonTexte) return;
@@ -400,7 +404,10 @@
     <div class="centre-barre">
       <nav class="bascule">
         {#each VUES as choix (choix.cle)}
+          <!-- Trois boutons en rang : la zone de frappe ne s'etend qu'en
+               hauteur, sinon celle de « Matrice » recouvrirait « Carte ». -->
           <button
+            class="frappe-44-v"
             class:actif={vue === choix.cle}
             aria-pressed={vue === choix.cle}
             onclick={() => (vue = choix.cle)}
@@ -445,7 +452,7 @@
       <!-- Le libelle est porte par `aria-label` et non par le texte : l'icone
            dit la destination (lune vers le sombre, soleil vers le clair), le
            nom accessible la nomme. -->
-      <button class="theme" onclick={basculer}
+      <button class="theme frappe-44" onclick={basculer}
               aria-label={theme.courant === 'clair' ? 'Sombre' : 'Clair'}
               title={theme.courant === 'clair'
                 ? 'Passer au thème sombre'
@@ -480,6 +487,7 @@
           vueInitiale={cadrageInitial}
           bind:fond
           bind:suivreVue
+          friseOuverte={friseOuverte}
           onselect={(ref) => (selection = ref)}
           onbbox={(bbox) => (filters.bbox = bbox)}
         />
@@ -559,7 +567,7 @@
              ouvert : la croix de l'en-tete du tiroir est alors le seul geste
              de fermeture, et le bouton revient avec elle. -->
         {#if !facettesOuvertes}
-          <button class="filtres" aria-expanded="false"
+          <button class="filtres frappe-44" aria-expanded="false"
                   onclick={() => (facettesOuvertes = true)}>
             Filtres{#if actifs > 0} <em>{actifs}</em>{/if}
           </button>
@@ -572,7 +580,7 @@
         <div class="colonne facettes" class:ouvert={facettesOuvertes}>
           <div class="entete-tiroir">
             <h2>Filtres</h2>
-            <button class="fermer-tiroir" aria-label="Fermer les filtres"
+            <button class="fermer-tiroir frappe-44" aria-label="Fermer les filtres"
                     onclick={() => (facettesOuvertes = false)}>×</button>
           </div>
           <!-- La zone visible est un critere comme un autre : elle rejoint
@@ -614,7 +622,7 @@
           onfermer={() => (friseOuverte = false)}
         />
       {:else}
-        <button class="replier" aria-expanded="false"
+        <button class="replier frappe-44-v" aria-expanded="false"
                 onclick={() => (friseOuverte = true)}>
           Afficher les frises
         </button>
@@ -727,7 +735,7 @@
 
   .cible {
     flex: 0 0 auto;
-    height: 40px;
+    height: 44px;
     padding: 0 14px;
     background: transparent;
     border: 1px solid var(--bord);
@@ -741,7 +749,15 @@
       color var(--t-rapide);
   }
 
-  .cible:hover:not(:disabled) {
+  /* `:not(.actif)` n'est pas une precaution de style, c'est ce qui rend le
+     bouton lisible une fois active. Sans lui, ce selecteur pese (0,4,0) contre
+     (0,3,0) pour `.cible.actif` : sa `color` gagne, le `background` de l'etat
+     actif reste, et comme `--texte` **vaut exactement** `--plein-fond` dans les
+     deux themes (#1a1d20 en clair, #f2f0ea en sombre), le libelle disparait
+     dans son propre fond — mesure a 1,00:1. Au pointeur fin le texte revient
+     des que la souris s'ecarte ; au tactile le `:hover` reste colle jusqu'au
+     geste suivant, et la pastille reste vide. */
+  .cible:hover:not(:disabled):not(.actif) {
     color: var(--texte);
     border-color: var(--inscrit);
   }
@@ -762,10 +778,14 @@
     cursor: not-allowed;
   }
 
+  /* 44 px et non 40 : un `<input>` n'accepte pas de pseudo-element, donc la
+     zone de frappe etendue lui est interdite — sa hauteur reelle est la seule
+     cible qu'il ait. Ses deux voisins de la barre suivent, sinon le groupe
+     median se desaligne. */
   .recherche {
     flex: 1 1 auto;
     min-width: 0;
-    height: 40px;
+    height: 44px;
     padding: 0 16px 0 38px;
     background:
       var(--icone-recherche) no-repeat 14px 50% / 15px 15px,
@@ -774,6 +794,10 @@
     border-radius: var(--r-pilule);
     color: var(--texte);
     font-size: 13px;
+    /* Le texte de substitution est plus long que le champ, meme a 1920 px ou le
+       groupe median est borne a 700 px : sans cela il se coupe en plein mot,
+       sans rien qui signale qu'il manque quelque chose. */
+    text-overflow: ellipsis;
     transition:
       border-color var(--t-rapide),
       background-color var(--t-rapide);
@@ -823,7 +847,7 @@
      et que la bascule de cible, sinon la rangee se decale d'un pixel. */
   .hasard {
     flex: 0 0 auto;
-    height: 40px;
+    height: 44px;
     padding: 0 15px;
     border: 1px solid var(--bord-appuye);
     border-radius: var(--r-pilule);
@@ -924,9 +948,13 @@
 
   /* La case de zone visible se pose sous l'en-tete du tiroir, hors de la
      partie qui defile : c'est un critere de cadrage, pas une facette de plus. */
+  /* La case elle-meme fait 15 px, mais c'est le label qui recoit le clic : sa
+     hauteur est donc la vraie cible, portee ici a 44 px. Agrandir la case
+     aurait donne une coche disproportionnee dans un tiroir dense. */
   .zone {
     display: flex;
     align-items: center;
+    min-height: 44px;
     gap: 9px;
     padding: 0 22px 14px;
     background: var(--fond-carte);
@@ -1251,6 +1279,27 @@
 
   .replier:hover {
     color: var(--texte);
+  }
+
+  /* Au-dela de 1440 px, la liste laissait pres de la moitie de l'ecran vide a
+     droite : chaque entree est une ligne pleine largeur cliquable, donc ce vide
+     n'etait meme pas une colonne de lecture bornee. Le contenu se recentre sur
+     1120 px — titre et entrees ensemble, sans quoi les deux se desaligneraient.
+     Le seuil n'est pas cosmetique : la reserve du bouton flottant est
+     neutralisee ici, et il faut que la marge laissee par le centrage
+     (160 px a 1440) depasse l'empreinte du bouton (108 px avec son badge),
+     sinon le titre repasserait dessous. */
+  @media (min-width: 1440px) {
+    .liste header {
+      padding-left: 20px;
+    }
+
+    .liste header h3,
+    .liste header p,
+    .liste ul {
+      max-width: 1120px;
+      margin-inline: auto;
+    }
   }
 
   @media (max-width: 1320px) {

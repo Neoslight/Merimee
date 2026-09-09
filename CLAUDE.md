@@ -44,6 +44,7 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `web/src/lib/components/` | `MonumentMap`, `FacetPanel`, `Jetons`, `Timeline`, `Matrice`, `DetailPanel` |
 | `web/tests/smoke.mjs` | 127 vérifications en Chromium réel, avec `serveur.mjs` instrumenté |
 | `web/tests/apercu-social.mjs` | régénère la vignette Open Graph depuis l'application |
+| `web/tests/audit-visuel.mjs` | 112 captures + relevés WCAG chiffrés, **hors** `npm run test` |
 
 ## Commandes
 
@@ -57,6 +58,7 @@ cd web  && npm run dev                  # http://localhost:5173
 cd web  && npm run check                # svelte-check, doit rester à 0/0
 cd web  && npm run build && npm run test # build statique + 127 vérifications navigateur
 cd web  && npm run apercu               # régénère static/apercu-social.png
+cd web  && npm run audit                # 112 captures + relevés dans .audit-screenshots/
 cd web  && npm run deploy               # build /Merimee + push sur gh-pages
 ```
 
@@ -525,6 +527,66 @@ de celui qui le reçoit. Même règle que les tiroirs du gabarit téléphone. Un
 inline en tête d'`app.html` pose `data-theme` avant le premier paint — sans lui le
 site est prérendu en sombre puis bascule à l'hydratation.
 
+**Les cibles se touchent au doigt sans que les pilules grossissent.** Le produit
+assume sa densité, et WCAG 2.5.5 demande 44 px : `app.css` porte donc deux classes,
+`.frappe-44` et `.frappe-44-v`, qui posent un `::after` transparent centré. La pilule
+garde sa taille, son fond et son filet ; seule la surface qui répond au doigt s'étend.
+Quatre points à ne pas défaire :
+
+- **`-v` étend la hauteur seule, et ce n'est pas un raffinement.** Sur des boutons en
+  rang — le rail « statut / époque », les trois onglets de vue, les puces de filtres,
+  les deux fonds historiques — deux zones de 44 px se recouvriraient latéralement, et le
+  dernier dans l'ordre du DOM prendrait le clic de son voisin ;
+- **trois éléments n'ont pas pu la recevoir.** Un `<input>` n'accepte pas de
+  pseudo-élément : le champ de recherche monte donc à **44 px réels**, et `.cible` et
+  `.hasard` le suivent, sinon le groupe médian se désaligne. Le zoom MapLibre non plus —
+  `.maplibregl-ctrl-group` porte `overflow: hidden`, qui rognerait la zone — d'où deux
+  boutons de **44 px réels**, et la conséquence ci-dessous ;
+- **`top: 108px` sur `.ouvrir-fonds` / `.fonds` suit la hauteur du zoom.** Les deux
+  boutons passés de 29 à 44 px, le groupe MapLibre mesure 91 px au lieu de 61 : à 78 px
+  le module des cartes anciennes lui rentrait dedans. Changer l'un sans l'autre fait
+  chevaucher les deux blocs, et rien ne le signale sinon à l'œil ;
+- **les pilules d'options des facettes restent à 30 px**, délibérément. Ce sont des
+  cibles en grille, elles passent le seuil AA de WCAG 2.2 (24 px), et les porter à 44
+  changerait la densité du tiroir. L'attribution MapLibre reste à 11 px pour une autre
+  raison : l'agrandir la ferait monter vers la légende, dont un test garde la
+  **disjonction géométrique**.
+
+**Trois niveaux de gris utiles en clair, quatre en sombre.** `--texte-tenu` valait
+2,48:1 sur `--carte-terre` et portait une trentaine de textes courants — sous-titre de la
+marque, mot « notices », comptes de facette, texte de substitution des champs, lieu et
+crédit de la fiche. Le mettre en conformité (#6e695f, 4,54:1) le rapproche de
+`--texte-faible` au point que la hiérarchie claire compte désormais **trois** niveaux
+lisibles. C'est assumé : sur des fonds à 95 % de clarté, AA ne laisse pas la place à un
+quatrième. En sombre l'écart tient (#8a8680 contre #a5a09a). Ne pas « rétablir » le
+quatrième niveau en éclaircissant : il n'y a pas de place pour lui.
+
+**`.cible:hover` porte `:not(.actif)`, et c'est ce qui rend le bouton lisible.** Sans
+lui le sélecteur pèse (0,4,0) contre (0,3,0) pour `.cible.actif` : sa `color` gagne, le
+`background` de l'état actif reste, et comme `--texte` **vaut exactement** `--plein-fond`
+dans les deux thèmes, le libellé disparaît dans son propre fond — mesuré à 1,00:1. Au
+pointeur fin le texte revient dès que la souris s'écarte ; au tactile le `:hover` reste
+collé et la pastille reste vide. C'est le seul endroit du produit où une règle de survol
+écrase une règle d'état ; un balayage des paires `:hover` / `.actif` n'en trouve pas
+d'autre.
+
+**Le pointeur Playwright fausse un audit visuel.** Il reste où le dernier geste l'a
+laissé, donc la capture et le relevé portent un `:hover` figé. Quatre lecteurs de la
+première passe en ont conclu qu'un jeton de couleur était faux, alors que c'était le
+survol. `audit-visuel.mjs` écarte donc la souris avant chaque capture. Même piège pour
+les cibles : `getBoundingClientRect` ne voit ni le `::after` d'une zone étendue ni le
+`<label>` qui reçoit le clic d'une case — le relevé interroge les deux, sans quoi il
+continuerait à signaler 19 px là où le doigt en a 44.
+
+**La suite de tests échoue par intermittence sur `AbortError`, et ce n'est pas neuf.**
+Trois vérifications tombent ensemble — `deux bascules rapides ne laissent qu un style`,
+`le lien rouvre sans erreur et sans boucle`, `aucune erreur console` — quand MapLibre
+annule un chargement de style en vol. Mesuré en alternance sur la même machine, quatre
+tours : **origine 124 · 124 · 123 · 124**, après correctifs **124 · 122 · 127 · 124**.
+Le 127/127 annoncé plus haut est donc le meilleur cas, pas le cas courant. Avant
+d'imputer cet échec à une modification, refaire cette comparaison en alternance : le
+compter sur une seule exécution ne prouve rien.
+
 **Toute couleur vit dans `app.css`.** MapLibre et Plot ne savent pas lire une `var()` :
 `theme.svelte.ts` relit les jetons par `getComputedStyle` à chaque bascule et les
 expose dans `palette`. Une couleur écrite en dur dans un composant resterait muette
@@ -891,10 +953,6 @@ mesurée), pas le *quoi*.
   connexion unique. Le résoudre une fois par cycle dans une table temporaire plafonnée à
   24 819 lignes devrait le rendre négligeable. **À instrumenter avant de corriger** :
   `mesures.svelte.ts` ne couvre aujourd'hui que la chaîne des points.
-- **Cibles tactiles sous 44 px** sur les commandes les plus manipulées au doigt :
-  pastilles de la fiche et bascule de thème à 34 px, croix du tiroir à 30 px, croix de
-  la frise à 26 px. C'est un arbitrage avec la densité voulue du produit, pas un
-  oubli — d'où le renvoi ici plutôt qu'une correction silencieuse.
 - **Les `:hover` s'appliquent au tactile et y restent collés** jusqu'au tap suivant, sur
   les pilules de facette et les puces de filtres notamment. Les envelopper dans
   `@media (hover: hover) and (pointer: fine)` les rendrait au pointeur seul.

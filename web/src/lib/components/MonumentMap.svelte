@@ -23,6 +23,11 @@
      *  dans le tiroir des filtres — c'en est un — donc l'etat vit dans la page,
      *  seule a posseder `filters.bbox`. */
     suivreVue: boolean;
+    /** La frise occupe le bas de l'ecran. Sur gabarit etroit, la legende s'y
+     *  ajoutait : il ne restait qu'un quart de hauteur a la carte, entre la
+     *  barre et le panneau. Elle se replie alors en une bande de cles, sans ses
+     *  commandes — celles-ci restent atteignables des que la frise se referme. */
+    friseOuverte: boolean;
     onselect: (reference: string) => void;
     onbbox: (bbox: [number, number, number, number] | null) => void;
   }
@@ -33,6 +38,7 @@
     vueInitiale,
     fond = $bindable(),
     suivreVue = $bindable(),
+    friseOuverte,
     onselect,
     onbbox
   }: Props = $props();
@@ -545,7 +551,7 @@
 
 <div class="carte" bind:this={conteneur}></div>
 
-<div class="legende">
+<div class="legende" class:compacte={friseOuverte}>
   <div class="cles">
     {#if densite}
       <!-- Sous la densite, les teintes de statut ne disent plus rien : la
@@ -572,15 +578,15 @@
   <div class="commandes">
     <span class="etiquette">colorer par</span>
     <div class="segments">
-      <button class="mode" class:actif={mode === 'statut'} aria-pressed={mode === 'statut'}
+      <button class="mode frappe-44-v" class:actif={mode === 'statut'} aria-pressed={mode === 'statut'}
               onclick={() => (mode = 'statut')}
               title="Colorer les points par statut de protection">statut</button>
-      <button class="mode" class:actif={mode === 'epoque'} aria-pressed={mode === 'epoque'}
+      <button class="mode frappe-44-v" class:actif={mode === 'epoque'} aria-pressed={mode === 'epoque'}
               onclick={() => (mode = 'epoque')}
               title="Colorer les points par époque de construction">époque</button>
     </div>
     <i class="separateur" aria-hidden="true"></i>
-    <button class="densite" class:actif={densite} onclick={basculerDensite}
+    <button class="densite frappe-44-v" class:actif={densite} onclick={basculerDensite}
             aria-pressed={densite} title="Afficher la densité plutôt que les points seuls">
       densité
     </button>
@@ -595,11 +601,11 @@
   <div class="fonds">
     <div class="entete-fonds">
       <p class="titre-outil">Cartes anciennes</p>
-      <button class="fermer-fonds" aria-label="Replier les cartes anciennes"
+      <button class="fermer-fonds frappe-44" aria-label="Replier les cartes anciennes"
               onclick={() => (fondsOuverts = false)}>×</button>
     </div>
     {#each HISTORIQUES as h (h.cle)}
-      <button class:actif={fond === h.cle} onclick={() => choisirFond(h.cle)}
+      <button class="frappe-44-v" class:actif={fond === h.cle} onclick={() => choisirFond(h.cle)}
               aria-pressed={fond === h.cle}
               title="Superposer la carte {h.titre} ({h.epoque}) — {h.poids}">
         <span class="nom-fond">{h.titre}</span>
@@ -617,7 +623,7 @@
     {/if}
   </div>
 {:else}
-  <button class="ouvrir-fonds" class:actif={fond !== null} aria-expanded="false"
+  <button class="ouvrir-fonds frappe-44" class:actif={fond !== null} aria-expanded="false"
           aria-label="Cartes anciennes"
           title="Superposer une carte ancienne — Cassini, état-major"
           onclick={() => (fondsOuverts = true)}>
@@ -781,12 +787,15 @@
   }
 
   /* Le module prolonge la colonne d'outils du zoom : meme bord droit, meme
-     largeur au repos, meme langage graphique. 78 px : la hauteur du groupe
-     MapLibre (deux boutons de 29 px et son filet) plus sa marge de 10 px. */
+     largeur au repos, meme langage graphique. 108 px : la hauteur du groupe
+     MapLibre — deux boutons **de 44 px** depuis qu'ils sont a la taille du
+     doigt, plus son filet et ses bordures — et sa marge de 10 px. Cette valeur
+     suit celle du zoom : la changer d'un cote sans l'autre fait chevaucher les
+     deux blocs, et rien ne le signale sinon a l'oeil. */
   .ouvrir-fonds,
   .fonds {
     position: absolute;
-    top: 78px;
+    top: 108px;
     right: calc(var(--marge-droite, 0px) + 10px);
     z-index: 2;
     border: 1px solid var(--bord-flottant);
@@ -956,12 +965,23 @@
 
     .ouvrir-fonds,
     .fonds {
-      top: 74px;
+      top: 104px;
     }
 
     .fonds {
       width: 146px;
       padding: 8px 9px 9px;
+    }
+
+    /* Legende et frise ouvertes ensemble ne laissaient qu'un quart de la
+       hauteur a la carte, entre la barre et le panneau : on perdait le repere
+       geographique au moment ou l'on croise deux chronologies. La legende garde
+       alors ses cles — elles disent ce qu'on voit, et une carte sans legende ne
+       se lit pas — et abandonne ses commandes, qui reviennent des que la frise
+       se referme. Le repli ne vaut **que** sur ce gabarit : au large, les deux
+       panneaux cohabitent sans se disputer la place. */
+    .legende.compacte .commandes {
+      display: none;
     }
   }
 </style>

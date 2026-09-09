@@ -167,7 +167,12 @@
                 aria-pressed={actives.includes(item.valeur)}
                 onclick={() => toggle(CIBLES[section.cle], item.valeur)}
               >
-                <span class="etiquette">{item.valeur}</span>
+                <!-- Le libelle est coupe a 200 px par l'ellipse, et certaines
+                     denominations en font 389 : « architecture hospitaliere,
+                     d'assis… » ne se devine pas. Le `title` est le seul moyen
+                     d'atteindre la valeur entiere — au pointeur comme aux
+                     technologies d'assistance. -->
+                <span class="etiquette" title={item.valeur}>{item.valeur}</span>
                 <span class="compte">{nf.format(item.n)}</span>
               </button>
             </li>
@@ -219,9 +224,16 @@
     border-bottom: none;
   }
 
+  /* L'en-tete est une cible **isolee** : elle peut prendre ses 44 px en
+     hauteur reelle, ce qui coute une vingtaine de pixels par section dans un
+     tiroir qui defile deja. Les pilules d'options, elles, restent a 30 px :
+     ce sont des cibles en grille, elles passent le seuil AA de WCAG 2.2
+     (24 px), et les porter a 44 changerait la densite du tiroir — c'est un
+     arbitrage, pas un oubli. */
   .titre {
     display: flex;
     align-items: center;
+    min-height: 44px;
     gap: 9px;
     width: 100%;
     padding: 0 0 11px;

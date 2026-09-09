@@ -283,7 +283,7 @@
 <section class="frise">
   <!-- La frise se replie a toutes les largeurs, comme le tiroir des filtres :
        la croix est ici, le bouton qui la rouvre est dans la page. -->
-  <button class="fermer-frise" aria-label="Masquer les frises" onclick={onfermer}>×</button>
+  <button class="fermer-frise frappe-44" aria-label="Masquer les frises" onclick={onfermer}>×</button>
 
   <div class="piste">
     <header>

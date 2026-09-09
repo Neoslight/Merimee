@@ -19,3 +19,6 @@ web/build/
 .DS_Store
 web/tests/apercu.png
 web/tests/echec.png
+
+# Audit visuel (captures et releves, regenerables)
+web/.audit-screenshots/

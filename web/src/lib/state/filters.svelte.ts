@@ -101,6 +101,34 @@ export const filters = $state<Filters>(filtresVides());
  */
 let termesResolus: number[] | null = null;
 
+/**
+ * La saisie telle qu'elle a ete tapee, pour l'affichage seul.
+ *
+ * `filters.recherche` et `filters.texte` portent la forme **repliee** —
+ * minuscules sans accents — parce que c'est elle qui interroge `search_key` et
+ * le lexique. Cette forme fuyait dans les puces : on tapait « jube » et la
+ * puce annoncait « historiques : « jube » ». Elle vit hors de `filters` pour
+ * la meme raison que `termesResolus` : elle en derive, et l'ajouter a
+ * `JSON.stringify(filters)` doublerait la signature du cycle de requetes sans
+ * rien y apporter.
+ *
+ * Repli volontaire sur la forme repliee quand elle est vide : un permalien
+ * ouvre l'application avec un filtre mais sans saisie, et la puce doit quand
+ * meme se nommer.
+ */
+let saisieBrute = '';
+
+export function poserSaisie(brute: string): void {
+  saisieBrute = brute.trim();
+}
+
+/** Rend la saisie d'origine quand elle correspond au filtre courant, la forme
+ *  repliee sinon — cas d'un permalien, ou d'un filtre pose sans passer par le
+ *  champ. Comparer les deux formes evite d'afficher une saisie perimee. */
+function affichable(replie: string): string {
+  return replier(saisieBrute) === replie ? saisieBrute : replie;
+}
+
 export function poserTermes(termes: readonly number[] | null): void {
   termesResolus = termes === null ? null : [...termes];
 }
@@ -236,12 +264,12 @@ export function jetonsActifs(f: Filters): Jeton[] {
     } else if (cle === 'nbPalissy' && f.nbPalissy > 0) {
       jetons.push({ cle, libelle: `≥ ${f.nbPalissy} objets` });
     } else if (cle === 'recherche' && f.recherche) {
-      jetons.push({ cle, libelle: `« ${f.recherche} »` });
+      jetons.push({ cle, libelle: `« ${affichable(f.recherche)} »` });
     } else if (cle === 'texte' && f.texte) {
       // Libelle distinct de celui de la recherche par titre : les deux puces
       // seraient autrement indiscernables, pour un lecteur d'ecran comme pour
       // Playwright en mode strict.
-      jetons.push({ cle, libelle: `historiques : « ${f.texte} »` });
+      jetons.push({ cle, libelle: `historiques : « ${affichable(f.texte)} »` });
     } else if (cle === 'bbox' && f.bbox) {
       jetons.push({ cle, libelle: 'zone visible' });
     }

@@ -280,7 +280,7 @@
         </figure>
       {/if}
 
-      <button class="pastille fermer" onclick={onclose} aria-label="Fermer la fiche">
+      <button class="pastille fermer frappe-44" onclick={onclose} aria-label="Fermer la fiche">
         <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
           <polyline points="8.5,2.5 4,7 8.5,11.5" stroke="currentColor" stroke-width="1.5"
                     stroke-linecap="round" stroke-linejoin="round" />
@@ -289,7 +289,7 @@
       <!-- Le nom accessible differe du libelle de la barre : deux boutons de
            meme nom seraient indiscernables, pour un lecteur d'ecran comme pour
            un test. -->
-      <button class="pastille copier" onclick={oncopier}
+      <button class="pastille copier frappe-44" onclick={oncopier}
               aria-label="Copier le lien de la notice">
         {#if copie}
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
@@ -898,5 +898,19 @@
 
   a:hover {
     text-decoration: underline;
+  }
+
+  /* Sur gabarit etroit la fiche remonte en feuille pleine largeur, et le cadre,
+     qui suit le rapport reel du fichier, prenait alors pres de 570 px de haut :
+     le titre de l'edifice — la seule chose qui dise sur quoi on a clique —
+     arrivait coupe en deux par le bord de l'ecran. La hauteur affichee est donc
+     bornee ici, et **seulement ici**. Le rapport lui-meme n'est pas touche :
+     `object-fit` continue de faire son travail dans le cadre reduit, et le
+     couple bornes 0,68 / 1,9 reste la regle sur les gabarits ou la fiche est
+     une colonne. */
+  @media (max-width: 768px) {
+    .cadre {
+      max-height: 48dvh;
+    }
   }
 </style>

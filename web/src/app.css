@@ -32,8 +32,20 @@
   --bord-appuye: #e0d8c6;
   --texte: #1a1d20;
   --texte-moyen: #4a463f;
-  --texte-faible: #6e6a62;
-  --texte-tenu: #9a958a;
+  /* `--texte-faible` ne fautait que d'un point, et sur un seul fond : les cles
+     de la legende, seul endroit ou il se pose sur la terre du fond de carte —
+     4,47:1 pour un seuil de 4,5. */
+  --texte-faible: #6d6962;
+  /* Ce jeton portait 2,48:1 sur `--carte-terre` et 2,91:1 sur `--fond-carte`,
+     pour une trentaine de porteurs de **texte courant** : sous-titre de la
+     marque, mot « notices », comptes de facette, cardinalites, texte de
+     substitution des champs, lieu et credit de la fiche, note de la matrice.
+     Un seul jeton, donc un seul correctif — mais il rapproche `--texte-tenu`
+     de `--texte-faible` au point que la hierarchie compte **trois** niveaux
+     utiles et non quatre. C'est assume : sur des fonds a 95 % de clarte, AA ne
+     laisse pas la place a un quatrieme. Le garder pale aurait voulu dire ne
+     plus jamais y mettre de texte. */
+  --texte-tenu: #6e695f;
 
   /* Couleurs d'identite, sans porteur aujourd'hui : `.scene` etait le dernier,
      et elle prend desormais `--carte-terre` — la couleur que le fond de carte
@@ -43,7 +55,12 @@
   --ardoise-clair: #2a2e33;
 
   --accent: #b94723; /* texte et liens : 4,5:1 sur --fond */
-  --accent-plein: #c85a32; /* aplats, pastilles, barres de frise */
+  /* Assombri de trois points : `--texte-sur-plein` y rendait 4,23:1, sous le
+     seuil, sur les deux pastilles qui portent un chiffre blanc — le badge du
+     bouton « Filtres » et celui de la selection d'une facette. Les autres
+     porteurs (voile de brossage, `accent-color` de la case) ne portent pas de
+     texte : l'ecart ne s'y voit pas. */
+  --accent-plein: #c05730; /* aplats, pastilles, barres de frise */
   --accent-doux: rgba(200, 90, 50, 0.09);
   --erreur: #b13521;
 
@@ -201,7 +218,10 @@
   --texte: #f2f0ea;
   --texte-moyen: #d6d2c8;
   --texte-faible: #a5a09a;
-  --texte-tenu: #7e7a74;
+  /* Meme correctif qu'en clair, moins severe : 3,83:1 sur `--fond-carte`. La
+     hierarchie sombre, elle, garde ses quatre niveaux — `--texte-faible`
+     (#a5a09a) reste a 6,30:1, l'ecart entre les deux tient. */
+  --texte-tenu: #8a8680;
 
   --ardoise: #101215;
   --ardoise-clair: #23262a;
@@ -347,6 +367,16 @@ a:hover {
   border-top: 1px solid var(--bord) !important;
 }
 
+/* Les deux boutons de zoom sont livres a 29 px. Ils sont les seuls du produit
+   a ne pas pouvoir recevoir de zone de frappe etendue : `.maplibregl-ctrl-group`
+   porte `overflow: hidden` — sans quoi les coins arrondis laisseraient passer
+   les angles des boutons — et un pseudo-element y serait rogne. La pastille
+   grandit donc reellement, de 58 a 88 px de haut pour les deux. */
+.maplibregl-ctrl-group button {
+  width: 44px !important;
+  height: 44px !important;
+}
+
 .maplibregl-ctrl-group button:hover {
   background: var(--fond-creux) !important;
 }
@@ -357,4 +387,47 @@ a:hover {
    sur une image de fond. */
 :root[data-theme='sombre'] .maplibregl-ctrl-group button .maplibregl-ctrl-icon {
   filter: invert(1);
+}
+
+/* --- Zones de frappe -------------------------------------------------------
+   Le produit assume sa densite : plusieurs commandes tiennent en 19 a 31 px de
+   haut, la ou le doigt en demande 44 (WCAG 2.5.5). Agrandir les pastilles
+   aurait change le caractere du produit ; ces deux classes agrandissent la
+   **surface qui repond au doigt** et rien d'autre — la pilule garde sa taille,
+   son fond et son filet.
+
+   Trois points a ne pas defaire :
+
+   - `.frappe-44` etend les deux axes, `.frappe-44-v` la hauteur seule. Sur des
+     boutons **adjacents** — le rail « statut / epoque », les trois onglets de
+     vue — deux zones de 44 px se recouvriraient lateralement et le dernier
+     dans l'ordre du DOM prendrait le clic de son voisin. La regle est donc :
+     bouton isole, les deux axes ; bouton en rang, la hauteur seule ;
+   - le porteur doit etre `position: relative` et ne pas vivre sous un
+     `overflow: hidden` qui rognerait la zone ;
+   - la zone est **transparente et sans fond** : elle ne se voit sur aucune
+     capture. C'est aussi ce qui la rend invisible a un releve qui lit
+     `getBoundingClientRect` — `tests/audit-visuel.mjs` interroge donc le
+     pseudo-element, sans quoi il continuerait a signaler 19 px. */
+.frappe-44,
+.frappe-44-v {
+  position: relative;
+}
+
+.frappe-44::after,
+.frappe-44-v::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  height: max(100%, 44px);
+}
+
+.frappe-44::after {
+  width: max(100%, 44px);
+}
+
+.frappe-44-v::after {
+  width: 100%;
 }
