@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Exploration cartographique et chronologique des 46 760 immeubles protégés au titre des monuments historiques (base Mérimée)." />
+    <link rel="icon" href="/Merimee/favicon.svg" type="image/svg+xml" />
+
+    <!-- Pose le theme avant le premier paint. Sans ce script la page s'affiche
+         en sombre puis bascule : le site est prerendu, aucun rendu serveur ne
+         connait la preference du visiteur. Le nom de la cle est repris dans
+         `lib/state/theme.svelte.ts`. -->
+    <script>
+      try {
+        var t = localStorage.getItem('merimee-theme');
+        if (t !== 'clair' && t !== 'sombre')
+          t = matchMedia('(prefers-color-scheme: light)').matches ? 'clair' : 'sombre';
+        document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
+
+    <!-- Carte de lien. L'URL de l'image doit être absolue : les agrégateurs ne
+         résolvent pas un chemin relatif, et `/Merimee` n'en produit
+         pas d'absolu. Elle est donc figée sur le domaine de publication, et
+         cesserait d'être valable si le site déménageait. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Mérimée" />
+    <meta property="og:title" content="Mérimée — 46 760 monuments historiques" />
+    <meta property="og:description" content="Carte, filtrage croisé et double frise : époque de construction contre année de protection, de 1840 à 2026." />
+    <meta property="og:url" content="https://neoslight.github.io/Merimee/" />
+    <meta property="og:image" content="https://neoslight.github.io/Merimee/apercu-social.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <link href="/Merimee/_app/immutable/entry/start._h57pp0Y.js" rel="modulepreload">
+		<link href="/Merimee/_app/immutable/chunks/DEJi8hrZ.js" rel="modulepreload">
+		<link href="/Merimee/_app/immutable/chunks/DTogMCBI.js" rel="modulepreload">
+		<link href="/Merimee/_app/immutable/chunks/BvU6DdQQ.js" rel="modulepreload">
+		<link href="/Merimee/_app/immutable/chunks/R78PjtxS.js" rel="modulepreload">
+		<link href="/Merimee/_app/immutable/entry/app.huINixt0.js" rel="modulepreload">
+		<link href="/Merimee/_app/immutable/chunks/DCJmxf8J.js" rel="modulepreload">
+		<link href="/Merimee/_app/immutable/chunks/C035VupA.js" rel="modulepreload">
+		<link href="/Merimee/_app/immutable/chunks/CiMp-9JU.js" rel="modulepreload">
+		<link href="/Merimee/_app/immutable/chunks/BTwmoDmP.js" rel="modulepreload">
+		<link href="/Merimee/_app/immutable/nodes/0.tN5e554E.js" rel="modulepreload">
+		
+		<link href="/Merimee/_app/immutable/assets/0.DFxJi_Ep.css" rel="stylesheet">
+  </head>
+  <body data-sveltekit-preload-data="hover">
+    <div style="display: contents">
+			<script>
+				{
+					__sveltekit_1vsozj = {
+						base: "/Merimee",
+						assets: "/Merimee"
+					};
+
+					const element = document.currentScript.parentElement;
+
+					Promise.all([
+						import("/Merimee/_app/immutable/entry/start._h57pp0Y.js"),
+						import("/Merimee/_app/immutable/entry/app.huINixt0.js")
+					]).then(([kit, app]) => {
+						kit.start(app, element);
+					});
+
+					if ('serviceWorker' in navigator) {
+						const script_url = '/Merimee/service-worker.js';
+						const policy = globalThis?.window?.trustedTypes?.createPolicy(
+							'sveltekit-trusted-url',
+							{ createScriptURL(url) { return url; } }
+						);
+						const sanitised = policy?.createScriptURL(script_url) ?? script_url;
+						addEventListener('load', function () {
+							navigator.serviceWorker.register(sanitised);
+						});
+					}
+				}
+			</script>
+		</div>
+  </body>
+</html>
