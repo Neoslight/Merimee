@@ -72,7 +72,10 @@ const SELECTEUR_VUE = '.bascule button:visible, .onglets button:visible';
 
 /** Sur telephone, les commandes de legende attendent la pastille « reglages ». */
 async function deplierReglages(page) {
-  const reglages = page.getByRole('button', { name: 'Réglages de la carte' });
+  // `exact` n'est pas une precaution : sans lui le nom se compare par
+  // sous-chaine, « Masquer les réglages de la carte » repond aussi, et l'aide
+  // refermait les reglages qu'elle devait ouvrir.
+  const reglages = page.getByRole('button', { name: 'Réglages de la carte', exact: true });
   if ((await reglages.count()) === 1 && (await reglages.isVisible())) {
     await reglages.click();
     await page.waitForTimeout(200);
@@ -149,7 +152,7 @@ async function raz(page) {
   }
   if ((await page.locator('.fonds').count()) === 1) {
     await page
-      .locator('.fonds .fermer')
+      .locator('.fonds .fermer-fonds')
       .first()
       .click()
       .catch(() => {});

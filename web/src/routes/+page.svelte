@@ -1007,14 +1007,18 @@
              style:transform={decalage !== null ? `translateY(${decalage}px)` : undefined}>
           <!-- Poignee de la feuille, telephone seulement. Un toucher bascule le
                cran, un glissement le deplace, tirer vers le bas ferme ; au
-               clavier, Entree bascule. -->
-          <button class="poignee" aria-expanded={cran === 'plein'}
-                  aria-label={cran === 'plein' ? 'Réduire la fiche' : 'Agrandir la fiche'}
-                  onpointerdown={saisirPoignee} onpointermove={glisserPoignee}
-                  onpointerup={lacherPoignee} onpointercancel={annulerPoignee}
-                  onclick={clavierPoignee}>
-            <span aria-hidden="true"></span>
-          </button>
+               clavier, Entree bascule. Rendue **seulement fiche ouverte** :
+               feuille fermee, elle restait un bouton focusable sous le bord de
+               l'ecran, invisible au clavier comme au lecteur d'ecran. -->
+          {#if selection !== null}
+            <button class="poignee" aria-expanded={cran === 'plein'}
+                    aria-label={cran === 'plein' ? 'Réduire la fiche' : 'Agrandir la fiche'}
+                    onpointerdown={saisirPoignee} onpointermove={glisserPoignee}
+                    onpointerup={lacherPoignee} onpointercancel={annulerPoignee}
+                    onclick={clavierPoignee}>
+              <span aria-hidden="true"></span>
+            </button>
+          {/if}
           <DetailPanel reference={selection} {copie} oncopier={copierLien}
                        bind:this={detailPanel} onclose={fermerFiche}
                        ontitre={(t) => (titreFiche = t)}
@@ -2143,14 +2147,15 @@
       max-height: 20dvh;
     }
 
-    /* 32 px reels plutot qu'une zone etendue : la feuille porte
-       `overflow: hidden`, qui rognerait un `::after` au-dessus d'elle. */
+    /* 44 px **reels** plutot qu'une zone etendue : la feuille porte
+       `overflow: hidden`, qui rognerait un `::after` au-dessus d'elle. L'audit
+       l'a relevee a 32 px, sous le seuil que le produit s'impose. */
     .poignee {
       display: flex;
       flex: 0 0 auto;
       align-items: center;
       justify-content: center;
-      height: 32px;
+      height: 44px;
       padding: 0;
       border: none;
       background: var(--fond-carte);

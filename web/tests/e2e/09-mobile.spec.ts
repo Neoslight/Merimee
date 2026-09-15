@@ -88,7 +88,7 @@ test('gabarit téléphone', async () => {
 
   await test.step('legende repliee sur ses cles', async () => {
     verifier('commandes de legende masquees par defaut', !(await page.locator('.legende .commandes').isVisible()));
-    await page.getByRole('button', { name: 'Réglages de la carte' }).click();
+    await page.getByRole('button', { name: 'Réglages de la carte', exact: true }).click();
     verifier('la pastille deplie les commandes', await page.locator('.legende .commandes').isVisible());
     await page.getByRole('button', { name: 'Masquer les réglages de la carte' }).click();
   });
