@@ -1,0 +1,69 @@
+name: CI
+
+# Ce que cette CI ne fait pas, volontairement :
+#
+# - elle ne lance jamais `python -m merimee_etl` : `data/raw/merimee.csv`
+#   (100 Mo) n'est pas versionné, donc aucun artefact Parquet n'existe ici.
+#   Les tests d'intégration de `etl/tests/test_pipeline.py` s'en aperçoivent
+#   eux-mêmes (`pytest.mark.skipif` sur l'absence de `web/static/data/…`) et
+#   se sautent proprement — seuls les tests unitaires (fonctions pures)
+#   tournent, et la commande sort en code 0 ;
+# - elle ne lance jamais `npm run test` (Playwright, `web/tests/e2e/`) : cette
+#   suite exige le build complet servi avec ses vraies données
+#   (`web/static/data/`, produites par l'ETL et elles aussi non versionnées)
+#   et appelle CARTO en réseau pour vérifier que le fond de carte clair est
+#   réellement reteinté — un service tiers dont la disponibilité rendrait
+#   cette CI intermittente. Ce dépôt tient délibérément ses tests
+#   automatisés hors réseau et hors données ; la suite e2e reste un geste
+#   manuel (`npm run build && npm run test`), avec les données en place.
+#
+# `npm run build`, lui, doit réussir sans `web/static/data/` : le site est
+# statique et n'interroge ses données qu'au chargement, dans le navigateur.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  etl:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: etl
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+
+      - run: pip install -r requirements.txt
+
+      # Les tests d'intégration (comparaison aux chiffres d'ANALYSE_MERIMEE.md)
+      # se sautent d'eux-mêmes en l'absence de `web/static/data/` — cf. le
+      # commentaire en tête de fichier. Seuls les tests unitaires tournent ici.
+      - run: python -m pytest tests -q
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - run: npm ci
+
+      - run: npm run check
+
+      - run: npm run test:unit
+
+      # Sans `web/static/data/` : `web/scripts/precharger.mjs`, chaîné à ce
+      # script, ne dépend que de `build/_app` et ne lit jamais `static/data`.
+      - run: npm run build

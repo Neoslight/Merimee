@@ -8,7 +8,8 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
-from .config import LAT_RANGE, LON_RANGE, PERIODES, REF_DIR
+from .config import (LAT_RANGE, LON_RANGE, PERIODES, PROTECTION_YEAR_MAX,
+                     PROTECTION_YEAR_MIN, REF_DIR)
 from .normalize import fold, normalize_text, split_multi
 
 # --------------------------------------------------------------------------
@@ -44,14 +45,18 @@ def parse_coords(value: str | None) -> tuple[float | None, float | None]:
 _SIECLE = re.compile(r"(\d{1,2})\s*(?:er|ère|re|è|e|ème)?\s*s\b", re.IGNORECASE)
 
 
-def parse_siecles(value: str | None) -> tuple[list[int], list[str]]:
-    """Renvoie (siècles numériques triés, périodes non numériques).
+def parse_siecles(value: str | None) -> tuple[list[int], list[str], list[str]]:
+    """Renvoie (siècles numériques triés, périodes non numériques, rejets).
 
     Un même segment peut porter plusieurs siècles : `limite 15e s. 16e s.`,
-    `12e s.. 16e s.`, `15e s. : 17e s.` produisent chacun deux valeurs.
+    `12e s.. 16e s.`, `15e s. : 17e s.` produisent chacun deux valeurs. Un
+    segment qui n'est ni un siècle ni une période connue de `PERIODES` était
+    perdu sans trace ; il rejoint désormais `etl/out/rejets.csv`, comme les
+    segments hors-format des protections.
     """
     siecles: set[int] = set()
     periodes: dict[str, None] = {}
+    rejects: list[str] = []
     for segment in split_multi(value):
         matches = _SIECLE.findall(segment)
         if matches:
@@ -60,7 +65,9 @@ def parse_siecles(value: str | None) -> tuple[list[int], list[str]]:
         periode = PERIODES.get(fold(segment))
         if periode:
             periodes.setdefault(periode, None)
-    return sorted(siecles), list(periodes)
+        else:
+            rejects.append(segment)
+    return sorted(siecles), list(periodes), rejects
 
 
 # --------------------------------------------------------------------------
@@ -142,22 +149,35 @@ def parse_protections(
 
     Les segments hors-format ne sont jamais silencieusement perdus : ils
     produisent quand même un événement (avec les champs lisibles) et sont
-    signalés pour le rapport `etl/out/rejets.csv`.
+    signalés pour le rapport `etl/out/rejets.csv`. Même règle pour un
+    mois/jour brut présent mais hors bornes (`_coerce` le réduit à `None`
+    sans le dire) et pour une année hors de `[PROTECTION_YEAR_MIN,
+    PROTECTION_YEAR_MAX]` : l'événement reste produit, l'année devient nulle,
+    et le segment part dans les rejets.
     """
     events: list[Protection] = []
     rejects: list[str] = []
     for segment in split_multi(value):
         cleaned = _clean_segment(segment)
         match = _DATE_HEAD.match(cleaned)
+        hors_bornes = False
         if match:
             annee = int(match.group("a"))
-            mois = _coerce(match.group("m"), 12)
-            jour = _coerce(match.group("j"), 31)
+            if not (PROTECTION_YEAR_MIN <= annee <= PROTECTION_YEAR_MAX):
+                annee = None
+                hors_bornes = True
+            mois_brut, jour_brut = match.group("m"), match.group("j")
+            mois = _coerce(mois_brut, 12)
+            jour = _coerce(jour_brut, 31)
+            if (mois_brut is not None and mois is None) or (
+                jour_brut is not None and jour is None
+            ):
+                hors_bornes = True
             libelle = cleaned[match.end():].strip(" :./-")
         else:
             annee = mois = jour = None
             libelle = cleaned.strip(" :./-")
-        if annee is None or not libelle:
+        if annee is None or not libelle or hors_bornes:
             rejects.append(segment)
         statut, partiel = classify_statut(libelle)
         events.append(

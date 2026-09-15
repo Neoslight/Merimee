@@ -11,7 +11,7 @@
  * `fts` de DuckDB est chargeable ; sans elle, les trois Parquet manquent et le
  * bouton disparait. Le reste du site est identique.
  */
-import { chargerIndex, resoudre, type StatsTexte } from '$lib/db/texte';
+import { chargerIndex, preparerClauseTexte, resoudre, type StatsTexte } from '$lib/db/texte';
 import { poserTermes, replier } from './filters.svelte';
 
 export type EtatIndex = 'repos' | 'chargement' | 'pret' | 'indisponible';
@@ -53,6 +53,8 @@ export async function charger(): Promise<boolean> {
   }
 }
 
+let generation = 0;
+
 /**
  * Traduit une saisie en identifiants de terme et les pose pour `buildWhere`.
  *
@@ -62,6 +64,12 @@ export async function charger(): Promise<boolean> {
  * chercher.
  */
 export async function preparer(saisie: string): Promise<number[]> {
+  // Deux preparations peuvent se chevaucher (frappe, puis frappe suivante
+  // avant que la premiere table soit posee) : seule la plus recente publie.
+  // Le jeton de la page ne garde que `filters.texte` ; sans celui-ci, une
+  // resolution lente poserait ses termes par-dessus ceux de la saisie
+  // courante, et le predicat viserait des mots que la puce n'affiche plus.
+  const mienne = ++generation;
   const mots = motsDe(saisie);
   if (!mots.length) {
     indexTexte.inconnus = [];
@@ -69,8 +77,13 @@ export async function preparer(saisie: string): Promise<number[]> {
     return [];
   }
   const resolus = await resoudre(mots);
-  indexTexte.inconnus = mots.filter((_, i) => resolus[i] === null);
   const termes = resolus.filter((t): t is number => t !== null);
+  // La table temporaire du predicat doit exister avant que `termesResolus` ne
+  // soit publie : c'est cette publication qui declenche le cycle de requetes,
+  // et `buildWhere` reste synchrone en visant un nom de table deja pose.
+  await preparerClauseTexte(termes);
+  if (mienne !== generation) return termes;
+  indexTexte.inconnus = mots.filter((_, i) => resolus[i] === null);
   poserTermes(termes);
   return termes;
 }

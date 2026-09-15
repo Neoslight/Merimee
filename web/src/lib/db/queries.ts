@@ -1,9 +1,10 @@
 /** Requetes du tableau de bord. Un scan complet coute ~46 760 lignes : inutile
  *  de materialiser des vues intermediaires, DuckDB repond en quelques ms. */
-import { fragmentDetails, query, queryArrow, lit } from './duckdb';
+import { fragmentDetails, query, queryArrow, lit, echapperLike } from './duckdb';
 import { scoreTexte } from './texte';
 import { indexTexte } from '$lib/state/texte.svelte';
 import { fragmentDe } from './shards';
+import { entite } from './points';
 import {
   buildWhere,
   replier,
@@ -81,18 +82,11 @@ export async function points(f: Filters): Promise<GeoJSON.FeatureCollection> {
     // aucun : seul `get` distingue « XXe » de « non renseigne ».
     const siecle = lot.getChild('siecle')!;
     for (let j = 0; j < lot.numRows; j++, i++) {
-      const ref = reference.get(j) as string;
-      features[i] = {
-        type: 'Feature',
-        id: ref,
-        geometry: { type: 'Point', coordinates: [lon[j], lat[j]] },
-        properties: {
-          reference: ref,
-          statut: statut.get(j),
-          nb: nb[j],
-          siecle: siecle.get(j)
-        }
-      };
+      // Constructeur partage avec le nuage precalcule (`points.ts`) : les deux
+      // doivent rendre exactement les memes proprietes.
+      features[i] = entite(
+        reference.get(j) as string, lon[j], lat[j], statut.get(j), nb[j], siecle.get(j)
+      );
     }
   }
   mesures.collection = performance.now() - t0;
@@ -143,7 +137,7 @@ export async function facette(
   const epinglee = choisies.length ? `valeur IN (${choisies.map(lit).join(', ')})` : 'FALSE';
 
   // `%` et `_` saisis par l'utilisateur sont des jokers LIKE : les neutraliser.
-  const motif = replier(terme).replace(/[\\%_]/g, (c) => `\\${c}`);
+  const motif = echapperLike(replier(terme));
   const cherche = motif
     ? `strip_accents(lower(valeur)) LIKE ${lit(`%${motif}%`)} ESCAPE '\\'`
     : 'TRUE';
@@ -251,6 +245,17 @@ export const SIECLE_MATRICE_MIN = 10;
  * Les deux filtres d'axe sont retires du predicat, comme une facette est
  * comptee sans elle-meme : la matrice reste explorable une fois une cellule
  * choisie.
+ *
+ * Une seule requete, et non deux : les deux anciennes partageaient la meme CTE
+ * `couples` mais se serialisaient sur la connexion unique — `Promise.all` ne
+ * les parallelise pas, cf. `mesures.sql` plus haut dans le fichier. `couples`
+ * est `MATERIALIZED` pour n'etre calculee qu'une fois malgre les deux lectures
+ * qui suivent ; la ligne des ecartees porte un `siecle` sentinelle (`-1`, hors
+ * du domaine des siecles) pour voyager dans le meme resultset sans que `NULL`
+ * n'ait a se distinguer d'un siecle authentique. Verifie ligne a ligne contre
+ * l'ancienne forme en duckdb Python sur 5 predicats (aucun filtre, un domaine,
+ * un statut, une region, deux filtres combines) : memes cellules, meme compte
+ * d'ecartees a chaque fois.
  */
 export async function matrice(f: Filters): Promise<Matrice> {
   const where = buildWhere(f, ['siecles', 'anneeProtection']);
@@ -260,17 +265,18 @@ export async function matrice(f: Filters): Promise<Matrice> {
     JOIN protections p USING (reference)
     WHERE p.annee IS NOT NULL
   `;
-  const [cellules, [reste]] = await Promise.all([
-    query<Cellule>(`
-      SELECT siecle::INT AS siecle, decennie::INT AS decennie, count(*)::INT AS n
-      FROM (${couples}) WHERE siecle >= ${SIECLE_MATRICE_MIN}
-      GROUP BY 1, 2 ORDER BY 1, 2
-    `),
-    query<{ n: number }>(`
-      SELECT count(*)::INT AS n FROM (${couples}) WHERE siecle < ${SIECLE_MATRICE_MIN}
-    `)
-  ]);
-  return { cellules, ecartees: reste?.n ?? 0 };
+  const lignes = await query<{ siecle: number; decennie: number; n: number }>(`
+    WITH couples AS MATERIALIZED (${couples})
+    SELECT siecle::INT AS siecle, decennie::INT AS decennie, count(*)::INT AS n
+    FROM couples WHERE siecle >= ${SIECLE_MATRICE_MIN}
+    GROUP BY 1, 2
+    UNION ALL
+    SELECT -1, -1, count(*)::INT AS n FROM couples WHERE siecle < ${SIECLE_MATRICE_MIN}
+    ORDER BY siecle, decennie
+  `);
+  const cellules = lignes.filter((l) => l.siecle !== -1);
+  const ecartees = lignes.find((l) => l.siecle === -1)?.n ?? 0;
+  return { cellules, ecartees };
 }
 
 export interface Ligne {
@@ -280,6 +286,32 @@ export interface Ligne {
   departement_nom: string;
   statut: string;
   nb_palissy: number;
+  /** Distance a la position de l'utilisateur, en metres. Presente seulement
+   *  quand la liste est triee par proximite. */
+  distance_m?: number;
+}
+
+/** Point de reference du tri par proximite. */
+export interface Proche {
+  lon: number;
+  lat: number;
+}
+
+/**
+ * Distance haversine en metres, en SQL, depuis `p` jusqu'a `lon`/`lat`.
+ *
+ * Haversine et non une projection plane : le corpus couvre l'outre-mer, et une
+ * approximation equirectangulaire derive de plusieurs pour cent des qu'on
+ * s'eloigne de la latitude de reference. Sur 44 484 lignes le calcul ne coute
+ * rien. Les coordonnees sont interpolees comme des reels deja valides — la
+ * fonction refuse le reste, un NaN finirait en SQL.
+ */
+function distanceSql(p: Proche): string {
+  if (!Number.isFinite(p.lon) || !Number.isFinite(p.lat)) throw new Error('position invalide');
+  return `2 * 6371000 * asin(sqrt(
+    pow(sin(radians(lat - ${p.lat}) / 2), 2)
+    + cos(radians(${p.lat})) * cos(radians(lat)) * pow(sin(radians(lon - ${p.lon}) / 2), 2)
+  ))`;
 }
 
 /** Sous-requete de classement, `null` des que le mode plein texte n'est pas
@@ -297,7 +329,21 @@ function ordreTexte(f: Filters): string | null {
  * BM25 se voit. La carte et les facettes n'ont besoin que de l'appartenance,
  * et scorer pour elles serait payer un tri que personne ne lit.
  */
-export async function liste(f: Filters, limite = 200): Promise<Ligne[]> {
+export async function liste(f: Filters, limite = 200, proche: Proche | null = null): Promise<Ligne[]> {
+  // La proximite l'emporte sur la pertinence : c'est un choix explicite de
+  // l'utilisateur, et le filtre plein texte reste applique par `buildWhere`.
+  // Elle ecarte les notices sans coordonnees — une distance ne se calcule pas
+  // sans elles — et **seulement** dans ce tri : la liste par pertinence les
+  // garde toutes.
+  if (proche) {
+    return query<Ligne>(`
+      SELECT reference, titre, commune, departement_nom, statut, nb_palissy,
+             ${distanceSql(proche)}::DOUBLE AS distance_m
+      FROM monuments
+      WHERE lat IS NOT NULL AND ${buildWhere(f)}
+      ORDER BY distance_m ASC, titre ASC LIMIT ${limite}
+    `);
+  }
   const ordre = ordreTexte(f);
   if (ordre) {
     return query<Ligne>(`
@@ -327,6 +373,9 @@ export interface Detail {
   periodes: string[];
   domaines: string[];
   denominations: string[];
+  /** Liste consolidee des auteurs, celle qu'utilise la facette — distincte
+   *  d'`auteurs_detail`, qui garde la forme brute du champ source. */
+  auteurs: string[];
   auteurs_detail: string[];
   proprietaires: string[];
   adresse: string;
@@ -347,6 +396,9 @@ export interface Detail {
    *  sous droits reserves, la fiche n'en fait qu'un renvoi. */
   memoire: number;
   nb_palissy: number;
+  /** Nulles pour les 2 276 notices sans coordonnees. */
+  lon: number | null;
+  lat: number | null;
   actes: { annee: number | null; mois: number | null; jour: number | null; libelle: string }[];
 }
 
@@ -369,7 +421,8 @@ export async function detail(reference: string): Promise<Detail> {
   const [ligne] = await query(`
     SELECT m.reference, m.titre, m.commune, m.departement_nom, m.region, m.statut,
            m.partiel, m.nature_acte, m.siecles, m.periodes, m.domaines, m.denominations,
-           m.proprietaires, m.nb_palissy,
+           m.auteurs, m.proprietaires, m.nb_palissy,
+           m.lon::DOUBLE AS lon, m.lat::DOUBLE AS lat,
            d.adresse, d.lieudit, d.cadastre, d.historique, d.precision_protection,
            d.observations, d.siecle_detail, d.archiv_mh, d.liens_externes, d.palissy,
            d.renvois, d.commons, d.memoire, d.auteurs_detail
@@ -387,6 +440,7 @@ export async function detail(reference: string): Promise<Detail> {
     periodes: toArray<string>(ligne.periodes),
     domaines: toArray<string>(ligne.domaines),
     denominations: toArray<string>(ligne.denominations),
+    auteurs: toArray<string>(ligne.auteurs),
     proprietaires: toArray<string>(ligne.proprietaires),
     auteurs_detail: toArray<string>(ligne.auteurs_detail),
     liens_externes: toArray<string>(ligne.liens_externes),

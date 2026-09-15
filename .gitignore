@@ -2,6 +2,7 @@
 data/raw/
 etl/out/
 web/static/data/*.parquet
+web/static/data/points.json
 web/static/data/details/
 web/static/data/texte/
 
@@ -19,6 +20,8 @@ web/build/
 .DS_Store
 web/tests/apercu.png
 web/tests/echec.png
+web/test-results/
+web/playwright-report/
 
 # Audit visuel (captures et releves, regenerables)
 web/.audit-screenshots/

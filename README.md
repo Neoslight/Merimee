@@ -50,7 +50,7 @@ navigateur interroge en SQL via DuckDB-Wasm.
 
 ```
 data/raw/merimee.csv  ──ETL Python──▶  web/static/data/*.parquet  ──▶  DuckDB-Wasm
-    100 Mo, 78 colonnes                     2,7 Mo + 32 fragments        (navigateur)
+    100 Mo, 78 colonnes                     2,5 Mo + 32 fragments        (navigateur)
 ```
 
 ## Mise en route
@@ -66,8 +66,8 @@ protégés » de [POP](https://www.pop.culture.gouv.fr/).
 ```bash
 cd etl
 pip install -r requirements.txt
-python -m merimee_etl          # ~10 s, écrit dans web/static/data/
-pytest                         # 55 tests
+python -m merimee_etl          # ~12 s, écrit dans web/static/data/
+pytest                         # 94 tests
 ```
 
 Le rapport affiché doit annoncer 46 760 notices, 44 484 géolocalisées,
@@ -80,18 +80,29 @@ rencontrés sont listés dans `etl/out/rejets.csv`.
 cd web
 npm install
 npm run dev                    # http://localhost:5173
-npm run build && npm run test  # build statique + 77 vérifications en navigateur
+npm run test:unit              # Vitest, 52 tests sur la logique pure
+npm run build && npm run test  # build statique + 181 vérifications en Chromium
 ```
 
-`npm run test` lance Chromium sur le build : **77 vérifications** couvrant le
-démarrage de DuckDB-Wasm, le filtrage croisé, la recherche dans une facette au-delà
-des 40 valeurs affichées, la matrice, les permaliens, le gabarit téléphone, les deux
+`npm run test` lance Chromium sur le build, réparti en 12 fichiers
+(`tests/e2e/*.spec.ts`) qui couvrent le démarrage de DuckDB-Wasm, le filtrage croisé,
+la recherche dans une facette au-delà des 40 valeurs affichées, la matrice, les
+permaliens, le chemin clavier des deux frises, le gabarit téléphone, les deux
 thèmes — contraste calculé dans chacun, polices réellement servies, aucune couleur en
 dur hors d'`app.css` —, les puces de filtres actifs, le brossage des siècles, et le
 fait qu'ouvrir une fiche ne télécharge qu'un fragment de ~320 Ko. Une mesure en pixels
 vérifie que le tiroir ne prend **aucune** largeur à la carte : c'est la régression que
 le passage en calques risque le plus. Nécessite `npx playwright install chromium` une
-fois.
+fois, et le build servi avec ses **vraies données** — la suite appelle aussi CARTO en
+réseau pour vérifier que le fond clair est réellement reteinté, elle ne tourne donc
+pas en intégration continue.
+
+`npm run test:unit` (Vitest) couvre la même logique sans navigateur ni données —
+construction du prédicat SQL, sérialisation de l'URL, hachage des fragments, teinte
+du fond de carte — et tourne dans la CI (`.github/workflows/ci.yml`) à chaque push et
+pull request vers `main`, avec `npm run check` et `npm run build`. L'ETL complet et
+la suite Playwright, qui exigent respectivement le CSV source (100 Mo, non versionné)
+et les données qu'il produit, restent hors CI et se lancent à la main.
 
 `npm run apercu` régénère `static/apercu-social.png`, la vignette des cartes de
 lien, capturée sur l'application elle-même : une image dessinée à la main cesserait
@@ -103,7 +114,9 @@ d'être vraie au premier changement d'interface.
 cd web && npm run deploy
 ```
 
-Le site est publié sur <https://neoslight.github.io/Merimee/>.
+`deploy` lance d'abord `predeploy` (`npm run check && npm run test:unit`), que npm
+enchaîne automatiquement devant tout script `deploy` : un déploiement ne part plus
+sans ces deux gardes. Le site est publié sur <https://neoslight.github.io/Merimee/>.
 
 Poids du premier chargement, mesuré en ligne : **≈ 10,5 Mo**, dont 7,5 Mo pour le
 seul binaire `duckdb-eh.wasm` (32,7 Mo bruts, servis gzip par Pages). Les Parquet
@@ -132,9 +145,9 @@ Trois détails que GitHub Pages impose :
 
 | Fichier | Contenu | Taille |
 |---|---|---|
-| `monuments.parquet` | 46 760 notices × 29 colonnes, dont les champs multivalués en colonnes `LIST` | 2,3 Mo |
+| `monuments.parquet` | 46 760 notices × 20 colonnes, dont les champs multivalués en colonnes `LIST` | 2,2 Mo |
 | `protections.parquet` | 51 640 actes de protection datés | 0,4 Mo |
-| `details/0-31.parquet` | textes longs, liens, mobilier, photographies — 32 fragments | 11,2 Mo au total |
+| `details/0-31.parquet` | textes longs, liens, mobilier, photographies — 32 fragments | 11,8 Mo au total |
 | `texte/*.parquet` | index plein texte des historiques : postings, lexique, longueurs | 3,8 Mo au total |
 
 Les deux premiers sont matérialisés en table au démarrage. Les fragments de
@@ -143,118 +156,18 @@ l'est au premier usage du mode « historiques », et jamais sinon.
 
 ## Décisions structurantes
 
-**Colonnes `LIST` plutôt que tables de liaison.** Domaines, siècles, dénominations,
-auteurs et propriétaires restent des listes dans une seule table. DuckDB filtre avec
-`list_has_any` et facette par `UNNEST` : pas de jointure, un seul fichier. Seuls les
-actes de protection, qui ont leur propre granularité (4 215 notices en portent
-plusieurs), justifient une table distincte.
-
-**Bundle DuckDB `eh`, pas `coi`.** Le bundle multi-thread exige les en-têtes
-COOP/COEP, impossibles à poser sur un hébergement statique. Le mono-thread répond
-en quelques millisecondes sur 46 760 lignes.
-
-**`details` éclaté en 32 fragments.** Le plan initial visait un fichier unique dont
-DuckDB n'aurait lu que le row group utile, par requête HTTP Range. Vérification faite
-en navigateur : duckdb-wasm 1.32 télécharge tout fichier Parquet **en entier**, que
-`registerFileURL` soit appelé avec `directIO` ou qu'une URL absolue soit passée
-directement à `read_parquet` — aucune requête Range n'est émise. Le fichier est donc
-la seule granularité de chargement disponible. Le fragment d'une notice se déduit
-d'un hachage FNV-1a de sa référence, implémenté à l'identique dans
-[etl/merimee_etl/build.py](etl/merimee_etl/build.py) et
-[web/src/lib/db/shards.ts](web/src/lib/db/shards.ts), donc sans index à télécharger.
-
-**L'état d'exploration est dans l'URL.** Les valeurs multiples passent par un
-paramètre répété (`?domaine=architecture+militaire&siecle=16`) plutôt que jointes
-par un séparateur : 63 libellés du corpus contiennent déjà une virgule. L'emprise
-de la carte en est volontairement absente — la réécrire à chaque déplacement
-noierait l'URL, et le destinataire d'un lien recalcule la sienne. Les filtres
-s'écrivent par remplacement d'entrée d'historique ; seule l'ouverture d'une fiche
-en empile une, pour que le retour arrière la referme.
-
-**Une facette affiche 40 valeurs, sa recherche en fouille 7 040.** Le champ
-« filtrer… » triait au départ la liste déjà rapatriée : sur 7 040 auteurs,
-7 000 étaient inatteignables, dont Baltard et Le Corbusier, et 5 607 n'ont qu'une
-seule notice — la longue traîne est précisément ce qu'on vient chercher. La
-recherche descend maintenant dans DuckDB, avec `strip_accents` pour ignorer les
-accents sans stocker de colonne repliée. Une valeur cochée reste listée même hors
-résultat : sans cela on ne pourrait plus la décocher.
-
-**La recherche plein texte est indexée à l'ETL, scorée dans le navigateur.** Le champ
-de la barre vise par défaut `search_key` — titre, commune, département — et répond en
-quelques millisecondes. Un bouton le fait viser les **historiques** : 15,1 Mo de texte
-libre où vivent les termes qu'on ne trouvait nulle part, machicoulis (550 notices),
-mascaron (118), jubé (34). L'indexation, elle, ne se fait pas côté client : elle
-supposerait d'y rapatrier les 12 Mo de fragments, et coûte 2,2 s en natif multi-thread
-quand le bundle wasm retenu est mono-thread. `merimee_etl/texte.py` produit donc
-l'index — postings triés par terme, plus un lexique des 45 826 formes du corpus qui
-dispense d'embarquer un stemmer : `mascaron` et `mascarons` désignent le même terme.
-Le navigateur ne fait que compter et scorer, BM25 en SQL, quelques dizaines de
-millisecondes. Le plafond est dit à l'écran : **24 819 notices sur 46 760 portent un
-historique**, et un mot que le lexique ignore est nommé plutôt que rendu par un
-résultat vide.
-
-**Deux palettes, un seul endroit.** MapLibre et Observable Plot reçoivent des chaînes,
-pas des `var()` : leurs couleurs sont donc déclarées en CSS comme les autres et relues
-par `getComputedStyle` à chaque bascule de thème, une fois par changement et non par
-image. Écrire une couleur en dur dans un composant la rendrait muette au passage en
-clair. La rampe de la matrice s'inverse entre les deux thèmes : en sombre l'effectif
-fort est clair, en clair il est sombre, sinon la matrice disparaît dans son fond — et
-celle de la densité fait désormais de même, sur les mêmes valeurs.
-
-**La vue de carte voyage dans le lien, pas dans l'URL.** `c=lon,lat,zoom` n'est ajouté
-que par le « Copier le lien » de la fiche : réécrire l'URL à chaque déplacement la
-noierait et empilerait l'historique. Elle est consommée au chargement et disparaît au
-premier changement de filtre — ce n'est pas un filtre, elle ne restreint aucun corpus.
-
-**Les photographies tiennent dans les fragments déjà téléchargés.** La base Mérimée ne
-porte aucun lien vers une image. Wikidata en porte un — `P380` identifiant Mérimée vers
-`P18` image — et il couvre **84,6 % du corpus, 39 556 notices**. Ce pont n'est pas
-étroit : 46 618 items portent déjà un `P380`, si bien que les fiches sans photographie
-n'ont pas d'item manquant — la photographie n'existe pas. Un second instantané
-(`python -m merimee_etl.commons`) rattrape ce que Commons héberge sans l'avoir relié à
-Wikidata, par les fichiers dont la page cite la référence : **512 notices de plus,
-85,7 %**. Le geosearch géolocalisé, mesuré aussi, a été écarté — 44 % de réponses mais
-un sujet non vérifié, la préfecture de Nanterre y récoltant le portrait d'un ministre.
-
-Les deux instantanés sont pris à part, versionnés séparément, puis reportés dans la
-colonne `commons` de `details` : ouvrir une fiche ne coûte donc aucune requête de plus,
-seule l'image part sur le réseau. Le pipeline ne va jamais en ligne de lui-même, et la
-colonne vaut la liste vide si les instantanés manquent.
-
-Le crédit auteur et la licence sont lus à la volée sur l'API Commons, parce que Wikidata
-ne les porte pas : ces images sont pour la plupart sous CC-BY-SA, le crédit est une
-obligation. Il n'est jamais bloquant.
-
-**Le cadre épouse le rapport de la photographie**, entre 0,68 et 1,9 : rien n'est rogné
-tant que l'image tient dans ces bornes, et au-delà — un bandeau, un tirage très vertical
-— elle se recadre et **se fait glisser** dans son cadre. Une fiche sans photographie
-s'ouvre directement sur son titre.
-
-**Ce que Wikimedia ignore, la fiche le nomme sans le montrer.** Les 6 692 notices sans
-fichier Commons ne sont pas sans photographie : la base Mémoire du ministère en illustre
-**4 861, soit 72,6 %**, avec 45 122 clichés — de quoi porter la couverture de la fiche,
-photographie ou renvoi, à **96,1 %**. Mais ces images ne sont pas libres (« tous droits
-réservés », « diffusion GrandPalaisRmn Photo ») : elles ne sont pas reprises.
-`python -m merimee_etl.memoire` n'en récolte que le nombre, et la fiche ouvre un renvoi
-vers la Plateforme ouverte du patrimoine, qui les présente.
-
-**Les panneaux flottent, ils ne compressent pas.** La grille d'origine réservait
-`246px | 1fr | 340px` en permanence — dont 340 px pour afficher « Sélectionnez un
-point ». Les deux panneaux sont devenus des calques : la carte garde sa pleine largeur,
-et les ouvrir ne provoque aucun redimensionnement du canevas WebGL. En contrepartie,
-les commandes MapLibre doivent s'écarter d'eux : l'attribution CARTO est posée à la
-main, en bas à droite, derrière la même marge que le zoom — une mention de licence que
-la fiche recouvre, ou qui chevauche la légende, n'est pas une mention.
-
-**Les puces disent l'état, et deux d'entre elles ont un miroir.** Retirer la puce de
-recherche doit aussi vider le champ de la barre, qui alimente le filtre ; retirer celle
-de la zone visible doit délier la vue de la carte, sinon le prochain déplacement la
-repose aussitôt.
-
-**Facettes évaluées sans leur propre filtre.** `buildWhere(filtres, except)` retire
-la clause de la facette qu'on est en train de compter. Sans cela, dès la première
-sélection toutes les options non cochées tomberaient à zéro et le filtrage croisé
-serait inutilisable.
+Le détail de chaque décision — mesures, contre-exemples, code exact impliqué — vit
+dans [CLAUDE.md](CLAUDE.md), le repère de travail du dépôt, et dans
+[docs/](docs/), où il est classé par domaine : [conception-donnees.md](docs/conception-donnees.md)
+pour le modèle en colonnes `LIST`, les facettes, le plein texte, le permalien et le
+cycle de requêtes ; [conception-carte.md](docs/conception-carte.md) pour MapLibre, les
+fonds historiques et la teinte du fond clair ; [conception-interface.md](docs/conception-interface.md)
+pour la mise en page, le focus et l'accessibilité ; [conception-photographies.md](docs/conception-photographies.md)
+pour les trois ponts Wikidata / Commons / Mémoire et le cadrage des images de fiche.
+[contraintes.md](docs/contraintes.md) rassemble ce qui a été mesuré plutôt que décidé
+— le comportement de DuckDB-Wasm, de MapLibre, du cache GitHub Pages. Cette section
+recopiait ces mêmes décisions et avait fini par en diverger ; mieux vaut un seul
+endroit à jour que deux qui dérivent.
 
 ## Nettoyage appliqué aux données
 

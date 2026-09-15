@@ -2,6 +2,7 @@
   import { untrack } from 'svelte';
   import { facette, type Compte } from '$lib/db/queries';
   import { filters, toggle, type FacetKey } from '$lib/state/filters.svelte';
+  import { nf } from '$lib/format';
 
   interface Props {
     facettes: Partial<Record<FacetKey, Compte[]>>;
@@ -118,8 +119,6 @@
   function visibles(cle: FacetKey): Compte[] {
     return trouvees[cle] ?? facettes[cle] ?? [];
   }
-
-  const nf = new Intl.NumberFormat('fr-FR');
 
   /** Ce qu'annonce le titre d'une section : le total des valeurs distinctes,
    *  et, section ouverte, la part reellement affichee. */
@@ -249,8 +248,10 @@
     transition: color var(--t-rapide);
   }
 
-  .titre:hover {
-    color: var(--accent);
+  @media (hover: hover) and (pointer: fine) {
+    .titre:hover {
+      color: var(--accent);
+    }
   }
 
   /* Le libelle prend la place restante : c'est lui qui pousse le badge et la
@@ -306,6 +307,16 @@
     transition: border-color var(--t-rapide);
   }
 
+  /* Sous 16 px, Safari iOS zoome la page entiere a la mise au point d'un
+     champ, et ne dezoome pas en sortant : le tiroir restait agrandi, coupe au
+     bord. La taille ne monte qu'au doigt, la densite du tiroir reste a la
+     souris. */
+  @media (pointer: coarse) {
+    .filtre {
+      font-size: 16px;
+    }
+  }
+
   .filtre:focus {
     outline: none;
     border-color: var(--inscrit);
@@ -344,10 +355,12 @@
     transition: all var(--t-rapide);
   }
 
-  .option:hover {
-    border-color: var(--inscrit);
-    background: color-mix(in srgb, var(--inscrit) 10%, var(--fond-carte));
-    color: var(--inscrit-texte);
+  @media (hover: hover) and (pointer: fine) {
+    .option:hover {
+      border-color: var(--inscrit);
+      background: color-mix(in srgb, var(--inscrit) 10%, var(--fond-carte));
+      color: var(--inscrit-texte);
+    }
   }
 
   .option.choisi {

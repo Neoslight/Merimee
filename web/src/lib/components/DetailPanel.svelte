@@ -1,6 +1,10 @@
 <script lang="ts">
   import { detail, type Detail } from '$lib/db/queries';
-  import { nf, romain } from '$lib/format';
+  import { formaterDistance, nf, romain } from '$lib/format';
+  import { distanceMetres } from '$lib/geo';
+  import { position } from '$lib/state/position.svelte';
+  import { cadre as calculerCadre, estRecadree, glisserCadrage, extraireCredit } from '$lib/photo';
+  import { filters } from '$lib/state/filters.svelte';
 
   interface Props {
     reference: string | null;
@@ -9,9 +13,24 @@
     copie: boolean;
     oncopier: () => void;
     onclose: () => void;
+    /** Le titre affiche remonte a la page, qui en fait le `<title>` du
+     *  document. Optionnel : un appelant sans onglet a nommer n'a rien a
+     *  fournir. */
+    ontitre?: (titre: string | null) => void;
+    /** Le contenu vient de defiler. En feuille d'apercu sur telephone, c'est
+     *  le signal que la page attend pour deplier la feuille : on ne lit pas un
+     *  historique dans 45 % d'ecran. */
+    ondefile?: () => void;
   }
 
-  let { reference, copie, oncopier, onclose }: Props = $props();
+  let { reference, copie, oncopier, onclose, ontitre, ondefile }: Props = $props();
+
+  /** Distance a l'utilisateur, si sa position est connue et la notice situee. */
+  const distance = $derived.by(() => {
+    const ici = position.courante;
+    if (!ici || !fiche || fiche.lon === null || fiche.lat === null) return null;
+    return distanceMetres(ici.lon, ici.lat, fiche.lon, fiche.lat);
+  });
 
   let fiche = $state<Detail | null>(null);
   let erreur = $state<string | null>(null);
@@ -20,16 +39,23 @@
     const ref = reference;
     if (!ref) {
       fiche = null;
+      ontitre?.(null);
       return;
     }
     let annule = false;
     erreur = null;
     detail(ref)
       .then((resultat) => {
-        if (!annule) fiche = resultat;
+        if (!annule) {
+          fiche = resultat;
+          ontitre?.(resultat.titre);
+        }
       })
       .catch((e) => {
-        if (!annule) erreur = String(e);
+        if (!annule) {
+          erreur = String(e);
+          ontitre?.(null);
+        }
       });
     return () => {
       annule = true;
@@ -107,18 +133,13 @@
    * les bornes rien n'est coupe ; au-dela, l'image se recadre et se fait
    * glisser dans son cadre.
    */
-  const CADRE_MIN = 0.68; // un tirage vertical, 2/3
-  const CADRE_MAX = 1.9; // un panorama, 16/9
-
   let rapport = $state<number | null>(null);
   let cadrageX = $state(50);
   let cadrageY = $state(50);
 
-  const cadre = $derived(
-    rapport === null ? 4 / 3 : Math.min(CADRE_MAX, Math.max(CADRE_MIN, rapport))
-  );
+  const cadre = $derived(calculerCadre(rapport));
   /** Hors bornes : l'image deborde son cadre, donc elle se fait glisser. */
-  const recadree = $derived(rapport !== null && (rapport < CADRE_MIN || rapport > CADRE_MAX));
+  const recadree = $derived(estRecadree(rapport));
 
   // Chaque photographie a son rapport : mesure et cadrage repartent a zero,
   // sinon la suivante heriterait du cadre de la precedente.
@@ -145,8 +166,6 @@
    */
   let glissement: { x: number; y: number; px: number; py: number } | null = null;
 
-  const borner = (valeur: number) => Math.min(100, Math.max(0, valeur));
-
   function saisir(event: PointerEvent) {
     if (!recadree) return;
     const boite = event.currentTarget as HTMLElement;
@@ -157,15 +176,15 @@
   function deplacer(event: PointerEvent) {
     if (!glissement || rapport === null) return;
     const boite = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    const rapportBoite = boite.width / boite.height;
-    // Rendu en `cover` : un seul axe deborde, l'autre est ajuste.
-    const cacheX = rapport > rapportBoite ? boite.height * rapport - boite.width : 0;
-    const cacheY = rapport < rapportBoite ? boite.width / rapport - boite.height : 0;
-    const dx = event.clientX - glissement.x;
-    const dy = event.clientY - glissement.y;
-    // Tirer vers la droite doit decouvrir la gauche : le pourcentage baisse.
-    if (cacheX > 0) cadrageX = borner(glissement.px - (dx / cacheX) * 100);
-    if (cacheY > 0) cadrageY = borner(glissement.py - (dy / cacheY) * 100);
+    const resultat = glisserCadrage({
+      rapport,
+      boiteWidth: boite.width,
+      boiteHeight: boite.height,
+      depart: glissement,
+      pointeur: { x: event.clientX, y: event.clientY }
+    });
+    cadrageX = resultat.x;
+    cadrageY = resultat.y;
   }
 
   function relacher() {
@@ -180,11 +199,6 @@
     `${COMMONS}/wiki/Special:FilePath/${encodeURIComponent(nom)}?width=${largeur}`;
 
   const pageFichier = (nom: string) => `${COMMONS}/wiki/File:${encodeURIComponent(nom)}`;
-
-  /** `extmetadata` renvoie du HTML (`<a>`, `<span>`) : le texte seul suffit. */
-  function texteNu(html: string): string {
-    return new DOMParser().parseFromString(html, 'text/html').body.textContent?.trim() ?? '';
-  }
 
   /**
    * Auteur et licence, lus a la volee sur l'API Commons.
@@ -206,14 +220,8 @@
       .then((r) => r.json())
       .then((donnees) => {
         if (annule) return;
-        const pages = donnees?.query?.pages ?? {};
-        const meta = Object.values(pages)[0] as
-          | { imageinfo?: { extmetadata?: Record<string, { value?: string }> }[] }
-          | undefined;
-        const champs = meta?.imageinfo?.[0]?.extmetadata ?? {};
-        const auteur = texteNu(champs.Artist?.value ?? '');
-        const licence = texteNu(champs.LicenseShortName?.value ?? '');
-        if (auteur || licence) credit = { auteur, licence };
+        const resultat = extraireCredit(donnees);
+        if (resultat) credit = resultat;
       })
       .catch(() => {
         // Reseau ou API muets : le lien vers la page du fichier reste.
@@ -222,9 +230,30 @@
       annule = true;
     };
   });
+
+  // --- Filtrage par auteur ---------------------------------------------------
+  // Un clic ajoute l'auteur au filtre courant, jamais ne le retire : ce n'est
+  // pas une case a cocher, juste un raccourci vers le tiroir des facettes.
+  // Ecriture en place, comme `toggle()` : reaffecter la cle ferait perdre le
+  // proxy reactif que `$state` a pose sur le tableau.
+  function filtrerAuteur(nom: string) {
+    if (!filters.auteurs.includes(nom)) filters.auteurs.push(nom);
+  }
+
+  // --- Focus ------------------------------------------------------------
+  // Point d'entree pour la page : elle l'appelle apres un geste d'ouverture,
+  // jamais au chargement d'un permalien. L'aside est toujours present, meme
+  // pendant le chargement de la notice — le viser evite d'attendre le titre,
+  // qui n'arrive qu'une fois la requete resolue.
+  let noeud: HTMLElement | undefined;
+
+  export function focaliser() {
+    noeud?.focus();
+  }
 </script>
 
-<aside class="fiche" aria-live="polite">
+<aside class="fiche" tabindex="-1" bind:this={noeud}
+       onscroll={() => { if (noeud && noeud.scrollTop > 0) ondefile?.(); }}>
   {#if !reference}
     <div class="attente">
       <h2>Fiche du monument</h2>
@@ -308,7 +337,10 @@
     </div>
 
     <header>
-      <p class="lieu">{fiche.commune} · {fiche.departement_nom}</p>
+      <p class="lieu">
+        {fiche.commune} · {fiche.departement_nom}
+        {#if distance !== null}<span class="distance">à {formaterDistance(distance)} de vous</span>{/if}
+      </p>
       <h2>{fiche.titre}</h2>
       <p class="badges">
         <span class="badge {fiche.statut === 'classé' ? 'or' : fiche.statut === 'inscrit' ? 'bleu' : 'violet'}">
@@ -347,7 +379,21 @@
         <dt>Domaine</dt><dd>{fiche.domaines.join(', ')}</dd>
       {/if}
       {#if fiche.auteurs_detail.length}
-        <dt>Auteurs</dt><dd>{fiche.auteurs_detail.join(' ; ')}</dd>
+        <dt>Auteurs</dt>
+        <dd>
+          {fiche.auteurs_detail.join(' ; ')}
+          {#if fiche.auteurs.length}
+            <!-- Raccourci vers le filtre, pas une redite : `auteurs_detail`
+                 garde la forme brute du champ source, ces pastilles visent la
+                 liste consolidee qu'utilise deja la facette. -->
+            <div class="pastilles-auteurs">
+              {#each fiche.auteurs as nom (nom)}
+                <button class="pastille-auteur frappe-44-v" onclick={() => filtrerAuteur(nom)}
+                        aria-label="Filtrer sur l'auteur {nom}">{nom}</button>
+              {/each}
+            </div>
+          {/if}
+        </dd>
       {/if}
       {#if fiche.siecle_detail}
         <dt>Campagne principale</dt><dd>{fiche.siecle_detail}</dd>
@@ -508,8 +554,10 @@
     transition: background var(--t-rapide);
   }
 
-  .pastille:hover {
-    background: var(--fond-carte);
+  @media (hover: hover) and (pointer: fine) {
+    .pastille:hover {
+      background: var(--fond-carte);
+    }
   }
 
   .fermer {
@@ -532,6 +580,17 @@
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--texte-tenu);
+  }
+
+  /* La distance n'est pas un toponyme : elle quitte les capitales espacees du
+     lieu et prend la couleur du point de position, qui la relie a lui. */
+  .distance {
+    display: inline-block;
+    margin-left: 8px;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--position);
   }
 
   /* Le serif s'arrete au titre et au texte d'archive. Applique aux libelles de
@@ -623,22 +682,30 @@
   /* Second renvoi vers la meme page : il repond a une autre question — « ou
      sont les photographies que Wikimedia n'a pas ? » — mais il ne doit pas
      peser autant que le premier, d'ou une pilule sans filet. */
-  .actions a.renvoi-photo,
-  .actions a.renvoi-photo:hover {
+  .actions a.renvoi-photo {
     border-color: transparent;
     padding-left: 2px;
     padding-right: 2px;
     font-weight: 500;
-  }
-
-  .actions a.renvoi-photo {
     color: var(--texte-faible);
   }
 
-  .actions a:hover {
-    border-color: var(--inscrit);
-    color: var(--inscrit-texte);
-    text-decoration: none;
+  @media (hover: hover) and (pointer: fine) {
+    /* Annule le survol general ci-dessous : cette pilule ne doit pas peser
+       autant que le premier renvoi. Repetee plutot que partagee, pour rester
+       dans la meme media query que la regle qu'elle contredit. */
+    .actions a.renvoi-photo:hover {
+      border-color: transparent;
+      padding-left: 2px;
+      padding-right: 2px;
+      font-weight: 500;
+    }
+
+    .actions a:hover {
+      border-color: var(--inscrit);
+      color: var(--inscrit-texte);
+      text-decoration: none;
+    }
   }
 
   .photo {
@@ -761,6 +828,35 @@
     line-height: 1.45;
   }
 
+  /* Raccourci de filtrage, pas une facette de plus : memes jetons que les
+     pilules d'options du tiroir, en plus discret puisqu'il vit dans un `dd`
+     et non dans une liste de criteres poses. */
+  .pastilles-auteurs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 7px;
+  }
+
+  .pastille-auteur {
+    padding: 3px 11px;
+    border: 1px solid var(--bord);
+    border-radius: var(--r-pilule);
+    background: var(--fond-creux);
+    color: var(--texte-moyen);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all var(--t-rapide);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .pastille-auteur:hover {
+      border-color: var(--inscrit);
+      background: color-mix(in srgb, var(--inscrit) 10%, var(--fond-carte));
+      color: var(--inscrit-texte);
+    }
+  }
+
   section {
     padding: 18px 22px;
     border-bottom: 1px solid color-mix(in srgb, var(--bord) 70%, transparent);
@@ -863,10 +959,12 @@
     color: var(--texte-faible);
   }
 
-  .jetons a:hover {
-    color: var(--inscrit-texte);
-    border-color: var(--inscrit);
-    text-decoration: none;
+  @media (hover: hover) and (pointer: fine) {
+    .jetons a:hover {
+      color: var(--inscrit-texte);
+      border-color: var(--inscrit);
+      text-decoration: none;
+    }
   }
 
   .plus {
@@ -882,8 +980,10 @@
     transition: border-color var(--t-rapide);
   }
 
-  .plus:hover {
-    border-color: var(--accent);
+  @media (hover: hover) and (pointer: fine) {
+    .plus:hover {
+      border-color: var(--accent);
+    }
   }
 
   .plus em {
@@ -896,8 +996,10 @@
     text-decoration: none;
   }
 
-  a:hover {
-    text-decoration: underline;
+  @media (hover: hover) and (pointer: fine) {
+    a:hover {
+      text-decoration: underline;
+    }
   }
 
   /* Sur gabarit etroit la fiche remonte en feuille pleine largeur, et le cadre,
@@ -911,6 +1013,12 @@
   @media (max-width: 768px) {
     .cadre {
       max-height: 48dvh;
+    }
+
+    /* La feuille remonte du bas : sur iPhone, la barre d'accueil (home
+       indicator) chevauche le bas du panneau sans cette reserve. */
+    .fiche {
+      padding-bottom: calc(8px + var(--sa-bas));
     }
   }
 </style>

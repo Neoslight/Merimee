@@ -4,11 +4,13 @@
     type Map as MapLibreMap
   } from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { fondPour, palette, theme } from '$lib/state/theme.svelte';
   import { mesures } from '$lib/state/mesures.svelte';
   import { etatCarte, oublierTeinture } from '$lib/state/carte.svelte';
+  import { erreurDepuisCode, position } from '$lib/state/position.svelte';
   import { teinter } from '$lib/teinte';
+  import { HISTORIQUES, tuiles } from '$lib/carte/fonds';
   import type { FondHistorique, VueCarte } from '$lib/state/permalien';
 
   interface Props {
@@ -28,6 +30,10 @@
      *  barre et le panneau. Elle se replie alors en une bande de cles, sans ses
      *  commandes — celles-ci restent atteignables des que la frise se referme. */
     friseOuverte: boolean;
+    /** Hauteur en pixels que la feuille de fiche masque en bas de la carte,
+     *  sur telephone. Un point choisi qui tomberait dessous est ramene dans la
+     *  part visible : on toucherait sinon un monument pour ne plus le voir. */
+    reserveBas?: number;
     onselect: (reference: string) => void;
     onbbox: (bbox: [number, number, number, number] | null) => void;
   }
@@ -39,9 +45,15 @@
     fond = $bindable(),
     suivreVue = $bindable(),
     friseOuverte,
+    reserveBas = 0,
     onselect,
     onbbox
   }: Props = $props();
+
+  /** Commandes de la legende depliees, sur telephone seulement : a cette
+   *  largeur le rail et la densite prenaient une seconde rangee de legende,
+   *  en permanence, pour un reglage qu'on touche une fois. */
+  let reglagesOuverts = $state(false);
 
   /** Vue par defaut : la France entiere. */
   const DEPART: VueCarte = { lon: 2.6, lat: 46.6, zoom: 4.7 };
@@ -63,6 +75,23 @@
    */
   let fondPose = untrack(() => fondPour(theme.courant));
 
+  /**
+   * Tolerance du toucher, en pixels autour du point de contact.
+   *
+   * Un point mesure 1,2 a 4,5 px de rayon jusqu'a z10 : au doigt, dont la
+   * pulpe couvre une dizaine de pixels CSS et masque ce qu'elle vise, toucher
+   * le pixel exact relevait du hasard. La souris, elle, vise juste — une marge
+   * large lui ferait ouvrir le voisin de ce qu'elle pointe.
+   */
+  const TOLERANCE_DOIGT = 16;
+  const TOLERANCE_SOURIS = 6;
+
+  /** Sous ce zoom, un toucher qui couvre plus de `AMAS` points rapproche la
+   *  vue au lieu d'ouvrir l'un d'eux : dans un amas, le plus proche du doigt
+   *  n'est pas celui qu'on voulait, c'est celui que le hasard a mis la. */
+  const ZOOM_AMAS = 9;
+  const AMAS = 3;
+
   /** Semiologie des points : statut juridique, ou epoque de construction. */
   type Mode = 'statut' | 'epoque';
   let mode = $state<Mode>('statut');
@@ -74,58 +103,6 @@
     { cle: 'epoque4', depuis: 18, titre: 'XVIIIe – XIXe' },
     { cle: 'epoque5', depuis: 20, titre: 'XXe et après' }
   ] as const;
-
-  /**
-   * Fonds historiques de la Geoplateforme IGN, servis sans cle d'API.
-   *
-   * Trois points mesures, a ne pas redecouvrir :
-   *
-   * - le prefixe `BNF-IGNF_` de Cassini est **obligatoire** : l'identifiant nu
-   *   `GEOGRAPHICALGRIDSYSTEMS.CASSINI` renvoie 400 ;
-   * - `zoomMax` n'est pas une precaution, c'est le piege du dispositif. Cassini
-   *   s'arrete a z14 : sans `maxzoom` sur la source, MapLibre reclame des tuiles
-   *   inexistantes au-dela et **la couche disparait** au moment precis ou l'on
-   *   zoome sur l'edifice. Avec, il etire la derniere tuile disponible, ce qui
-   *   est le comportement correct pour une carte ancienne ;
-   * - Cassini pese ~170 Ko la tuile, soit ~2 Mo par ecran. D'ou la visibilite
-   *   `none` au depart : aucun octet IGN ne part tant qu'un fond n'est pas
-   *   demande.
-   *
-   * L'attribution n'est pas decorative : ce sont des reproductions BnF / IGN,
-   * la mention est une obligation. Portee par la source, MapLibre l'ajoute et
-   * la retire tout seul avec la couche.
-   */
-  const HISTORIQUES = [
-    {
-      cle: 'cassini',
-      titre: 'Cassini',
-      epoque: 'XVIIIe siècle',
-      couche: 'BNF-IGNF_GEOGRAPHICALGRIDSYSTEMS.CASSINI',
-      format: 'image/png',
-      zoomMax: 14,
-      poids: '~170 Ko par tuile',
-      attribution: 'Carte de Cassini — BnF / IGN'
-    },
-    {
-      cle: 'etatmajor',
-      titre: 'État-major',
-      epoque: '1820-1866',
-      couche: 'GEOGRAPHICALGRIDSYSTEMS.ETATMAJOR40',
-      format: 'image/jpeg',
-      zoomMax: 15,
-      poids: '~20 Ko par tuile',
-      attribution: "Carte de l'état-major — IGN"
-    }
-  ] as const satisfies readonly {
-    cle: FondHistorique;
-    titre: string;
-    epoque: string;
-    couche: string;
-    format: string;
-    zoomMax: number;
-    poids: string;
-    attribution: string;
-  }[];
 
   /** Opacite de la superposition, en pourcent. Absente de l'URL : c'est un
    *  dosage de lecture, pas un etat d'exploration. */
@@ -143,15 +120,35 @@
    */
   let fondsOuverts = $state(untrack(() => fond) !== null);
 
+  /** La pastille repliee : `replierFonds()` lui rend le focus, sinon Echap
+   *  referme le module et laisse le clavier retomber sur le document. */
+  let boutonOuvrirFonds: HTMLButtonElement | undefined = $state();
+
+  async function replierFonds() {
+    fondsOuverts = false;
+    await tick();
+    boutonOuvrirFonds?.focus();
+  }
+
+  /**
+   * Echap referme le module quand le focus y est, et rend la main a la
+   * pastille repliee — comme la croix, mais au clavier.
+   *
+   * `preventDefault()` n'est pas un reflexe : l'ecouteur Echap global posé sur
+   * `window` (fiche puis tiroir) ignore les evenements deja traites, et sans
+   * cet appel il refermerait en plus la fiche ou le tiroir derriere ce module,
+   * pour une seule pression de touche.
+   */
+  function clavierFonds(event: KeyboardEvent) {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    replierFonds();
+  }
+
   /** Au-dela de cette opacite, l'aplat beige de la carte ancienne l'emporte sur
    *  le sol, quel qu'il soit — ardoise en sombre, grege en clair — et le lisere,
    *  qui vaut precisement ce sol, s'y efface. */
   const BASCULE_LISERET = 50;
-
-  const tuiles = (h: (typeof HISTORIQUES)[number]) =>
-    'https://data.geopf.fr/wmts?SERVICE=WMTS&VERSION=1.0.0&REQUEST=GetTile' +
-    `&LAYER=${h.couche}&STYLE=normal&TILEMATRIXSET=PM` +
-    `&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=${encodeURIComponent(h.format)}`;
 
   /**
    * Rayon des points. A l'echelle nationale, 44 484 pastilles de 2 px pleines
@@ -372,10 +369,63 @@
       // moindre glissement a deux doigts en desorientation sur telephone.
       dragRotate: false,
       pitchWithRotate: false,
-      touchPitch: false
+      touchPitch: false,
+      // Seuls les libelles de la geolocalisation sont traduits : ceux du zoom
+      // restent ceux de MapLibre, que la suite e2e et l'audit lisent deja.
+      locale: {
+        'GeolocateControl.FindMyLocation': 'Me localiser',
+        'GeolocateControl.LocationNotAvailable': 'Position non disponible'
+      }
     });
+
+    // Releve pour Playwright, publie sur `window` comme `__carte` : les points
+    // rendus en coordonnees **de page**, seul moyen de toucher un monument
+    // precis sans connaitre la projection. Rien n'y ecrit, rien ne le lit en
+    // production.
+    (window as unknown as { __carteOutils: unknown }).__carteOutils = {
+      rendus: () => {
+        if (!map.getLayer('monuments-points')) return [];
+        const boite = conteneur.getBoundingClientRect();
+        return map.queryRenderedFeatures({ layers: ['monuments-points'] }).map((f) => {
+          const p = map.project((f.geometry as GeoJSON.Point).coordinates as [number, number]);
+          return { reference: f.properties?.reference, x: boite.left + p.x, y: boite.top + p.y };
+        });
+      },
+      zoom: () => map.getZoom()
+    };
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+    // Sous le zoom, dans la meme colonne : c'est un outil de cadrage, comme
+    // lui. Le controle natif porte deja le point, le cercle de precision, le
+    // suivi et l'etat de permission — le reecrire n'apporterait qu'un bouton
+    // de plus a maintenir. Ses couleurs sont reprises dans `app.css`.
+    const geoloc = new maplibregl.GeolocateControl({
+      positionOptions: { enableHighAccuracy: true, timeout: 15_000 },
+      trackUserLocation: true,
+      showAccuracyCircle: true,
+      fitBoundsOptions: { maxZoom: 14 }
+    });
+    map.addControl(geoloc, 'top-right');
+    // L'evenement MapLibre recopie les champs de la position (ou de l'erreur)
+    // sur lui-meme : `coords` et `code` y sont directement.
+    geoloc.on('geolocate', (event) => {
+      const { coords } = event as unknown as GeolocationPosition;
+      position.courante = { lon: coords.longitude, lat: coords.latitude, precision: coords.accuracy };
+      position.erreur = null;
+    });
+    geoloc.on('error', (event) => {
+      position.erreur = erreurDepuisCode((event as unknown as GeolocationPositionError).code);
+    });
+
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
+
+    // Trois deplacements animes existent : le rapprochement sur un amas
+    // touche, le cadrage du controle de geolocalisation (`fitBounds`), et le
+    // recentrage d'un point passe sous la feuille de fiche. **Aucun ne passe
+    // `essential: true`**, et le controle natif non plus (verifie dans sa
+    // source, 4.7.1) : MapLibre lit alors `prefers-reduced-motion` lui-meme a
+    // chaque appel et ramene la duree a zero — c'est deja le mouvement reduit
+    // demande, sans code a ecrire ici. « Au hasard » continue d'ouvrir une
+    // fiche sans toucher au cadrage.
 
     // `style.load` se declenche au montage **et** apres chaque `setStyle` :
     // c'est le seul evenement qui couvre les deux.
@@ -390,9 +440,41 @@
       map.getCanvas().style.cursor = '';
       popup.remove();
     });
-    map.on('click', 'monuments-points', (event) => {
-      const ref = event.features?.[0]?.properties?.reference;
-      if (typeof ref === 'string') onselect(ref);
+    // Clic sur la carte entiere, et non sur la couche : l'ecouteur de couche ne
+    // repond qu'au pixel exact d'un cercle. On interroge une boite autour du
+    // contact et on retient le point le plus proche **a l'ecran** — l'ordre
+    // rendu par `queryRenderedFeatures` est celui du dessin, pas de la distance.
+    const doigt = window.matchMedia('(pointer: coarse)');
+    map.on('click', (event) => {
+      if (!map.getLayer('monuments-points')) return;
+      const r = doigt.matches ? TOLERANCE_DOIGT : TOLERANCE_SOURIS;
+      const { x, y } = event.point;
+      const touches = map.queryRenderedFeatures(
+        [[x - r, y - r], [x + r, y + r]],
+        { layers: ['monuments-points'] }
+      );
+      // Une source GeoJSON peut rendre la meme entite sur deux tuiles voisines.
+      const vus = new Set<string>();
+      let retenue: string | null = null;
+      let meilleure = Infinity;
+      for (const entite of touches) {
+        const ref = entite.properties?.reference;
+        if (typeof ref !== 'string' || vus.has(ref)) continue;
+        vus.add(ref);
+        const [lon, lat] = (entite.geometry as GeoJSON.Point).coordinates;
+        const p = map.project([lon, lat]);
+        const d = (p.x - x) ** 2 + (p.y - y) ** 2;
+        if (d < meilleure) {
+          meilleure = d;
+          retenue = ref;
+        }
+      }
+      if (!retenue) return;
+      if (doigt.matches && vus.size > AMAS && map.getZoom() < ZOOM_AMAS) {
+        map.easeTo({ center: event.lngLat, zoom: Math.min(map.getZoom() + 2, ZOOM_AMAS) });
+        return;
+      }
+      onselect(retenue);
     });
     map.on('moveend', () => {
       if (!suivreVue) return;
@@ -442,6 +524,30 @@
   $effect(() => {
     if (!pret) return;
     carte?.setFilter('monuments-selection', ['==', ['get', 'reference'], selection ?? '']);
+  });
+
+  // Recentrage sous la feuille de fiche. Il ne part que si le point est hors
+  // de la part visible : ouvrir un monument deja bien place ne doit pas
+  // deplacer la carte, et passer d'un voisin a l'autre en apercu non plus.
+  // Le nuage est lu sans dependance — un filtre qui le remplace ne doit pas
+  // rejouer le cadrage.
+  $effect(() => {
+    const ref = selection;
+    const reserve = reserveBas;
+    if (!pret || !carte || !ref || reserve <= 0) return;
+    const map = carte;
+    untrack(() => {
+      const trouvee = points.features.find((f) => f.properties?.reference === ref);
+      if (!trouvee) return;
+      const [lon, lat] = (trouvee.geometry as GeoJSON.Point).coordinates;
+      const p = map.project([lon, lat]);
+      const hauteur = conteneur.clientHeight;
+      const visible = hauteur - reserve;
+      if (p.y > 16 && p.y < visible - 24) return;
+      // Le centre de la carte vaut `hauteur / 2` : l'offset y pose le point
+      // aux deux cinquiemes de la part visible.
+      map.easeTo({ center: [lon, lat], offset: [0, visible * 0.4 - hauteur / 2] });
+    });
   });
 
   // Les points restent la couche interactive : les masquer sous la densite
@@ -551,7 +657,7 @@
 
 <div class="carte" bind:this={conteneur}></div>
 
-<div class="legende" class:compacte={friseOuverte}>
+<div class="legende" class:compacte={friseOuverte} class:deplie={reglagesOuverts}>
   <div class="cles">
     {#if densite}
       <!-- Sous la densite, les teintes de statut ne disent plus rien : la
@@ -571,6 +677,18 @@
         <span class="cle"><i style="background:{palette[tranche.cle]}"></i>{tranche.titre}</span>
       {/each}
     {/if}
+    <!-- Visible sur telephone seulement : ailleurs les commandes sont
+         toujours depliees. -->
+    <button class="reglages frappe-44" aria-expanded={reglagesOuverts}
+            aria-label={reglagesOuverts ? 'Masquer les réglages de la carte' : 'Réglages de la carte'}
+            onclick={() => (reglagesOuverts = !reglagesOuverts)}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+           stroke-linecap="round" aria-hidden="true">
+        <path d="M4 7h9M17 7h3M4 17h3M11 17h9" />
+        <circle cx="15" cy="7" r="2" />
+        <circle cx="9" cy="17" r="2" />
+      </svg>
+    </button>
   </div>
 
   <!-- Les commandes sont sous un filet, la ou la lecture s'arrete : la legende
@@ -598,14 +716,18 @@
      qu'on ne s'en sert pas en continu. La colonne suit `--marge-droite` comme
      le zoom : la fiche ne doit rien recouvrir. -->
 {#if fondsOuverts}
+  <!-- `clavierFonds` est pose sur chaque commande plutot que sur ce
+       conteneur : un `<div>` muni d'un `onkeydown` reclamerait un role
+       interactif que ce groupe de boutons natifs n'a pas a porter. -->
   <div class="fonds">
     <div class="entete-fonds">
       <p class="titre-outil">Cartes anciennes</p>
       <button class="fermer-fonds frappe-44" aria-label="Replier les cartes anciennes"
-              onclick={() => (fondsOuverts = false)}>×</button>
+              onclick={replierFonds} onkeydown={clavierFonds}>×</button>
     </div>
     {#each HISTORIQUES as h (h.cle)}
       <button class="frappe-44-v" class:actif={fond === h.cle} onclick={() => choisirFond(h.cle)}
+              onkeydown={clavierFonds}
               aria-pressed={fond === h.cle}
               title="Superposer la carte {h.titre} ({h.epoque}) — {h.poids}">
         <span class="nom-fond">{h.titre}</span>
@@ -618,6 +740,7 @@
         <span>opacité</span>
         <output>{opaciteFond} %</output>
         <input type="range" min="0" max="100" step="5" bind:value={opaciteFond}
+               onkeydown={clavierFonds}
                aria-label="Opacité du fond historique" />
       </label>
     {/if}
@@ -626,6 +749,7 @@
   <button class="ouvrir-fonds frappe-44" class:actif={fond !== null} aria-expanded="false"
           aria-label="Cartes anciennes"
           title="Superposer une carte ancienne — Cassini, état-major"
+          bind:this={boutonOuvrirFonds}
           onclick={() => (fondsOuverts = true)}>
     <!-- Trois feuillets empiles : le geste est une superposition, pas un choix
          de fond. Trait en `currentColor`, sinon la couleur echapperait au
@@ -687,6 +811,30 @@
     white-space: nowrap;
   }
 
+  .reglages {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    margin-left: auto;
+    border: 1px solid var(--bord);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--texte-faible);
+    cursor: pointer;
+  }
+
+  .reglages[aria-expanded='true'] {
+    border-color: var(--inscrit);
+    color: var(--inscrit-texte);
+  }
+
+  .reglages svg {
+    width: 15px;
+    height: 15px;
+  }
+
   .cle i {
     width: 9px;
     height: 9px;
@@ -741,8 +889,11 @@
     transition: all var(--t-rapide);
   }
 
-  .segments button:hover {
-    color: var(--texte);
+  /* Le survol qui reste colle au tactile n'a de sens qu'au pointeur fin. */
+  @media (hover: hover) and (pointer: fine) {
+    .segments button:hover {
+      color: var(--texte);
+    }
   }
 
   .segments button.actif {
@@ -772,10 +923,12 @@
     transition: all var(--t-rapide);
   }
 
-  .densite:hover,
-  .fonds > button:hover {
-    border-color: var(--inscrit);
-    color: var(--inscrit-texte);
+  @media (hover: hover) and (pointer: fine) {
+    .densite:hover,
+    .fonds > button:hover {
+      border-color: var(--inscrit);
+      color: var(--inscrit-texte);
+    }
   }
 
   .densite.actif,
@@ -787,15 +940,21 @@
   }
 
   /* Le module prolonge la colonne d'outils du zoom : meme bord droit, meme
-     largeur au repos, meme langage graphique. 108 px : la hauteur du groupe
-     MapLibre — deux boutons **de 44 px** depuis qu'ils sont a la taille du
-     doigt, plus son filet et ses bordures — et sa marge de 10 px. Cette valeur
-     suit celle du zoom : la changer d'un cote sans l'autre fait chevaucher les
-     deux blocs, et rien ne le signale sinon a l'oeil. */
+     largeur au repos, meme langage graphique. 164 px : les deux groupes
+     MapLibre qui le precedent — le zoom (deux boutons **de 44 px**, son filet
+     et ses bordures, 91 px) puis la geolocalisation (46 px) — et leurs marges
+     de 10 px. Cette valeur suit ces deux groupes : la changer d'un cote sans
+     l'autre fait chevaucher les blocs, et c'est la disjonction geometrique
+     verifiee en e2e qui le signale. */
+  .ouvrir-fonds,
+  .fonds {
+    --haut-fonds: 164px;
+  }
+
   .ouvrir-fonds,
   .fonds {
     position: absolute;
-    top: 108px;
+    top: var(--haut-fonds);
     right: calc(var(--marge-droite, 0px) + 10px);
     z-index: 2;
     border: 1px solid var(--bord-flottant);
@@ -822,9 +981,11 @@
     height: 17px;
   }
 
-  .ouvrir-fonds:hover {
-    background: var(--fond-creux);
-    color: var(--texte);
+  @media (hover: hover) and (pointer: fine) {
+    .ouvrir-fonds:hover {
+      background: var(--fond-creux);
+      color: var(--texte);
+    }
   }
 
   /* Replie sur un fond actif, le bouton doit encore le dire : sinon la carte
@@ -875,8 +1036,10 @@
     transition: color var(--t-rapide);
   }
 
-  .fermer-fonds:hover {
-    color: var(--texte);
+  @media (hover: hover) and (pointer: fine) {
+    .fermer-fonds:hover {
+      color: var(--texte);
+    }
   }
 
   /* Le nom sur une ligne, la periode sous lui : c'est elle qui dit ce que la
@@ -965,7 +1128,7 @@
 
     .ouvrir-fonds,
     .fonds {
-      top: 104px;
+      --haut-fonds: 160px;
     }
 
     .fonds {
@@ -981,6 +1144,20 @@
        se referme. Le repli ne vaut **que** sur ce gabarit : au large, les deux
        panneaux cohabitent sans se disputer la place. */
     .legende.compacte .commandes {
+      display: none;
+    }
+  }
+
+  /* Telephone : les commandes attendent la pastille « reglages ». Avec la
+     frise ouverte, la pastille disparait aussi — la regle `.compacte`
+     ci-dessus a deja retire ce qu'elle deplierait. */
+  @media (max-width: 768px) {
+    .reglages {
+      display: inline-flex;
+    }
+
+    .legende:not(.deplie) .commandes,
+    .legende.compacte .reglages {
       display: none;
     }
   }

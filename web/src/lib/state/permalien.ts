@@ -14,6 +14,10 @@
  * `bbox` est volontairement absente. Elle est produite par les deplacements de
  * la carte : la reecrire noierait l'URL a chaque pan.
  *
+ * La **position de l'utilisateur** et le **tri par proximite** sont absents
+ * eux aussi, pour une autre raison : un lien partage ne doit pas dire ou se
+ * tenait celui qui l'a copie (`state/position.svelte.ts`).
+ *
  * La **vue** de carte (`c=lon,lat,zoom`) suit une regle differente de tout le
  * reste : elle n'est jamais ecrite dans l'URL vivante — un simple deplacement
  * ne doit rien reecrire — mais elle est ajoutee au lien **produit** par

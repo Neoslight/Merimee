@@ -1,12 +1,13 @@
 /**
  * Audit visuel et accessibilite : captures + releves chiffres.
  *
- * `smoke.mjs` verifie 127 comportements, mais aucune de ses verifications ne
- * juge le **rendu** : un texte peut passer sous 4,5:1, un panneau en recouvrir
- * un autre, une cible tomber a 26 px, sans qu'aucune ne bouge. Ce script
- * produit la matiere de cet audit-la — un PNG et un JSON par etat.
+ * La suite e2e (`tests/e2e/`, `npm run test`) verifie plus de 180
+ * comportements, mais aucune de ses verifications ne juge le **rendu** : un
+ * texte peut passer sous 4,5:1, un panneau en recouvrir un autre, une cible
+ * tomber a 26 px, sans qu'aucune ne bouge. Ce script produit la matiere de cet
+ * audit-la — un PNG et un JSON par etat.
  *
- * Contrairement a `smoke.mjs`, **il laisse partir les requetes CARTO et
+ * Contrairement a la suite e2e, **il laisse partir les requetes CARTO et
  * Geoplateforme**. La regle « ce depot tient ses tests hors reseau » vise la
  * suite de tests, qui doit rester deterministe ; un audit de rendu qui
  * boucherait Cassini par un PNG 1x1 transparent ne montrerait rien de ce qu'il
@@ -36,7 +37,8 @@ for (const nom of readdirSync(SORTIE)) {
   if (nom.endsWith('.png') || nom === 'journal.txt') rmSync(`${SORTIE}/${nom}`, { force: true });
 }
 
-// Port distinct de celui de `smoke.mjs` : les deux doivent pouvoir tourner cote a cote.
+// Port distinct de celui de la suite e2e (tests/e2e/_soutien.ts, 4180) : les
+// deux doivent pouvoir tourner cote a cote.
 const { serveur, url: BASE } = await demarrer(chemin('../build'), 4181);
 
 // `AUDIT_GABARITS` et `AUDIT_THEMES` restreignent la passe — utiles pour
@@ -64,6 +66,19 @@ const REF_SANS_PHOTO = 'PA48000036';
 
 const attendre = (page, selecteur, timeout = 45_000) => page.waitForSelector(selecteur, { timeout });
 
+// Le selecteur de vue vit dans la barre au large et dans les onglets du pied
+// sur telephone ; l'autre est masque. On vise celui qui est visible.
+const SELECTEUR_VUE = '.bascule button:visible, .onglets button:visible';
+
+/** Sur telephone, les commandes de legende attendent la pastille « reglages ». */
+async function deplierReglages(page) {
+  const reglages = page.getByRole('button', { name: 'Réglages de la carte' });
+  if ((await reglages.count()) === 1 && (await reglages.isVisible())) {
+    await reglages.click();
+    await page.waitForTimeout(200);
+  }
+}
+
 async function ouvrirFiltres(page) {
   if ((await page.locator('.facettes.ouvert').count()) === 1) return;
   await page.getByRole('button', { name: /^Filtres/ }).click();
@@ -73,7 +88,9 @@ async function ouvrirFiltres(page) {
 
 async function ouvrirFrises(page) {
   if ((await page.locator('.frise').count()) === 1) return;
-  await page.getByRole('button', { name: 'Afficher les frises' }).click();
+  const onglet = page.locator('.onglets button:visible', { hasText: 'Frises' });
+  if ((await onglet.count()) === 1) await onglet.click();
+  else await page.getByRole('button', { name: 'Afficher les frises' }).click();
   await attendre(page, '.piste-siecles svg', 20_000);
   await page.waitForTimeout(600);
 }
@@ -140,10 +157,16 @@ async function raz(page) {
   }
   const densite = page.getByRole('button', { name: 'densité' });
   if ((await densite.count()) === 1 && ((await densite.getAttribute('class')) ?? '').includes('actif')) {
+    await deplierReglages(page);
     await densite.click();
     await page.waitForTimeout(500);
   }
-  const carte = page.locator('.bascule button', { hasText: 'Carte' });
+  const masquer = page.getByRole('button', { name: 'Masquer les réglages de la carte' });
+  if ((await masquer.count()) === 1 && (await masquer.isVisible())) {
+    await masquer.click();
+    await page.waitForTimeout(200);
+  }
+  const carte = page.locator(SELECTEUR_VUE, { hasText:'Carte' });
   if ((await carte.count()) === 1) {
     await carte.click();
     await page.waitForTimeout(500);
@@ -220,6 +243,7 @@ const ETATS = [
     cle: 'densite',
     vue: 'carte',
     poser: async (page) => {
+      await deplierReglages(page);
       await page.getByRole('button', { name: 'densité' }).click();
       await page.waitForTimeout(1400);
     }
@@ -249,7 +273,7 @@ const ETATS = [
     cle: 'defaut',
     vue: 'liste',
     poser: async (page) => {
-      await page.locator('.bascule button', { hasText: 'Liste' }).click();
+      await page.locator(SELECTEUR_VUE, { hasText:'Liste' }).click();
       await attendre(page, '.liste header p');
       await page.waitForTimeout(900);
     }
@@ -259,7 +283,7 @@ const ETATS = [
     cle: 'scroll-mi-page',
     vue: 'liste',
     poser: async (page) => {
-      await page.locator('.bascule button', { hasText: 'Liste' }).click();
+      await page.locator(SELECTEUR_VUE, { hasText:'Liste' }).click();
       await attendre(page, '.liste header p');
       await page.waitForTimeout(900);
       await page.evaluate(() => {
@@ -279,7 +303,7 @@ const ETATS = [
     cle: 'recherche-historiques',
     vue: 'liste',
     poser: async (page) => {
-      await page.locator('.bascule button', { hasText: 'Liste' }).click();
+      await page.locator(SELECTEUR_VUE, { hasText:'Liste' }).click();
       await attendre(page, '.liste header p');
       await page.locator('button.cible').click();
       await page.fill('.recherche', 'jubé');
@@ -291,7 +315,7 @@ const ETATS = [
     cle: 'defaut',
     vue: 'matrice',
     poser: async (page) => {
-      await page.locator('.bascule button', { hasText: 'Matrice' }).click();
+      await page.locator(SELECTEUR_VUE, { hasText:'Matrice' }).click();
       await attendre(page, '.matrice svg', 25_000);
       await page.waitForTimeout(1200);
     }
@@ -536,6 +560,8 @@ try {
 
     await page.goto(BASE, { waitUntil: 'domcontentloaded' });
     await attendre(page, '.chiffres b', 90_000);
+    // Le compte peut etre le provisoire de `points.json` : attendre le moteur.
+    await page.waitForFunction(() => !document.querySelector('.amorce-discrete'), null, { timeout: 90_000 });
     await page.waitForTimeout(2500);
 
     for (const theme of THEMES) {

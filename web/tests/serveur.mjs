@@ -1,3 +1,8 @@
+// @ts-nocheck -- JS simple, jamais type. La suite e2e (tests/e2e/*.ts) est
+// la premiere a l'importer depuis un fichier verifie par svelte-check ; sans
+// cette ligne, `npm run check` remonterait les `any` implicites d'un
+// utilitaire de test qui n'a pas a porter cette rigueur. Aucun changement de
+// comportement — API et logique restent identiques.
 /**
  * Serveur statique de test, avec support des requetes Range et comptage des
  * octets reellement servis par fichier.

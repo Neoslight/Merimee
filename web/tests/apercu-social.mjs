@@ -23,6 +23,9 @@ const page = await navigateur.newPage({
 
 await page.goto(url, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('.chiffres b', { timeout: 90_000 });
+// Le compte peut etre le provisoire de `points.json` : la vignette doit montrer
+// l'application prete, sans la pastille d'attente du moteur.
+await page.waitForFunction(() => !document.querySelector('.amorce-discrete'), null, { timeout: 90_000 });
 // Laisser la carte finir son rendu WebGL, sinon la vignette montre un fond nu.
 await page.waitForTimeout(3000);
 await page.screenshot({ path: 'static/apercu-social.png' });

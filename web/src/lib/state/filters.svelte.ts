@@ -6,7 +6,7 @@
  * cochees tombent a zero des la premiere selection et le filtrage croise
  * devient inutilisable.
  */
-import { lit, litList } from '$lib/db/duckdb';
+import { lit, litList, echapperLike } from '$lib/db/duckdb';
 import { clauseTexte } from '$lib/db/texte';
 import { romain } from '$lib/format';
 
@@ -143,11 +143,23 @@ function listeClause(colonne: string, valeurs: readonly string[]): string | null
   return valeurs.length ? `list_has_any(${colonne}, ${litList(valeurs)})` : null;
 }
 
+/**
+ * Defense en profondeur : `filters` est mute par du code de confiance
+ * (`toggle`, `permalien.decoder`, deja borne), mais une valeur numerique
+ * invalide interpolee telle quelle dans le SQL casserait la requete entiere —
+ * autant l'ecarter silencieusement que planter tout le cycle pour un seul
+ * filtre corrompu.
+ */
+const entierValide = (n: number): boolean => Number.isInteger(n);
+const reelValide = (n: number): boolean => Number.isFinite(n);
+
 const CLAUSES: Record<FacetKey, (f: Filters) => string | null> = {
   statut: (f) =>
     f.statut.length ? `statut IN (${f.statut.map(lit).join(', ')})` : null,
-  siecles: (f) =>
-    f.siecles.length ? `list_has_any(siecles, [${f.siecles.join(', ')}]::TINYINT[])` : null,
+  siecles: (f) => {
+    const valeurs = f.siecles.filter(entierValide);
+    return valeurs.length ? `list_has_any(siecles, [${valeurs.join(', ')}]::TINYINT[])` : null;
+  },
   periodes: (f) => listeClause('periodes', f.periodes),
   domaines: (f) => listeClause('domaines', f.domaines),
   denominations: (f) => listeClause('denominations', f.denominations),
@@ -161,17 +173,23 @@ const CLAUSES: Record<FacetKey, (f: Filters) => string | null> = {
   // Semi-jointure sur les actes plutot que sur `annee_premiere/derniere` :
   // une notice protegee en 1925 puis en 1990 ne doit pas apparaitre pour 1960.
   anneeProtection: (f) =>
-    f.anneeProtection
+    f.anneeProtection && entierValide(f.anneeProtection[0]) && entierValide(f.anneeProtection[1])
       ? `reference IN (SELECT reference FROM protections WHERE annee BETWEEN ${f.anneeProtection[0]} AND ${f.anneeProtection[1]})`
       : null,
-  nbPalissy: (f) => (f.nbPalissy > 0 ? `nb_palissy >= ${f.nbPalissy}` : null),
+  nbPalissy: (f) =>
+    f.nbPalissy > 0 && entierValide(f.nbPalissy) ? `nb_palissy >= ${f.nbPalissy}` : null,
   // Chaque mot est cherche separement : `search_key` concatene titre, commune
   // et departement, donc « chateau bordeaux » n'y apparait jamais d'un seul
   // tenant. Les mots doivent tous etre presents, dans n'importe quel ordre.
   recherche: (f) => {
     const mots = f.recherche.trim().split(/\s+/).filter(Boolean);
     if (!mots.length) return null;
-    return mots.map((mot) => `search_key LIKE ${lit(`%${mot}%`)}`).join(' AND ');
+    // `%` et `_` saisis par l'utilisateur sont des jokers LIKE, comme dans
+    // `facette()` : sans l'echappement, une commune contenant un `_` ou un `%`
+    // change silencieusement le sens de la recherche.
+    return mots
+      .map((mot) => `search_key LIKE ${lit(`%${echapperLike(mot)}%`)} ESCAPE '\\'`)
+      .join(' AND ');
   },
   // Le predicat ne porte pas le terme mais les identifiants que le lexique lui
   // a fait correspondre, poses par `poserTermes`. Tant qu'ils manquent — index
@@ -183,7 +201,7 @@ const CLAUSES: Record<FacetKey, (f: Filters) => string | null> = {
     return termesResolus.length ? clauseTexte(termesResolus) : 'FALSE';
   },
   bbox: (f) =>
-    f.bbox
+    f.bbox && f.bbox.every(reelValide)
       ? `lat BETWEEN ${f.bbox[1]} AND ${f.bbox[3]} AND lon BETWEEN ${f.bbox[0]} AND ${f.bbox[2]}`
       : null
 };

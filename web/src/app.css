@@ -175,6 +175,13 @@
      dans le meme piege : d'ou un jeton a part. */
   --bord-flottant: #d8d2c4;
 
+  /* Position de l'utilisateur. Un bleu, et c'est le seul du produit : c'est la
+     convention de toutes les cartes de telephone, et aucune teinte de la
+     palette patrimoniale ne doit pouvoir passer pour « vous etes ici ». */
+  --position: #1f6fd1;
+  --position-halo: rgba(31, 111, 209, 0.16);
+  --position-anneau: #ffffff;
+
   /* Loupe des champs de recherche. Un `<input>` n'accepte pas de
      pseudo-element : une image de fond est le seul chemin, et son trait est
      une couleur — elle doit donc vivre ici, comme les autres, sinon elle
@@ -201,6 +208,14 @@
      du calque et la marge dont s'ecartent la legende et l'attribution — donc
      elle n'est ecrite qu'ici. */
   --largeur-tiroir: 296px;
+
+  /* Bordures physiques de l'ecran sur iOS (encoche, coins arrondis, barre
+     d'accueil du bas) : `env()` vaut 0 ailleurs, ces variables ne changent
+     donc rien hors iOS ni sur les elements qui ne touchent aucun bord. */
+  --sa-haut: env(safe-area-inset-top, 0px);
+  --sa-bas: env(safe-area-inset-bottom, 0px);
+  --sa-gauche: env(safe-area-inset-left, 0px);
+  --sa-droite: env(safe-area-inset-right, 0px);
 
   --police: 'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
   --police-titre: 'Newsreader Variable', 'Newsreader', Georgia, 'Times New Roman', serif;
@@ -284,6 +299,10 @@
   --voile: 0 0 0;
   --bord-flottant: #313539;
 
+  --position: #5ea2ef;
+  --position-halo: rgba(94, 162, 239, 0.18);
+  --position-anneau: #f2f0ea;
+
   --icone-recherche: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Ccircle cx='7' cy='7' r='4.6' stroke='%23a5a09a' stroke-width='1.4'/%3E%3Cline x1='10.6' y1='10.6' x2='14' y2='14' stroke='%23a5a09a' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
 
   --ombre-carte: 0 10px 30px -5px rgb(var(--voile) / 50%);
@@ -328,9 +347,11 @@ a {
   text-decoration: none;
 }
 
-a:hover {
-  color: var(--texte);
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  a:hover {
+    color: var(--texte);
+    text-decoration: underline;
+  }
 }
 
 ::-webkit-scrollbar {
@@ -343,8 +364,10 @@ a:hover {
   border-radius: var(--r-pilule);
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: var(--bord-appuye);
+@media (hover: hover) and (pointer: fine) {
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--bord-appuye);
+  }
 }
 
 .maplibregl-ctrl-attrib {
@@ -377,16 +400,62 @@ a:hover {
   height: 44px !important;
 }
 
-.maplibregl-ctrl-group button:hover {
-  background: var(--fond-creux) !important;
+@media (hover: hover) and (pointer: fine) {
+  .maplibregl-ctrl-group button:hover {
+    background: var(--fond-creux) !important;
+  }
 }
 
 /* Les icones du zoom sont des SVG noirs poses en image de fond : sur une
    pastille ardoise elles disparaissent. Elles ne sont pas des jetons — on ne
    peut pas leur donner une couleur — d'ou l'inversion, seul levier disponible
    sur une image de fond. */
-:root[data-theme='sombre'] .maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+:root[data-theme='sombre'] .maplibregl-ctrl-group button:not(.maplibregl-ctrl-geolocate) .maplibregl-ctrl-icon {
   filter: invert(1);
+}
+
+/* --- Geolocalisation ---------------------------------------------------------
+   L'icone de MapLibre est un SVG colore en dur, bleu une fois active : ni
+   jeton ni inversion n'y donnent prise proprement. Elle devient un **masque**
+   — le trace seul, sans couleur — et c'est la couleur de fond, un jeton, qui
+   la peint. Elle suit donc le theme sans filtre, d'ou son exclusion de
+   l'inversion ci-dessus. */
+.maplibregl-ctrl button.maplibregl-ctrl-geolocate .maplibregl-ctrl-icon {
+  background-image: none !important;
+  background-color: var(--texte-moyen);
+  -webkit-mask: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3C/svg%3E") center / 29px 29px no-repeat;
+  mask: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3C/svg%3E") center / 29px 29px no-repeat;
+}
+
+.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-active .maplibregl-ctrl-icon,
+.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-background .maplibregl-ctrl-icon {
+  background-color: var(--position);
+}
+
+.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-active-error .maplibregl-ctrl-icon,
+.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-background-error .maplibregl-ctrl-icon {
+  background-color: var(--erreur);
+}
+
+/* `.maplibregl-map` en tete : la feuille de MapLibre est importee par le
+   composant, et l'ordre des deux feuilles dans le bundle ne se garantit pas.
+   La specificite, si. */
+.maplibregl-map .maplibregl-user-location-dot,
+.maplibregl-map .maplibregl-user-location-dot::before {
+  background-color: var(--position);
+}
+
+.maplibregl-map .maplibregl-user-location-dot::after {
+  border-color: var(--position-anneau);
+  box-shadow: 0 0 3px rgb(var(--voile) / 35%);
+}
+
+.maplibregl-map .maplibregl-user-location-dot.maplibregl-user-location-dot-stale {
+  background-color: var(--statut-nul);
+}
+
+.maplibregl-map .maplibregl-user-location-accuracy-circle {
+  background-color: var(--position-halo);
 }
 
 /* --- Zones de frappe -------------------------------------------------------
@@ -430,4 +499,42 @@ a:hover {
 
 .frappe-44-v::after {
   width: 100%;
+}
+
+/* --- <noscript> ------------------------------------------------------------
+   Le site interroge DuckDB dans le navigateur : sans JavaScript, rien ne peut
+   s'afficher. Le message ne vit que dans `app.html`, jamais visible autrement
+   — la couleur reste tout de meme un jeton, comme partout ailleurs. */
+.noscript {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 32px;
+  background: var(--fond);
+  color: var(--texte);
+  font-family: var(--police);
+  font-size: 15px;
+  text-align: center;
+}
+
+/* --- Mouvement reduit -------------------------------------------------------
+   Ne change rien par defaut : les deux durees partagees tombent quasi a zero
+   uniquement sous cette requete, et toute transition/animation residuelle —
+   y compris celles ecrites en dur dans les composants, hors de ces jetons —
+   est neutralisee au meme endroit que le reste des echelles partagees. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --t-rapide: 0.01ms;
+    --t-tiroir: 0.01ms;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -24,10 +24,45 @@ let instance: duckdb.AsyncDuckDB | null = null;
 
 const fichier = (chemin: string) => new URL(`${base}/data/${chemin}`, location.href).href;
 
+/**
+ * Resout l'URL du wasm a passer a `instantiate`.
+ *
+ * `precharger.mjs` pose un `<link rel="preload" as="fetch" crossorigin>` sur
+ * ce meme fichier dans le shell HTML, pour que le telechargement parte des
+ * l'analyse de la page plutot qu'apres coup. Mais `instantiate()` fait fetch
+ * le wasm **depuis le worker** — un contexte distinct du document, qui n'y
+ * reprend pas toujours le prechargement : mesure (compteur d'octets serveur),
+ * le binaire partait deux fois, une par le prechargement et une par le
+ * worker. Le fetch est donc fait ici, dans le document — la ou le
+ * prechargement est repris de facon fiable — puis converti en URL `blob:`
+ * que le worker peut fetch localement, sans repartir sur le reseau.
+ *
+ * Un echec (reseau, blob non supporte) retombe sur l'URL directe : le worker
+ * la fetchera lui-meme, exactement comme avant ce dispositif.
+ */
+async function urlWasmPrechargee(): Promise<string> {
+  try {
+    const reponse = await fetch(ehWasm);
+    if (!reponse.ok) return ehWasm;
+    const octets = await reponse.arrayBuffer();
+    // Le type doit etre pose explicitement : une URL `blob:` fetchee rend un
+    // Content-Type tire du `Blob` lui-meme, et `instantiateStreaming` exige
+    // `application/wasm` pour eviter de retomber sur la voie lente.
+    return URL.createObjectURL(new Blob([octets], { type: 'application/wasm' }));
+  } catch {
+    return ehWasm;
+  }
+}
+
 async function boot(): Promise<duckdb.AsyncDuckDBConnection> {
   const worker = new Worker(ehWorker);
   const db = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), worker);
-  await db.instantiate(ehWasm);
+  const urlWasm = await urlWasmPrechargee();
+  try {
+    await db.instantiate(urlWasm);
+  } finally {
+    if (urlWasm !== ehWasm) URL.revokeObjectURL(urlWasm);
+  }
   amorcage.phase = 'corpus';
   instance = db;
 
@@ -49,7 +84,13 @@ export function connection(): Promise<duckdb.AsyncDuckDBConnection> {
   return ready;
 }
 
-const enregistres = new Set<string>();
+// La promesse est memoisee, pas seulement le resultat : entre deux appels
+// concurrents sur le meme nom, le second doit trouver l'enregistrement deja
+// en vol et l'attendre, pas en relancer un second. Peupler un `Set` apres coup
+// laissait une fenetre ouverte tant que l'`await` de `registerFileURL` durait —
+// deux appels partis avant qu'elle se referme enregistraient deux fois le
+// meme fichier.
+const enregistres = new Map<string, Promise<void>>();
 
 /**
  * Rend un fichier de `static/data/` interrogeable sous le nom `nom`, une fois.
@@ -59,11 +100,20 @@ const enregistres = new Set<string>();
  * plus sur le reseau. C'est ce qui rend acceptables les chargements a la
  * demande — un fragment de fiche, l'index plein texte.
  */
-export async function enregistrer(nom: string, chemin: string): Promise<void> {
-  await connection();
-  if (enregistres.has(nom)) return;
-  await instance!.registerFileURL(nom, fichier(chemin), duckdb.DuckDBDataProtocol.HTTP, false);
-  enregistres.add(nom);
+export function enregistrer(nom: string, chemin: string): Promise<void> {
+  let promesse = enregistres.get(nom);
+  if (promesse) return promesse;
+  promesse = (async () => {
+    await connection();
+    await instance!.registerFileURL(nom, fichier(chemin), duckdb.DuckDBDataProtocol.HTTP, false);
+  })().catch((e) => {
+    // Echec (404, reseau) : retirer l'entree pour qu'un prochain appel puisse
+    // retenter, plutot que de rester coince sur une promesse rejetee a vie.
+    enregistres.delete(nom);
+    throw e;
+  });
+  enregistres.set(nom, promesse);
+  return promesse;
 }
 
 /**
@@ -114,4 +164,17 @@ export function lit(value: string): string {
 /** Liste SQL de chaines : `['a', 'b']`. */
 export function litList(values: readonly string[]): string {
   return `[${values.map(lit).join(', ')}]`;
+}
+
+/**
+ * Echappe `%`, `_` et l'antislash lui-meme pour un usage dans un `LIKE`.
+ *
+ * Sans cela, un `%` ou un `_` saisi par l'utilisateur redevient un joker : une
+ * recherche de commune sur « saint_denis » retomberait sur toute commune dont
+ * le neuvieme caractere est quelconque. A utiliser avec `ESCAPE '\\'` cote SQL —
+ * DuckDB n'interprete pas l'antislash dans un litteral standard, verifie a
+ * l'execution, donc `lit()` seul ne suffit pas a le poser.
+ */
+export function echapperLike(motif: string): string {
+  return motif.replace(/[\\%_]/g, (c) => `\\${c}`);
 }

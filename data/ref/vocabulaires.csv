@@ -7,3 +7,18 @@ Statut_juridique_de_l_edifice,propriete de l'etat,propriété de l'État
 Domaine,architecture funeraire ou commemorative ou votive,"architecture funéraire, commémorative ou votive"
 Domaine,architecture de commerce,architecture commerciale
 Technique_du_decor_porte_de_l_edifice,desaffecte,désaffecté
+Domaine,escalier,
+Domaine,architecture hospitalière ou d'assistance ou de protection sociale,"architecture hospitalière, d'assistance ou de protection sociale"
+Statut_juridique_de_l_edifice,propriété d'un établissement public de l'Etat,propriété d'un établissement public de l'État
+Statut_juridique_de_l_edifice,propriété du Département,propriété du département
+Statut_juridique_de_l_edifice,propriété d'un Etat étranger,propriété d'un état étranger
+Statut_juridique_de_l_edifice,propriété de la Communauté de communes,propriété de la communauté de communes
+Denomination_de_l_edifice,hopital,hôpital
+Denomination_de_l_edifice,hôtel de Ville,hôtel de ville
+Denomination_de_l_edifice,fAIENCERIE,faïencerie
+Denomination_de_l_edifice,ecole,école
+Denomination_de_l_edifice,ilôt,îlot
+Denomination_de_l_edifice,ilot,îlot
+Denomination_de_l_edifice,bASSIN,bassin
+Denomination_de_l_edifice,oUVRAGE D'ART,ouvrage d'art
+Technique_du_decor_porte_de_l_edifice,mosaique,mosaïque

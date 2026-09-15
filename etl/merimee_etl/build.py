@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import csv
+import gzip
+import json
 from collections import defaultdict
 from dataclasses import dataclass
 from functools import lru_cache
@@ -20,12 +22,18 @@ from .parse import (classify_statut, merge_auteurs, palissy_ids, parse_auteurs,
 _STR = pa.string()
 _LIST_STR = pa.list_(pa.string())
 
+# `cog`, `annee_premiere_protection`, `annee_derniere_protection`, `siecle_min`,
+# `techniques_decor`, `zones_protection`, `nb_protections`, `departement` et
+# `typologie_dossier` ont été retirées : jamais lues côté navigateur (grep sur
+# `web/src`, `SELECT *` compris — DuckDB-wasm télécharge le Parquet en entier,
+# donc les colonnes non lues restent des octets payés pour rien à chaque
+# premier écran). `departement_nom` reste : la facette l'affiche, pas le code
+# numérique. Retirer une colonne ici ne change aucun chiffre de l'oracle,
+# seulement le poids du fichier.
 MONUMENTS_SCHEMA = pa.schema([
     ("reference", _STR),
     ("titre", _STR),
     ("commune", _STR),
-    ("cog", _STR),
-    ("departement", _STR),
     ("departement_nom", _STR),
     ("region", _STR),
     ("lat", pa.float32()),
@@ -33,11 +41,6 @@ MONUMENTS_SCHEMA = pa.schema([
     ("statut", _STR),
     ("partiel", pa.bool_()),
     ("nature_acte", _STR),
-    ("typologie_dossier", _STR),
-    ("annee_premiere_protection", pa.int16()),
-    ("annee_derniere_protection", pa.int16()),
-    ("nb_protections", pa.int16()),
-    ("siecle_min", pa.int8()),
     ("siecle_max", pa.int8()),
     ("siecles", pa.list_(pa.int8())),
     ("periodes", _LIST_STR),
@@ -45,21 +48,20 @@ MONUMENTS_SCHEMA = pa.schema([
     ("denominations", _LIST_STR),
     ("auteurs", _LIST_STR),
     ("proprietaires", _LIST_STR),
-    ("zones_protection", _LIST_STR),
-    ("techniques_decor", _LIST_STR),
     ("nb_palissy", pa.int32()),
     ("has_historique", pa.bool_()),
     ("search_key", _STR),
 ])
 
+# `statut` et `partiel` sont déjà sur `monuments` (le seul lu par les requêtes
+# de facette et de détail) : la fiche assemble ses actes via `m.statut` /
+# `m.partiel`, jamais via `protections.statut` — cf. `queries.ts::detail`.
 PROTECTIONS_SCHEMA = pa.schema([
     ("reference", _STR),
     ("annee", pa.int16()),
     ("mois", pa.int8()),
     ("jour", pa.int8()),
     ("libelle", _STR),
-    ("statut", _STR),
-    ("partiel", pa.bool_()),
 ])
 
 DETAILS_SCHEMA = pa.schema([
@@ -72,7 +74,6 @@ DETAILS_SCHEMA = pa.schema([
     ("observations", _STR),
     ("siecle_detail", _STR),
     ("auteurs_detail", _LIST_STR),
-    ("cadre_etude", _STR),
     ("archiv_mh", _STR),
     ("liens_externes", _LIST_STR),
     ("palissy", _LIST_STR),
@@ -173,19 +174,21 @@ def transform(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFram
     for row in df.itertuples(index=False):
         ref = row.Reference.strip()
         lat, lon = parse_coords(row.coordonnees_au_format_WGS84)
-        siecles, periodes = parse_siecles(row.Format_abrege_du_siecle_de_construction)
+        siecles, periodes, siecles_bad = parse_siecles(
+            row.Format_abrege_du_siecle_de_construction)
+        for segment in siecles_bad:
+            rejets.append({"reference": ref, "champ": "Format_abrege_du_siecle_de_construction",
+                           "segment": segment})
         statut, partiel = classify_statut(row.Typologie_de_la_protection)
 
         events, bad = parse_protections(ref, row.Date_et_typologie_de_la_protection)
         for segment in bad:
             rejets.append({"reference": ref, "champ": "Date_et_typologie_de_la_protection",
                            "segment": segment})
-        annees = [e.annee for e in events if e.annee is not None]
         for e in events:
             protections.append({
                 "reference": e.reference, "annee": e.annee, "mois": e.mois,
-                "jour": e.jour, "libelle": e.libelle, "statut": e.statut,
-                "partiel": e.partiel,
+                "jour": e.jour, "libelle": e.libelle,
             })
 
         # La typologie de protection est parfois absente (448 notices) alors
@@ -212,8 +215,6 @@ def transform(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFram
             "reference": ref,
             "titre": titre,
             "commune": commune,
-            "cog": _first(row.COG_Insee_lors_de_la_protection),
-            "departement": _first(row.Departement_format_numerique),
             "departement_nom": _first(row.Departement_en_lettres),
             "region": _first(row.Region),
             "lat": lat,
@@ -222,12 +223,6 @@ def transform(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFram
             "partiel": partiel,
             "nature_acte": normalize_vocab("Nature_de_la_protection",
                                            _first(row.Nature_de_la_protection)),
-            "typologie_dossier": normalize_vocab("Typologie_du_dossier",
-                                                 _first(row.Typologie_du_dossier)),
-            "annee_premiere_protection": min(annees) if annees else None,
-            "annee_derniere_protection": max(annees) if annees else None,
-            "nb_protections": len(events),
-            "siecle_min": siecles[0] if siecles else None,
             "siecle_max": siecles[-1] if siecles else None,
             "siecles": siecles,
             "periodes": periodes,
@@ -237,10 +232,6 @@ def transform(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFram
             "auteurs": parse_auteurs(row.Auteur_de_l_edifice),
             "proprietaires": split_vocab("Statut_juridique_de_l_edifice",
                                          row.Statut_juridique_de_l_edifice),
-            "zones_protection": split_vocab("Typologie_de_la_zone_de_protection",
-                                            row.Typologie_de_la_zone_de_protection),
-            "techniques_decor": split_vocab("Technique_du_decor_porte_de_l_edifice",
-                                            row.Technique_du_decor_porte_de_l_edifice),
             "nb_palissy": len(palissy),
             "has_historique": bool(historique),
             "search_key": search_key(titre, commune,
@@ -260,7 +251,6 @@ def transform(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFram
             # Mentions completes, role compris : `monuments.auteurs` ne
             # conserve que l'identite pour rester facettable.
             "auteurs_detail": merge_auteurs(row.Auteur_de_l_edifice),
-            "cadre_etude": normalize_text(row.Cadre_de_l_etude),
             "archiv_mh": row.Lien_vers_la_base_Archiv_MH.strip(),
             "liens_externes": parse_links(row.Liens_externes),
             "palissy": palissy,
@@ -306,6 +296,41 @@ def _write(df: pd.DataFrame, schema: pa.Schema, path: Path, row_group: int | Non
     return path.stat().st_size
 
 
+def points_colonnaires(monuments: pd.DataFrame) -> dict:
+    """Nuage de points du premier écran, en colonnes.
+
+    Le navigateur ne peut rien afficher tant que DuckDB-Wasm n'a pas été
+    téléchargé puis compilé — plusieurs secondes sur un téléphone — alors que
+    le premier écran, sans filtre, n'a besoin d'aucun moteur SQL. Ce fichier
+    le sert tout de suite ; la première réponse de DuckDB le remplace.
+
+    **JSON et non binaire** : GitHub Pages compresse `application/json`, pas un
+    `.bin`. Colonnes et non entités GeoJSON : les clés ne sont pas répétées
+    44 484 fois. Coordonnées à 5 décimales, soit environ un mètre — le Parquet
+    les stocke en `float32`, qui n'en porte guère plus. Le statut est un index
+    dans une table portée par le fichier : quatre libellés, pas 44 484.
+
+    Mêmes lignes que `monuments WHERE lat IS NOT NULL`, dans le même ordre :
+    `test_points_instantanes` le vérifie sur les artefacts.
+    """
+    geo = monuments[monuments.lat.notna()]
+    valeurs = [s if isinstance(s, str) else None for s in geo.statut]
+    connus = sorted({s for s in valeurs if s is not None})
+    statuts: list[str | None] = connus + ([None] if None in valeurs else [])
+    index = {s: i for i, s in enumerate(statuts)}
+    return {
+        "total": int(len(monuments)),
+        "geolocalises": int(len(geo)),
+        "statuts": statuts,
+        "reference": geo.reference.tolist(),
+        "lon": [round(float(v), 5) for v in geo.lon],
+        "lat": [round(float(v), 5) for v in geo.lat],
+        "statut": [index[s] for s in valeurs],
+        "nb": [int(v) if pd.notna(v) else 0 for v in geo.nb_palissy],
+        "siecle": [int(v) if pd.notna(v) else None for v in geo.siecle_max],
+    }
+
+
 def write_artifacts(
     monuments: pd.DataFrame,
     protections: pd.DataFrame,
@@ -319,6 +344,13 @@ def write_artifacts(
         "protections.parquet": _write(protections, PROTECTIONS_SCHEMA,
                                       out_dir / "protections.parquet"),
     }
+
+    nuage = json.dumps(points_colonnaires(monuments), ensure_ascii=False,
+                       separators=(",", ":")).encode("utf-8")
+    (out_dir / "points.json").write_bytes(nuage)
+    tailles["points.json"] = len(nuage)
+    # Le poids qui compte est celui du transfert : Pages sert ce fichier gzippé.
+    tailles["points.json (gzip)"] = len(gzip.compress(nuage, compresslevel=6))
 
     # Les fiches sont consultees une par une : un fichier unique de 9,5 Mo
     # serait rapatrie en entier au premier clic.

@@ -80,12 +80,14 @@
     transition: opacity var(--t-rapide);
   }
 
-  button:hover {
-    background: color-mix(in srgb, var(--inscrit) 20%, transparent);
-  }
+  @media (hover: hover) and (pointer: fine) {
+    button:hover {
+      background: color-mix(in srgb, var(--inscrit) 20%, transparent);
+    }
 
-  button:hover i {
-    opacity: 1;
+    button:hover i {
+      opacity: 1;
+    }
   }
 
   /* La remise a zero n'est pas un critere : elle se distingue des puces. */
@@ -97,8 +99,10 @@
     font-weight: 500;
   }
 
-  .raz:hover {
-    background: var(--fond-creux);
-    color: var(--texte);
+  @media (hover: hover) and (pointer: fine) {
+    .raz:hover {
+      background: var(--fond-creux);
+      color: var(--texte);
+    }
   }
 </style>

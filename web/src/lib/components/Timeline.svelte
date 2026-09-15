@@ -199,6 +199,18 @@
     courant = annee(event);
   }
 
+  // Factorisees pour etre rejouees a l'identique par le clavier : « memes
+  // callbacks que le pointeur », donc les deux gestes de fin de glissement
+  // et de clic sec vivent ici, pas dupliques dans le gestionnaire clavier.
+  function appliquerPlageAnnees(a: number, b: number) {
+    onplage([Math.min(a, b), Math.max(a, b)]);
+  }
+
+  function basculerAnnee(a: number) {
+    // Recliquer la meme annee l'efface, comme recliquer un siecle le decoche.
+    onplage(plage && plage[0] === a && plage[1] === a ? null : [a, a]);
+  }
+
   function fin(event: PointerEvent) {
     if (depart === null) return;
     const a = depart;
@@ -210,10 +222,10 @@
     // recliquer un siecle le decoche. Le clic effacait la plage sans rien
     // poser, ce qui n'avait d'equivalent nulle part ailleurs.
     if (Math.abs(a - b) >= 1) {
-      onplage([Math.min(a, b), Math.max(a, b)]);
+      appliquerPlageAnnees(a, b);
       return;
     }
-    onplage(plage && plage[0] === a && plage[1] === a ? null : [a, a]);
+    basculerAnnee(a);
   }
 
   const apercu = $derived.by(() => {
@@ -223,6 +235,77 @@
     const x2 = echelleX(Math.max(borne[0], borne[1]) + 1);
     return { gauche: x1, largeur: Math.max(2, x2 - x1) };
   });
+
+  // --- Chemin clavier : annee -----------------------------------------------
+  //
+  // Les fleches seules ne font que deplacer le curseur — un survol, pas une
+  // action. Entree/Espace rejoue `basculerAnnee`, Maj+fleche rejoue
+  // `appliquerPlageAnnees` a chaque pas : memes fonctions que le pointeur,
+  // aucun nouveau chemin vers les filtres. Le curseur est un calque Svelte
+  // au meme titre que le voile de brossage, jamais lu par les deux effets
+  // qui construisent le graphique — sinon chaque pas reconstruirait Plot.
+  let curseurAnnee: number | null = $state(null);
+  let ancreAnnee: number | null = $state(null);
+
+  function initialiserCurseurAnnee() {
+    if (curseurAnnee !== null) return;
+    curseurAnnee = plage ? plage[0] : Math.round((ANNEE_MIN + ANNEE_MAX) / 2);
+  }
+
+  function clavierAnnee(event: KeyboardEvent) {
+    switch (event.key) {
+      case 'ArrowRight':
+      case 'ArrowLeft': {
+        event.preventDefault();
+        const pas = event.key === 'ArrowRight' ? 1 : -1;
+        const base = curseurAnnee ?? ANNEE_MIN;
+        const cible = Math.min(ANNEE_MAX, Math.max(ANNEE_MIN, base + pas));
+        if (event.shiftKey) {
+          if (ancreAnnee === null) ancreAnnee = base;
+          curseurAnnee = cible;
+          appliquerPlageAnnees(ancreAnnee, curseurAnnee);
+        } else {
+          ancreAnnee = null;
+          curseurAnnee = cible;
+        }
+        break;
+      }
+      case 'Home':
+        event.preventDefault();
+        ancreAnnee = null;
+        curseurAnnee = ANNEE_MIN;
+        break;
+      case 'End':
+        event.preventDefault();
+        ancreAnnee = null;
+        curseurAnnee = ANNEE_MAX;
+        break;
+      case 'Enter':
+      case ' ':
+        event.preventDefault();
+        ancreAnnee = null;
+        if (curseurAnnee !== null) basculerAnnee(curseurAnnee);
+        break;
+    }
+  }
+
+  // `echelleX` est reactif (cf. plus haut) : ce derive se recalcule donc a
+  // chaque reconstruction du graphique, comme `apercu`.
+  const curseurRectAnnee = $derived.by(() => {
+    if (curseurAnnee === null || !echelleX) return null;
+    const x1 = echelleX(curseurAnnee);
+    const x2 = echelleX(curseurAnnee + 1);
+    return { gauche: x1, largeur: Math.max(2, x2 - x1) };
+  });
+
+  const effectifAnnee = $derived(
+    curseurAnnee === null ? null : (protections.find((d) => d.annee === curseurAnnee)?.n ?? 0)
+  );
+  const annonceAnnee = $derived(
+    curseurAnnee === null || effectifAnnee === null
+      ? ''
+      : `${curseurAnnee} — ${effectifAnnee.toLocaleString('fr-FR')} acte${effectifAnnee > 1 ? 's' : ''}`
+  );
 
   // --- Brossage des siecles -------------------------------------------------
   let departS: number | null = $state(null);
@@ -254,6 +337,13 @@
     }
   }
 
+  // Factorisee pour etre rejouee a l'identique par le clavier (cf. annee).
+  function appliquerPlageSiecles(a: number, b: number) {
+    const bas = Math.min(a, b);
+    const haut = Math.max(a, b);
+    onsiecles(siecles.filter((d) => d.siecle >= bas && d.siecle <= haut).map((d) => d.siecle));
+  }
+
   function finSiecle() {
     if (departS === null) return;
     const a = departS;
@@ -266,9 +356,7 @@
       onsiecle(a);
       return;
     }
-    const bas = Math.min(a, b);
-    const haut = Math.max(a, b);
-    onsiecles(siecles.filter((d) => d.siecle >= bas && d.siecle <= haut).map((d) => d.siecle));
+    appliquerPlageSiecles(a, b);
   }
 
   const apercuSiecles = $derived.by(() => {
@@ -278,6 +366,82 @@
     if (!a || !b) return null;
     return { gauche: a.gauche, largeur: b.gauche + b.largeur - a.gauche };
   });
+
+  // --- Chemin clavier : siecle -----------------------------------------------
+  //
+  // Echelle a bandes : le curseur avance par index dans les donnees affichees,
+  // pas par arithmetique sur le siecle — un « cran » n'a de sens qu'entre deux
+  // valeurs presentes sur l'axe. Memes fonctions que le pointeur
+  // (`onsiecle`, `appliquerPlageSiecles`), meme raison qu'en annee.
+  let curseurSiecle: number | null = $state(null);
+  let ancreSiecle: number | null = $state(null);
+
+  function indexCourantSiecle(): number {
+    if (curseurSiecle === null) return 0;
+    const i = siecles.findIndex((d) => d.siecle === curseurSiecle);
+    return i === -1 ? 0 : i;
+  }
+
+  function initialiserCurseurSiecle() {
+    if (curseurSiecle !== null || siecles.length === 0) return;
+    const premierRetenu =
+      siecleSelection.length > 0
+        ? siecles.find((d) => siecleSelection.includes(d.siecle))
+        : undefined;
+    curseurSiecle = (premierRetenu ?? siecles[0]).siecle;
+  }
+
+  function clavierSiecle(event: KeyboardEvent) {
+    if (siecles.length === 0) return;
+    switch (event.key) {
+      case 'ArrowRight':
+      case 'ArrowLeft': {
+        event.preventDefault();
+        const pas = event.key === 'ArrowRight' ? 1 : -1;
+        const ancienIndex = indexCourantSiecle();
+        const nouvelIndex = Math.min(siecles.length - 1, Math.max(0, ancienIndex + pas));
+        if (event.shiftKey) {
+          if (ancreSiecle === null) ancreSiecle = siecles[ancienIndex].siecle;
+          curseurSiecle = siecles[nouvelIndex].siecle;
+          appliquerPlageSiecles(ancreSiecle, curseurSiecle);
+        } else {
+          ancreSiecle = null;
+          curseurSiecle = siecles[nouvelIndex].siecle;
+        }
+        break;
+      }
+      case 'Home':
+        event.preventDefault();
+        ancreSiecle = null;
+        curseurSiecle = siecles[0].siecle;
+        break;
+      case 'End':
+        event.preventDefault();
+        ancreSiecle = null;
+        curseurSiecle = siecles[siecles.length - 1].siecle;
+        break;
+      case 'Enter':
+      case ' ':
+        event.preventDefault();
+        ancreSiecle = null;
+        if (curseurSiecle !== null) onsiecle(curseurSiecle);
+        break;
+    }
+  }
+
+  const curseurRectSiecle = $derived.by(() => {
+    if (curseurSiecle === null || !bornesSiecle) return null;
+    return bornesSiecle(curseurSiecle);
+  });
+
+  const effectifSiecle = $derived(
+    curseurSiecle === null ? null : (siecles.find((d) => d.siecle === curseurSiecle)?.n ?? 0)
+  );
+  const annonceSiecle = $derived(
+    curseurSiecle === null || effectifSiecle === null
+      ? ''
+      : `${romain(curseurSiecle)}e siècle — ${effectifSiecle.toLocaleString('fr-FR')} notice${effectifSiecle > 1 ? 's' : ''}`
+  );
 </script>
 
 <section class="frise">
@@ -290,9 +454,19 @@
       <h3>Époque de construction</h3>
       <span>clic pour un siècle, glisser pour une plage</span>
     </header>
+    <!-- `role="application"` reste le plus honnete : cet axe repond deja au
+         pointeur avec une semantique qui lui est propre (clic, glissement),
+         desormais doublee au clavier. L'a11y-lint de Svelte ne reconnait pas
+         ce role comme « interactif » pour autoriser `tabindex`/`onkeydown` —
+         c'est pourtant precisement ce que ce role signifie a un lecteur
+         d'ecran : gerer soi-meme les touches. -->
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div class="graphe brossable cliquable piste-siecles"
-         role="application" aria-label="Histogramme des époques de construction, cliquer un siècle ou glisser pour sélectionner une plage"
-         onpointerdown={debutSiecle} onpointermove={glisseSiecle} onpointerup={finSiecle}>
+         role="application" tabindex="0"
+         aria-label="Histogramme des époques de construction. Cliquer un siècle ou glisser pour une plage à la souris ; flèches gauche et droite pour déplacer le curseur d'un siècle, Début et Fin pour les extrémités, Entrée ou Espace pour sélectionner ou désélectionner le siècle focalisé, Majuscule et flèche pour étendre une plage depuis ce curseur"
+         onpointerdown={debutSiecle} onpointermove={glisseSiecle} onpointerup={finSiecle}
+         onkeydown={clavierSiecle} onfocus={initialiserCurseurSiecle}>
       <!-- La toile est a Plot, le voile est a Svelte : `replaceChildren` efface
            **tous** les enfants de son hote, y compris ceux que Svelte y a
            rendus et l'ancre ou il les reinsere. Les melanger faisait
@@ -301,6 +475,14 @@
       {#if apercuSiecles}
         <div class="brosse" style="left:{apercuSiecles.gauche}px; width:{apercuSiecles.largeur}px"></div>
       {/if}
+      {#if curseurRectSiecle}
+        <!-- Repere clavier : un calque Svelte de plus, au meme titre que le
+             voile de brossage — jamais une marque Plot, sinon chaque pas
+             clavier reconstruirait le graphique. -->
+        <div class="curseur-clavier"
+             style="left:{curseurRectSiecle.gauche}px; width:{curseurRectSiecle.largeur}px"></div>
+      {/if}
+      <span class="lecteur-seul" aria-live="polite">{annonceSiecle}</span>
     </div>
   </div>
 
@@ -309,13 +491,22 @@
       <h3>Année de protection</h3>
       <span>clic pour une année, glisser pour une plage</span>
     </header>
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div class="graphe brossable cliquable piste-annees"
-         role="application" aria-label="Histogramme des actes de protection, cliquer une année ou glisser pour sélectionner une plage"
-         onpointerdown={debut} onpointermove={glisse} onpointerup={fin}>
+         role="application" tabindex="0"
+         aria-label="Histogramme des actes de protection. Cliquer une année ou glisser pour une plage à la souris ; flèches gauche et droite pour déplacer le curseur d'une année, Début et Fin pour les bornes {ANNEE_MIN} et {ANNEE_MAX}, Entrée ou Espace pour sélectionner ou désélectionner l'année focalisée, Majuscule et flèche pour étendre une plage depuis ce curseur"
+         onpointerdown={debut} onpointermove={glisse} onpointerup={fin}
+         onkeydown={clavierAnnee} onfocus={initialiserCurseurAnnee}>
       <div class="toile" bind:this={boiteAnnees}></div>
       {#if apercu}
         <div class="brosse" style="left:{apercu.gauche}px; width:{apercu.largeur}px"></div>
       {/if}
+      {#if curseurRectAnnee}
+        <div class="curseur-clavier"
+             style="left:{curseurRectAnnee.gauche}px; width:{curseurRectAnnee.largeur}px"></div>
+      {/if}
+      <span class="lecteur-seul" aria-live="polite">{annonceAnnee}</span>
     </div>
   </div>
 </section>
@@ -360,9 +551,12 @@
     transition: all var(--t-rapide);
   }
 
-  .fermer-frise:hover {
-    border-color: var(--bord-appuye);
-    color: var(--frise-texte);
+  /* Le survol qui reste colle au tactile n'a de sens qu'au pointeur fin. */
+  @media (hover: hover) and (pointer: fine) {
+    .fermer-frise:hover {
+      border-color: var(--bord-appuye);
+      color: var(--frise-texte);
+    }
   }
 
   header {
@@ -446,6 +640,39 @@
 
   .brosse::after {
     right: -8px;
+  }
+
+  /* Repere clavier : un simple cadre, distinct de la teinte du filtre actif
+     (`--accent-plein`, deja pris par les barres retenues et le voile de
+     brossage). Invisible tant que l'axe n'a pas le focus — un Tab prealable
+     est le seul moyen d'y entrer, comme pour toute barre d'outils. */
+  .curseur-clavier {
+    position: absolute;
+    top: 8px;
+    bottom: 20px;
+    border: 2px solid var(--frise-texte);
+    border-radius: 2px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--t-rapide);
+  }
+
+  .graphe:focus .curseur-clavier {
+    opacity: 1;
+  }
+
+  /* Gardee pour les lecteurs d'ecran : la valeur focalisee et son effectif
+     n'ont pas d'autre pendant visible que le curseur lui-meme. */
+  .lecteur-seul {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+    padding: 0;
+    margin: -1px;
   }
 
   @media (max-width: 900px) {

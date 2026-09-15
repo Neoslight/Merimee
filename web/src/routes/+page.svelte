@@ -2,9 +2,7 @@
   import DetailPanel from '$lib/components/DetailPanel.svelte';
   import FacetPanel from '$lib/components/FacetPanel.svelte';
   import Jetons from '$lib/components/Jetons.svelte';
-  import Matrice from '$lib/components/Matrice.svelte';
   import MonumentMap from '$lib/components/MonumentMap.svelte';
-  import Timeline from '$lib/components/Timeline.svelte';
   import {
     auHasard,
     cardinalites,
@@ -45,9 +43,14 @@
   import { charger, indexTexte, preparer } from '$lib/state/texte.svelte';
   import { appliquer, basculer, theme } from '$lib/state/theme.svelte';
   import { amorcage, LIBELLES } from '$lib/state/amorcage.svelte';
+  import { formaterDistance, nf } from '$lib/format';
   import { browser } from '$app/environment';
   import { pushState, replaceState } from '$app/navigation';
   import { page } from '$app/state';
+  import { tick, untrack } from 'svelte';
+  import { base } from '$app/paths';
+  import { versCollection } from '$lib/db/points';
+  import { MESSAGES_POSITION, position } from '$lib/state/position.svelte';
 
   const FACETTES: FacetKey[] = [
     'statut', 'domaines', 'denominations', 'regions',
@@ -77,7 +80,34 @@
   const initial = decoder(browser ? location.search : '');
   Object.assign(filters, initial.filtres);
 
+  // Nuage precalcule du premier ecran (`lib/db/points.ts`). Il ne part que si
+  // l'URL ne porte **aucun** filtre : sinon il peindrait le corpus entier avant
+  // que DuckDB ne le restreigne, et 500 Ko pour un nuage aussitot jete. Il ne
+  // se pose que si DuckDB n'a pas encore repondu et que rien n'a bouge depuis
+  // (`jeton` vaut encore 1) — il ne remplace jamais une reponse du moteur.
+  //
+  // Le compte provisoire ne porte que ce que la barre et la liste lisent ;
+  // classes, inscrits et objets arrivent avec la premiere reponse de DuckDB.
+  let nuageMoteur = false;
+  if (browser && encoder({ filtres: initial.filtres, selection: null, vue: 'carte', fond: null }) === '') {
+    fetch(`${base}/data/points.json`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((brut) => {
+        const nuage = versCollection(brut);
+        if (!nuage || nuageMoteur || jeton > 1) return;
+        pointsCarte = nuage;
+        compteurs ??= { total: brut.total, geolocalises: brut.geolocalises, classes: 0, inscrits: 0, objets: 0 };
+      })
+      .catch(() => {
+        // Fichier absent d'un deploiement plus ancien : DuckDB suivra.
+      });
+  }
+
   let selection = $state<string | null>(initial.selection);
+  // Cran de la feuille de fiche sur telephone, cf. « Feuille a crans » plus
+  // bas. Declare ici : `ouvrirFiche` le lit avant que ce bloc n'arrive.
+  type Cran = 'apercu' | 'plein';
+  let cran = $state<Cran>('apercu');
   let chargement = $state(true);
   let erreur = $state<string | null>(null);
   let vue = $state<Vue>(initial.vue);
@@ -86,6 +116,34 @@
   // composant — dosage de lecture, pas etat d'exploration.
   let fond = $state<FondHistorique | null>(initial.fond);
   let croisement = $state.raw<DonneesMatrice>({ cellules: [], ecartees: 0 });
+
+  // Timeline et Matrice importent Observable Plot (209 Ko minifie, ~65 Ko
+  // gzip) et partaient jusqu'ici dans le chunk de page, charge avant meme que
+  // `boot()` de duckdb.ts puisse commencer — alors que la frise est fermee au
+  // chargement et que la matrice n'est qu'une des trois vues. Les deux ne sont
+  // donc plus importes statiquement : `import()` les charge au premier besoin
+  // (frise ouverte, vue matrice), et le composant reste `null` le temps du
+  // telechargement — d'ou les emplacements reserves du gabarit, cf. le style.
+  type ComposantTimeline = (typeof import('$lib/components/Timeline.svelte'))['default'];
+  type ComposantMatrice = (typeof import('$lib/components/Matrice.svelte'))['default'];
+  let TimelineComp = $state<ComposantTimeline | null>(null);
+  let MatriceComp = $state<ComposantMatrice | null>(null);
+
+  $effect(() => {
+    if (friseOuverte && !TimelineComp) {
+      import('$lib/components/Timeline.svelte').then((m) => {
+        TimelineComp = m.default;
+      });
+    }
+  });
+
+  $effect(() => {
+    if (vue === 'matrice' && !MatriceComp) {
+      import('$lib/components/Matrice.svelte').then((m) => {
+        MatriceComp = m.default;
+      });
+    }
+  });
   let terme = $state(initial.filtres.texte || initial.filtres.recherche);
 
   // Cible de la saisie. Les deux recherches s'excluent : `search_key` est
@@ -100,6 +158,13 @@
   // Position de depart de la carte, portee par le lien partage et par lui seul.
   const cadrageInitial = initial.cadrage;
   let vueCarte = $state<{ vueCourante: () => VueCarte | null } | undefined>();
+
+  // Instance de la fiche, pour lui rendre le focus apres un geste d'ouverture
+  // — meme procede que `vueCarte` ci-dessus.
+  let detailPanel = $state<{ focaliser: () => void } | undefined>();
+  // Titre affiche par la fiche, pour le `<title>` du document : la page ne
+  // charge pas la notice elle-meme, `DetailPanel` le lui remonte.
+  let titreFiche = $state<string | null>(null);
 
   // « Limiter a la zone visible » est un filtre : sa case vit donc dans le
   // tiroir des filtres, avec les autres, et non plus dans la legende de la
@@ -179,18 +244,64 @@
     points(filters)
       .then((pts) => {
         if (mien !== jeton) return;
+        nuageMoteur = true;
         pointsCarte = pts;
       })
       .catch(echec(() => mien === jeton));
-    Promise.all([totaux(filters), liste(filters)])
-      .then(([tot, lst]) => {
+    totaux(filters)
+      .then((tot) => {
         if (mien !== jeton) return;
         compteurs = tot;
-        resultats = lst;
         erreur = null;
         chargement = false;
       })
       .catch(echec(() => mien === jeton));
+  });
+
+  // --- Ordre de la liste -----------------------------------------------------
+  // La liste a quitte l'effet principal : elle depend aussi de la position, qui
+  // n'a rien a relancer des points ni des totaux.
+  //
+  // `tri` et la position restent hors de l'URL : un lien partage ne dit pas ou
+  // se tenait celui qui l'a copie. A la **premiere** position obtenue, la liste
+  // passe d'elle-meme en proximite — c'est ce qu'on demandait en touchant le
+  // bouton — puis le choix n'appartient plus qu'a l'utilisateur.
+  type Tri = 'pertinence' | 'proximite';
+  let tri = $state<Tri>('pertinence');
+  let proximiteProposee = false;
+
+  $effect(() => {
+    if (!position.courante || proximiteProposee) return;
+    proximiteProposee = true;
+    tri = 'proximite';
+  });
+
+  const proche = $derived(tri === 'proximite' ? position.courante : null);
+  // Arrondie a une centaine de metres : en suivi, le navigateur renvoie une
+  // position toutes les quelques secondes, et chacune relancerait la requete
+  // pour un ordre inchange.
+  const cleProche = $derived(proche ? `${proche.lon.toFixed(3)},${proche.lat.toFixed(3)}` : '');
+  let jetonListe = 0;
+
+  $effect(() => {
+    signature;
+    cleProche;
+    const mien = ++jetonListe;
+    const ici = untrack(() => proche);
+    liste(filters, 200, ici ? { lon: ici.lon, lat: ici.lat } : null)
+      .then((lst) => {
+        if (mien !== jetonListe) return;
+        resultats = lst;
+      })
+      .catch(echec(() => mien === jetonListe));
+  });
+
+  // Le message d'erreur de geolocalisation s'efface de lui-meme : il informe,
+  // il n'attend pas de reponse.
+  $effect(() => {
+    if (!position.erreur) return;
+    const minuteur = setTimeout(() => (position.erreur = null), 8000);
+    return () => clearTimeout(minuteur);
   });
 
   // Les facettes et leurs cardinalites alimentent un tiroir repliable, ferme
@@ -322,12 +433,90 @@
     suivreVue = false;
   }
 
+  // --- Focus des calques -----------------------------------------------------
+  // Un tiroir ou une fiche ouverts par un geste deplacent le focus dedans ; le
+  // refermer le rend a ce qui l'avait avant. Seul un geste utilisateur le
+  // fait : un permalien pose `selection` sans jamais passer par ces fonctions,
+  // et l'effet de lecture d'URL (retour arriere compris) non plus.
+  //
+  // Le tiroir n'a qu'un seul point d'entree — son bouton flottant, qui
+  // reapparait a l'identique des la fermeture — inutile de le capturer. La
+  // fiche, elle, s'ouvre depuis trois endroits (carte, liste, « au hasard »),
+  // d'ou la capture du foyer courant.
+  let foyerFiche: HTMLElement | null = null;
+  let titreTiroir: HTMLElement | undefined = $state();
+  let boutonFiltres: HTMLElement | undefined = $state();
+
+  function ouvrirFiche(ref: string) {
+    const actif = document.activeElement;
+    foyerFiche = actif instanceof HTMLElement && actif !== document.body ? actif : null;
+    // Une feuille fermee s'ouvre en apercu ; une feuille deja ouverte garde son
+    // cran — passer d'un voisin a l'autre ne doit pas la faire sauter.
+    if (selection === null) cran = 'apercu';
+    selection = ref;
+    // La fiche affiche d'abord « Chargement… » : `focaliser()` vise l'aside
+    // lui-meme, toujours present, pas son titre qui arrive plus tard.
+    tick().then(() => detailPanel?.focaliser());
+  }
+
+  function fermerFiche() {
+    selection = null;
+    // Le foyer peut avoir disparu (filtre qui retire la ligne de liste) : un
+    // clic sur la carte replie alors sur le canevas, le repli le plus sense.
+    const repli =
+      foyerFiche && document.contains(foyerFiche)
+        ? foyerFiche
+        : document.querySelector<HTMLElement>('.maplibregl-canvas');
+    foyerFiche = null;
+    repli?.focus();
+  }
+
+  function ouvrirTiroir() {
+    facettesOuvertes = true;
+    tick().then(() => titreTiroir?.focus());
+  }
+
+  function fermerTiroir() {
+    facettesOuvertes = false;
+    tick().then(() => boutonFiltres?.focus());
+  }
+
+  // --- Echap -------------------------------------------------------------
+  // Ferme le calque le plus haut, avec les memes fonctions que les croix : la
+  // fiche restitue le focus au bon endroit, exactement comme un clic dessus.
+  function champTexteNonVide(el: HTMLElement): boolean {
+    if (el instanceof HTMLTextAreaElement) return el.value !== '';
+    if (el instanceof HTMLInputElement) return (el.type === 'text' || el.type === 'search') && el.value !== '';
+    return false;
+  }
+
+  function surEchap(event: KeyboardEvent) {
+    if (event.key !== 'Escape' || event.defaultPrevented) return;
+    // Convention partagee avec les composants qui gerent Echap localement :
+    // ils appellent `preventDefault`, celui-ci les laisse faire.
+    const cible = event.target;
+    // Un champ de saisie non vide se vide au premier Echap — comportement
+    // natif des `<input type="search">` de ce produit — la fermeture d'un
+    // calque attend le passage suivant.
+    if (cible instanceof HTMLElement && champTexteNonVide(cible)) return;
+    if (selection !== null) {
+      fermerFiche();
+    } else if (facettesOuvertes) {
+      fermerTiroir();
+    }
+  }
+
   // Le seuil telephone (768 px) est purement graphique — la fiche remonte du
   // bas au lieu de glisser du cote — et vit donc dans la feuille de style.
   // Celui-ci commande de l'etat : voile pose sur la scene, et fiche qui
   // referme le tiroir derriere elle.
   const ETROIT = '(max-width: 900px)';
   let etroit = $state(false);
+  // Le seuil telephone commande desormais de l'etat lui aussi : la feuille a
+  // crans, qui n'est modale qu'une fois depliee, et la reserve qu'elle impose
+  // a la carte. Il reste ecrit a l'identique dans la feuille de style.
+  const TELEPHONE = '(max-width: 768px)';
+  let telephone = $state(false);
 
   // Les deux panneaux repliables s'ouvrent au geste, jamais au chargement, et
   // **a toutes les largeurs**. Le tiroir etait pose d'emblee des qu'il y avait
@@ -342,18 +531,149 @@
   $effect(() => {
     if (!browser) return;
     const moyen = window.matchMedia(ETROIT);
+    const petit = window.matchMedia(TELEPHONE);
     const appliquerGabarit = () => {
       etroit = moyen.matches;
+      telephone = petit.matches;
     };
     appliquerGabarit();
     moyen.addEventListener('change', appliquerGabarit);
-    return () => moyen.removeEventListener('change', appliquerGabarit);
+    petit.addEventListener('change', appliquerGabarit);
+    return () => {
+      moyen.removeEventListener('change', appliquerGabarit);
+      petit.removeEventListener('change', appliquerGabarit);
+    };
   });
 
   // Ouvrir une fiche sur un ecran etroit doit refermer le tiroir des filtres,
   // sinon la fiche s'ouvre derriere lui. Au large les deux calques cohabitent.
   $effect(() => {
     if (selection && etroit) facettesOuvertes = false;
+  });
+
+  // Calque actuellement modal : seulement sur gabarit etroit, et seulement
+  // celui qui a effectivement un voile ou une feuille pleine largeur derriere
+  // lui. Sur ecran etroit, ouvrir la fiche referme deja le tiroir (effet
+  // ci-dessus) : les deux ne sont jamais modaux en meme temps.
+  //
+  // Exception : la feuille de fiche en **apercu** sur telephone n'est pas
+  // modale. Elle laisse 55 % de carte au-dessus d'elle, et c'est tout son
+  // interet — toucher le monument voisin sans refermer. Depliee, elle couvre
+  // l'ecran et redevient modale.
+  const calqueModal = $derived(
+    !etroit
+      ? null
+      : selection !== null
+        ? telephone && cran === 'apercu'
+          ? null
+          : 'fiche'
+        : facettesOuvertes
+          ? 'tiroir'
+          : null
+  );
+
+  // --- Feuille a crans (telephone) -----------------------------------------
+  // Deux crans et une fermeture, commandes par une poignee. Le glissement
+  // suit le doigt par `transform`, jamais par la hauteur : la feuille a une
+  // hauteur definie — c'est ce qui la fait defiler, cf. le style — et la
+  // translater ne provoque aucun reflow de la notice.
+  /** Part de la feuille cachee sous le bord en apercu. */
+  const PART_CACHEE = 0.55;
+  let hauteurScene = $state(0);
+  let decalage = $state<number | null>(null);
+  let saisiePoignee: { y: number; depart: number; hauteur: number; bouge: boolean } | null = null;
+
+  function basculerCran() {
+    cran = cran === 'plein' ? 'apercu' : 'plein';
+  }
+
+  function saisirPoignee(event: PointerEvent) {
+    const poignee = event.currentTarget as HTMLElement;
+    const hote = poignee.parentElement;
+    if (!hote) return;
+    poignee.setPointerCapture(event.pointerId);
+    const hauteur = hote.getBoundingClientRect().height;
+    saisiePoignee = {
+      y: event.clientY,
+      depart: cran === 'plein' ? 0 : hauteur * PART_CACHEE,
+      hauteur,
+      bouge: false
+    };
+  }
+
+  function glisserPoignee(event: PointerEvent) {
+    const s = saisiePoignee;
+    if (!s) return;
+    const dy = event.clientY - s.y;
+    // Quelques pixels de jeu : sans eux, le tremblement d'un toucher franc
+    // passerait pour un glissement et la bascule ne partirait jamais.
+    if (!s.bouge && Math.abs(dy) < 6) return;
+    s.bouge = true;
+    decalage = Math.min(s.hauteur, Math.max(0, s.depart + dy));
+  }
+
+  function lacherPoignee() {
+    const s = saisiePoignee;
+    const fin = decalage;
+    saisiePoignee = null;
+    decalage = null;
+    if (!s) return;
+    if (!s.bouge || fin === null) {
+      basculerCran();
+      return;
+    }
+    const part = fin / s.hauteur;
+    // Un quart de la part encore visible en apercu, tire vers le bas, ferme.
+    if (part > PART_CACHEE + (1 - PART_CACHEE) * 0.25) fermerFiche();
+    else cran = part < PART_CACHEE / 2 ? 'plein' : 'apercu';
+  }
+
+  function annulerPoignee() {
+    saisiePoignee = null;
+    decalage = null;
+  }
+
+  /** Le pointeur est traite par `lacherPoignee` ; un `click` de detail nul
+   *  vient du clavier (Entree, Espace), seul chemin qui passe ici. */
+  function clavierPoignee(event: MouseEvent) {
+    if (event.detail === 0) basculerCran();
+  }
+
+  // Ce que la feuille masque en bas de la carte : la carte y ramene un point
+  // choisi qui tomberait dessous. Depliee, la feuille couvre tout, il n'y a
+  // plus rien a ramener.
+  const reserveBas = $derived(
+    telephone && selection !== null && vue === 'carte' && cran === 'apercu'
+      ? Math.round((hauteurScene - 8) * (1 - PART_CACHEE))
+      : 0
+  );
+
+  // Pose `inert` sur tout ce qui n'est pas le calque modal courant, depuis
+  // l'exterieur : la carte, la matrice et la frise appartiennent a d'autres
+  // composants, `inert` se pose donc sur leurs racines sans qu'ils aient
+  // besoin de le connaitre. Le voile bloque deja le pointeur ; ceci bloque le
+  // clavier, que le voile ne couvre pas.
+  $effect(() => {
+    if (!browser) return;
+    const modal = calqueModal;
+    const scene = document.querySelector('.scene');
+    const dehors = [
+      document.querySelector('.barre'),
+      document.querySelector('.jetons'),
+      document.querySelector('.frise'),
+      document.querySelector('.replier'),
+      document.querySelector('.onglets')
+    ];
+    const cibles = [...(scene ? Array.from(scene.children) : []), ...dehors].filter(
+      (el): el is HTMLElement => el instanceof HTMLElement
+    );
+    for (const el of cibles) {
+      const estCalque =
+        (modal === 'tiroir' && el.classList.contains('facettes')) ||
+        (modal === 'fiche' && el.classList.contains('fiche-hote')) ||
+        el.classList.contains('voile');
+      el.inert = modal !== null && !estCalque;
+    }
   });
 
   const VUES: { cle: Vue; titre: string }[] = [
@@ -371,10 +691,9 @@
 
   async function hasard() {
     const ref = await auHasard(filters);
-    if (ref) selection = ref;
+    if (ref) ouvrirFiche(ref);
   }
 
-  const nf = new Intl.NumberFormat('fr-FR');
   const actifs = $derived(countActive(filters));
   const puces = $derived(jetonsActifs(filters));
   // Le tiroir ne se pose a cote de la carte qu'au large : c'est le seul cas ou
@@ -383,6 +702,12 @@
   // largeur n'est ecrite qu'une fois, dans `--largeur-tiroir`.
   const tiroirPose = $derived(facettesOuvertes && !etroit);
 </script>
+
+<svelte:window onkeydown={surEchap} />
+
+<svelte:head>
+  <title>{titreFiche ? `${titreFiche} — Mérimée` : 'Mérimée — monuments historiques'}</title>
+</svelte:head>
 
 <div class="app">
   <header class="barre">
@@ -419,6 +744,9 @@
         <input
           class="recherche"
           type="search"
+          aria-label={cible === 'historiques'
+            ? 'Rechercher dans le texte des historiques'
+            : 'Rechercher un édifice, une commune ou un département'}
           placeholder={cible === 'historiques'
             ? 'Chercher dans les historiques : jubé, machicoulis…'
             : 'Rechercher un édifice, une commune, un département…'}
@@ -437,7 +765,19 @@
             : 'Chercher dans le texte des historiques — 3,8 Mo au premier usage'}
           onclick={() => (cible = cible === 'historiques' ? 'titres' : 'historiques')}
         >Historiques</button>
-        <button class="hasard" onclick={hasard}>Au hasard</button>
+        <!-- Sur telephone le libelle cede la place a un de : la rangee du champ
+             n'a pas la largeur des deux mots. Le nom accessible ne change pas. -->
+        <button class="hasard" aria-label="Au hasard" title="Ouvrir une notice au hasard" onclick={hasard}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+               stroke-linejoin="round" aria-hidden="true">
+            <rect x="4" y="4" width="16" height="16" rx="3.5" />
+            <circle cx="9" cy="9" r="1.1" fill="currentColor" stroke="none" />
+            <circle cx="15" cy="15" r="1.1" fill="currentColor" stroke="none" />
+            <circle cx="15" cy="9" r="1.1" fill="currentColor" stroke="none" />
+            <circle cx="9" cy="15" r="1.1" fill="currentColor" stroke="none" />
+          </svg>
+          <span class="libelle-hasard">Au hasard</span>
+        </button>
       </div>
     </div>
 
@@ -445,7 +785,10 @@
          reponde a « combien en reste-t-il ». Classes, inscrites et objets se
          relisent dans le tiroir, ou la facette « statut » les donne deja
          croises — les repeter ici etait une triple lecture du meme etat. -->
-    <div class="chiffres">
+    <!-- Region live : seul le compte doit etre relu au changement, pas toute
+         la barre. `aria-atomic` fait relire le nombre entier plutot que le
+         seul chiffre modifie. -->
+    <div class="chiffres" aria-live="polite" aria-atomic="true">
       {#if compteurs}
         <span><b>{nf.format(compteurs.total)}</b> notices</span>
       {/if}
@@ -479,7 +822,7 @@
 
   <main class:fiche-ouverte={selection !== null} class:tiroir-pose={tiroirPose}>
     <div class="centre">
-      <div class="scene" class:tiroir-ouvert={facettesOuvertes}>
+      <div class="scene" class:tiroir-ouvert={facettesOuvertes} bind:clientHeight={hauteurScene}>
         <MonumentMap
           bind:this={vueCarte}
           points={pointsCarte}
@@ -488,18 +831,26 @@
           bind:fond
           bind:suivreVue
           friseOuverte={friseOuverte}
-          onselect={(ref) => (selection = ref)}
+          {reserveBas}
+          onselect={ouvrirFiche}
           onbbox={(bbox) => (filters.bbox = bbox)}
         />
 
         {#if vue === 'matrice'}
-          <Matrice
-            cellules={croisement.cellules}
-            ecartees={croisement.ecartees}
-            siecleSelection={filters.siecles}
-            plage={filters.anneeProtection}
-            oncellule={choisirCellule}
-          />
+          {#if MatriceComp}
+            <MatriceComp
+              cellules={croisement.cellules}
+              ecartees={croisement.ecartees}
+              siecleSelection={filters.siecles}
+              plage={filters.anneeProtection}
+              oncellule={choisirCellule}
+            />
+          {:else}
+            <!-- Meme empreinte que Matrice : elle est en `position: absolute;
+                 inset: 0`, donc le calque suffit a reserver sa place sans
+                 dupliquer sa taille. -->
+            <div class="matrice-attente" aria-hidden="true"></div>
+          {/if}
         {/if}
 
         {#if vue === 'liste'}
@@ -509,17 +860,33 @@
                 {compteurs ? nf.format(compteurs.total) : '—'} notices
                 {#if compteurs && compteurs.total > resultats.length}
                   <em>
-                    (200 premières, {filters.texte
-                      ? 'les plus pertinentes'
-                      : 'les plus riches en mobilier'})
+                    (200 premières, {proche
+                      ? 'les plus proches'
+                      : filters.texte
+                        ? 'les plus pertinentes'
+                        : 'les plus riches en mobilier'})
                   </em>
                 {/if}
               </h3>
               {#if compteurs}
                 <p>
                   {nf.format(compteurs.total - compteurs.geolocalises)} sans coordonnées,
-                  absentes de la carte
+                  absentes de la carte{proche ? ' et de ce tri' : ''}
                 </p>
+              {/if}
+              <!-- La bascule n'existe qu'une fois la position connue : proposer
+                   un tri par distance sans position serait un bouton mort. -->
+              {#if position.courante}
+                <div class="tri" role="group" aria-label="Ordre de la liste">
+                  <button class="frappe-44-v" class:actif={tri === 'pertinence'}
+                          aria-pressed={tri === 'pertinence'}
+                          onclick={() => (tri = 'pertinence')}>
+                    {filters.texte ? 'Pertinence' : 'Mobilier'}
+                  </button>
+                  <button class="frappe-44-v" class:actif={tri === 'proximite'}
+                          aria-pressed={tri === 'proximite'}
+                          onclick={() => (tri = 'proximite')}>À proximité</button>
+                </div>
               {/if}
               <!-- Le plafond de la recherche plein texte se dit : une notice sur
                    deux ne porte aucun historique, et un résultat vide serait
@@ -542,10 +909,11 @@
                 <li>
                   <button
                     class:choisi={selection === ligne.reference}
-                    onclick={() => (selection = ligne.reference)}
+                    onclick={() => ouvrirFiche(ligne.reference)}
                   >
                     <span class="nom">{ligne.titre}</span>
                     <span class="meta">
+                      {#if ligne.distance_m != null}<b class="distance">à {formaterDistance(ligne.distance_m)}</b> · {/if}
                       {ligne.commune} · {ligne.departement_nom}
                       {#if ligne.nb_palissy > 0}· {nf.format(ligne.nb_palissy)} objets{/if}
                     </span>
@@ -553,6 +921,17 @@
                 </li>
               {/each}
             </ul>
+            {#if compteurs && compteurs.total === 0}
+              <!-- En mode historiques, `.portee` dit deja pourquoi — le
+                   plafond structurel et les mots inconnus — pas de doublon,
+                   seul le bouton s'ajoute. -->
+              <div class="vide-liste">
+                {#if cible !== 'historiques'}
+                  <p>Aucune notice ne correspond à ces filtres.</p>
+                {/if}
+                <button onclick={toutEffacer}>Effacer les filtres</button>
+              </div>
+            {/if}
           </div>
         {/if}
 
@@ -560,6 +939,29 @@
           <div class="erreur"><b>Erreur DuckDB</b><p>{erreur}</p></div>
         {:else if chargement && !compteurs}
           <div class="amorce">{LIBELLES[amorcage.phase]}</div>
+        {:else if vue === 'carte' && compteurs && compteurs.total === 0}
+          <!-- Meme famille visuelle que `.amorce` / `.erreur` : une surface
+               posee au centre de la scene, qui ne recouvre aucun coin — les
+               commandes de la carte y vivent toutes. -->
+          <div class="vide-carte">
+            <p>Aucune notice ne correspond à ces filtres.</p>
+            <button onclick={toutEffacer}>Effacer les filtres</button>
+          </div>
+        {/if}
+
+        <!-- Des points precalcules sont deja a l'ecran pendant que le moteur
+             finit de charger : l'attente se dit dans une pastille, qui ne
+             couvre pas la carte qu'on regarde deja. -->
+        {#if !erreur && compteurs && amorcage.phase !== 'pret'}
+          <div class="amorce-discrete" role="status">{LIBELLES[amorcage.phase]}</div>
+        {/if}
+
+        {#if position.erreur}
+          <div class="alerte-position" role="alert">
+            <p>{MESSAGES_POSITION[position.erreur]}</p>
+            <button class="frappe-44" aria-label="Fermer le message"
+                    onclick={() => (position.erreur = null)}>×</button>
+          </div>
         {/if}
 
         <!-- Le tiroir se commande depuis le coin de la carte, la ou il
@@ -568,7 +970,7 @@
              de fermeture, et le bouton revient avec elle. -->
         {#if !facettesOuvertes}
           <button class="filtres frappe-44" aria-expanded="false"
-                  onclick={() => (facettesOuvertes = true)}>
+                  bind:this={boutonFiltres} onclick={ouvrirTiroir}>
             Filtres{#if actifs > 0} <em>{actifs}</em>{/if}
           </button>
         {/if}
@@ -579,9 +981,9 @@
              laisser la frise entierement visible sous eux. -->
         <div class="colonne facettes" class:ouvert={facettesOuvertes}>
           <div class="entete-tiroir">
-            <h2>Filtres</h2>
+            <h2 tabindex="-1" bind:this={titreTiroir}>Filtres</h2>
             <button class="fermer-tiroir frappe-44" aria-label="Fermer les filtres"
-                    onclick={() => (facettesOuvertes = false)}>×</button>
+                    onclick={fermerTiroir}>×</button>
           </div>
           <!-- La zone visible est un critere comme un autre : elle rejoint
                les facettes plutot que la legende de la carte, ou elle voisinait
@@ -597,12 +999,28 @@
           <!-- Fermer en touchant a cote : le geste attendu sur un tiroir. Au
                large le tiroir ne recouvre rien, il n'y a rien a voiler. -->
           <button class="voile" aria-label="Fermer les filtres"
-                  onclick={() => (facettesOuvertes = false)}></button>
+                  onclick={fermerTiroir}></button>
         {/if}
 
-        <div class="colonne fiche-hote" class:ouvert={selection !== null}>
+        <div class="colonne fiche-hote" class:ouvert={selection !== null}
+             class:plein={cran === 'plein'} class:glisse={decalage !== null}
+             style:transform={decalage !== null ? `translateY(${decalage}px)` : undefined}>
+          <!-- Poignee de la feuille, telephone seulement. Un toucher bascule le
+               cran, un glissement le deplace, tirer vers le bas ferme ; au
+               clavier, Entree bascule. -->
+          <button class="poignee" aria-expanded={cran === 'plein'}
+                  aria-label={cran === 'plein' ? 'Réduire la fiche' : 'Agrandir la fiche'}
+                  onpointerdown={saisirPoignee} onpointermove={glisserPoignee}
+                  onpointerup={lacherPoignee} onpointercancel={annulerPoignee}
+                  onclick={clavierPoignee}>
+            <span aria-hidden="true"></span>
+          </button>
           <DetailPanel reference={selection} {copie} oncopier={copierLien}
-                       onclose={() => (selection = null)} />
+                       bind:this={detailPanel} onclose={fermerFiche}
+                       ontitre={(t) => (titreFiche = t)}
+                       ondefile={() => {
+                         if (telephone && cran === 'apercu' && decalage === null) cran = 'plein';
+                       }} />
         </div>
       </div>
 
@@ -611,16 +1029,23 @@
            Meme dispositif que le tiroir des filtres — la croix est dans le
            panneau, le bouton qui le rouvre prend sa place. -->
       {#if friseOuverte}
-        <Timeline
-          siecles={barresSiecles}
-          protections={barresAnnees}
-          siecleSelection={filters.siecles}
-          plage={filters.anneeProtection}
-          onsiecle={toggleSiecle}
-          onsiecles={(choix) => (filters.siecles = choix)}
-          onplage={(p) => (filters.anneeProtection = p)}
-          onfermer={() => (friseOuverte = false)}
-        />
+        {#if TimelineComp}
+          <TimelineComp
+            siecles={barresSiecles}
+            protections={barresAnnees}
+            siecleSelection={filters.siecles}
+            plage={filters.anneeProtection}
+            onsiecle={toggleSiecle}
+            onsiecles={(choix) => (filters.siecles = choix)}
+            onplage={(p) => (filters.anneeProtection = p)}
+            onfermer={() => (friseOuverte = false)}
+          />
+        {:else}
+          <!-- Hauteur mesuree du panneau reel (deux graphiques de 104px, ses
+               paddings et son entete) : sans elle, l'arrivee du chunk Plot
+               ferait bondir la carte au moment ou <Timeline> apparait. -->
+          <div class="frise-attente" aria-hidden="true"></div>
+        {/if}
       {:else}
         <button class="replier frappe-44-v" aria-expanded="false"
                 onclick={() => (friseOuverte = true)}>
@@ -629,6 +1054,38 @@
       {/if}
     </div>
   </main>
+
+  <!-- Onglets du pied, telephone seulement : les vues sous le pouce, et la
+       barre du haut rendue a la marque et a la recherche. Ils remplacent le
+       selecteur de la barre et le bandeau « Afficher les frises », masques a
+       cette largeur ; tablette et ordinateur n'en voient rien. -->
+  <nav class="onglets" aria-label="Vues">
+    {#each VUES as choix (choix.cle)}
+      <button class:actif={vue === choix.cle} aria-pressed={vue === choix.cle}
+              onclick={() => (vue = choix.cle)}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          {#if choix.cle === 'carte'}
+            <path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6z" /><path d="M9 4v14M15 6v14" />
+          {:else if choix.cle === 'matrice'}
+            <rect x="4" y="4" width="6" height="6" rx="1" /><rect x="14" y="4" width="6" height="6" rx="1" />
+            <rect x="4" y="14" width="6" height="6" rx="1" /><rect x="14" y="14" width="6" height="6" rx="1" />
+          {:else}
+            <path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" />
+          {/if}
+        </svg>
+        <span>{choix.titre}</span>
+      </button>
+    {/each}
+    <button class:actif={friseOuverte} aria-expanded={friseOuverte}
+            onclick={() => (friseOuverte = !friseOuverte)}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+           stroke-linecap="round" aria-hidden="true">
+        <path d="M4 20h16M7 20v-6M11 20V8M15 20v-9M19 20v-4" />
+      </svg>
+      <span>Frises</span>
+    </button>
+  </nav>
 </div>
 
 <style>
@@ -656,7 +1113,9 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 12px 20px;
-    padding: 12px 24px;
+    /* Seuls le haut et les cotes touchent un bord physique de l'ecran :
+       `--sa-*` vaut 0 hors iOS, aucun changement ailleurs. */
+    padding: calc(12px + var(--sa-haut)) calc(24px + var(--sa-droite)) 12px calc(24px + var(--sa-gauche));
     min-height: 72px;
     background: var(--fond-carte);
     border-bottom: 1px solid var(--bord);
@@ -753,13 +1212,15 @@
      bouton lisible une fois active. Sans lui, ce selecteur pese (0,4,0) contre
      (0,3,0) pour `.cible.actif` : sa `color` gagne, le `background` de l'etat
      actif reste, et comme `--texte` **vaut exactement** `--plein-fond` dans les
-     deux themes (#1a1d20 en clair, #f2f0ea en sombre), le libelle disparait
-     dans son propre fond — mesure a 1,00:1. Au pointeur fin le texte revient
-     des que la souris s'ecarte ; au tactile le `:hover` reste colle jusqu'au
-     geste suivant, et la pastille reste vide. */
-  .cible:hover:not(:disabled):not(.actif) {
-    color: var(--texte);
-    border-color: var(--inscrit);
+     deux themes, le libelle disparait dans son propre fond — mesure a 1,00:1.
+     Au pointeur fin le texte revient des que la souris s'ecarte ; au tactile
+     le `:hover` reste colle jusqu'au geste suivant, et la pastille reste
+     vide. */
+  @media (hover: hover) and (pointer: fine) {
+    .cible:hover:not(:disabled):not(.actif) {
+      color: var(--texte);
+      border-color: var(--inscrit);
+    }
   }
 
   .cible.actif {
@@ -801,6 +1262,15 @@
     transition:
       border-color var(--t-rapide),
       background-color var(--t-rapide);
+  }
+
+  /* Sous 16 px, Safari iOS zoome toute la page a la mise au point du champ et
+     ne la dezoome pas en sortant. Au doigt seulement : a la souris, le 13 px
+     garde la barre a sa densite. */
+  @media (pointer: coarse) {
+    .recherche {
+      font-size: 16px;
+    }
   }
 
   .recherche::placeholder {
@@ -845,6 +1315,12 @@
   /* « Au hasard » se pose au bout du champ : c'est l'autre facon d'entrer dans
      le corpus quand on ne sait pas quoi y chercher. Meme hauteur que le champ
      et que la bascule de cible, sinon la rangee se decale d'un pixel. */
+  .hasard svg {
+    display: none;
+    width: 19px;
+    height: 19px;
+  }
+
   .hasard {
     flex: 0 0 auto;
     height: 44px;
@@ -860,9 +1336,11 @@
     transition: all var(--t-rapide);
   }
 
-  .hasard:hover {
-    border-color: var(--inscrit);
-    background: color-mix(in srgb, var(--inscrit) 10%, var(--fond-carte));
+  @media (hover: hover) and (pointer: fine) {
+    .hasard:hover {
+      border-color: var(--inscrit);
+      background: color-mix(in srgb, var(--inscrit) 10%, var(--fond-carte));
+    }
   }
 
   /* Une pastille sans libelle : le theme est un confort de lecture, il n'a pas
@@ -883,9 +1361,11 @@
     transition: all var(--t-rapide);
   }
 
-  .theme:hover {
-    color: var(--texte);
-    border-color: var(--bord-appuye);
+  @media (hover: hover) and (pointer: fine) {
+    .theme:hover {
+      color: var(--texte);
+      border-color: var(--bord-appuye);
+    }
   }
 
   .theme svg {
@@ -929,9 +1409,11 @@
     transition: all var(--t-rapide);
   }
 
-  .filtres:hover {
-    border-color: var(--accent);
-    color: var(--accent);
+  @media (hover: hover) and (pointer: fine) {
+    .filtres:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
   }
 
   .filtres em {
@@ -992,9 +1474,11 @@
     transition: all var(--t-rapide);
   }
 
-  .bascule button:hover {
-    background: color-mix(in srgb, var(--bord) 60%, transparent);
-    color: var(--texte);
+  @media (hover: hover) and (pointer: fine) {
+    .bascule button:hover {
+      background: color-mix(in srgb, var(--bord) 60%, transparent);
+      color: var(--texte);
+    }
   }
 
   .bascule button.actif {
@@ -1123,12 +1607,44 @@
     transition: background var(--t-rapide);
   }
 
-  .liste button:hover {
-    background: var(--fond-creux);
+  @media (hover: hover) and (pointer: fine) {
+    .liste button:hover {
+      background: var(--fond-creux);
+    }
   }
 
   .liste button.choisi {
     background: var(--accent-doux);
+  }
+
+  /* Pose au fil de la liste plutot qu'en surface flottante : elle n'a rien a
+     recouvrir, contrairement a son equivalent sur la vue carte. */
+  .vide-liste {
+    display: grid;
+    gap: 10px;
+    padding: 24px 20px;
+    text-align: center;
+    color: var(--texte-faible);
+    font-size: 12.5px;
+  }
+
+  .vide-liste button {
+    justify-self: center;
+    border: 1px solid var(--bord-appuye);
+    border-radius: var(--r-pilule);
+    background: transparent;
+    color: var(--accent);
+    padding: 7px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color var(--t-rapide);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .vide-liste button:hover {
+      border-color: var(--accent);
+    }
   }
 
   .nom {
@@ -1171,6 +1687,47 @@
     word-break: break-word;
   }
 
+  /* Meme dispositif que `.amorce` / `.erreur` ci-dessus : une surface posee au
+     centre de la scene, qui ne recouvre aucun coin — les commandes de la
+     carte y vivent toutes. */
+  .vide-carte {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 3;
+    display: grid;
+    gap: 10px;
+    padding: 18px 24px;
+    border: none;
+    border-radius: var(--r-m);
+    background: var(--fond-carte);
+    box-shadow: var(--ombre-carte);
+    font-size: 12px;
+    color: var(--texte-faible);
+    text-align: center;
+    max-width: 320px;
+  }
+
+  .vide-carte button {
+    justify-self: center;
+    border: 1px solid var(--bord-appuye);
+    border-radius: var(--r-pilule);
+    background: transparent;
+    color: var(--accent);
+    padding: 7px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color var(--t-rapide);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .vide-carte button:hover {
+      border-color: var(--accent);
+    }
+  }
+
   /* --- Les deux calques ---------------------------------------------------
      Aucun `backdrop-filter` : un flou plein ecran au-dessus d'un canevas WebGL
      se paie a chaque image. Fond opaque, ombre portee. */
@@ -1192,6 +1749,11 @@
     border-right: 1px solid var(--bord-flottant);
     transform: translateX(-100%);
     box-shadow: var(--ombre-tiroir);
+    /* Bord gauche et pied de l'ecran : les deux touchent un bord physique.
+       Applique une fois ici, en tete du calque, plutot que dans chacun de
+       ses trois enfants. */
+    padding-left: var(--sa-gauche);
+    padding-bottom: var(--sa-bas);
   }
 
   .facettes.ouvert {
@@ -1232,9 +1794,11 @@
     transition: background var(--t-rapide);
   }
 
-  .fermer-tiroir:hover {
-    background: var(--fond-creux);
-    color: var(--texte);
+  @media (hover: hover) and (pointer: fine) {
+    .fermer-tiroir:hover {
+      background: var(--fond-creux);
+      color: var(--texte);
+    }
   }
 
   /* La fiche ne compresse plus la carte : elle flotte par-dessus, et seulement
@@ -1262,6 +1826,102 @@
     display: none;
   }
 
+  /* Poignee et onglets n'existent que sur telephone, cf. le gabarit plus bas. */
+  .poignee,
+  .onglets {
+    display: none;
+  }
+
+  /* Bascule d'ordre de la liste : meme rail que le selecteur de vue. */
+  .tri {
+    display: inline-flex;
+    gap: 2px;
+    margin-top: 8px;
+    padding: 2px;
+    background: var(--fond-creux);
+    border-radius: var(--r-pilule);
+  }
+
+  .liste .tri button {
+    display: inline-block;
+    width: auto;
+    padding: 5px 13px;
+    border-radius: var(--r-pilule);
+    color: var(--texte-faible);
+    font-size: 11.5px;
+    font-weight: 500;
+  }
+
+  .liste .tri button.actif {
+    background: var(--fond-carte);
+    color: var(--texte);
+    font-weight: 600;
+    box-shadow: 0 2px 6px -2px rgb(var(--voile) / 18%);
+  }
+
+  .meta .distance {
+    font-weight: 600;
+    color: var(--position);
+  }
+
+  /* L'attente du moteur quand la carte a deja ses points : une pastille en
+     haut, au centre, sous le bouton des filtres et hors des coins d'outils. */
+  .amorce-discrete {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 3;
+    padding: 6px 14px;
+    border: 1px solid var(--bord-flottant);
+    border-radius: var(--r-pilule);
+    background: var(--fond-carte);
+    box-shadow: var(--ombre-carte);
+    font-size: 11px;
+    color: var(--texte-faible);
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  /* Meme famille que `.vide-carte`, mais en haut : l'erreur de position ne
+     doit pas cacher l'endroit de la carte qu'on regardait. */
+  .alerte-position {
+    position: absolute;
+    top: 64px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: max-content;
+    max-width: calc(100% - 24px);
+    padding: 10px 10px 10px 16px;
+    border: 1px solid var(--bord-flottant);
+    border-radius: var(--r-m);
+    background: var(--fond-carte);
+    box-shadow: var(--ombre-carte);
+    font-size: 12px;
+    color: var(--texte-moyen);
+  }
+
+  .alerte-position p {
+    margin: 0;
+  }
+
+  .alerte-position button {
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--texte-faible);
+    font-size: 17px;
+    line-height: 1;
+    cursor: pointer;
+  }
+
   /* Bandeau plein largeur : il ne coute sa hauteur que lorsque la frise est
      repliee, et dit ou elle est partie. */
   .replier {
@@ -1271,14 +1931,42 @@
     border-top: 1px solid var(--bord);
     background: var(--fond);
     color: var(--texte-faible);
-    padding: 8px;
+    /* Dernier element de la page : son pied touche le bord physique. */
+    padding: 8px 8px calc(8px + var(--sa-bas));
     font-size: 11px;
     cursor: pointer;
     transition: color var(--t-rapide);
   }
 
-  .replier:hover {
-    color: var(--texte);
+  @media (hover: hover) and (pointer: fine) {
+    .replier:hover {
+      color: var(--texte);
+    }
+  }
+
+  /* Emplacements reserves le temps que le chunk Plot arrive, cf. le
+     commentaire du script. La matrice se contente de remplir son calque
+     (`position: absolute; inset: 0`, identique au composant reel) ; la frise
+     n'a pas ce luxe, elle occupe une ligne de grille dimensionnee par son
+     contenu, d'ou la hauteur mesuree en dur ci-dessous — directement sur le
+     panneau reel, aux deux gabarits, pas deduite des paddings. */
+  .matrice-attente {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    background: var(--fond);
+  }
+
+  .frise-attente {
+    height: 168px;
+    border-top: 1px solid var(--bord);
+    background: var(--frise-fond);
+  }
+
+  @media (max-width: 900px) {
+    .frise-attente {
+      height: 317px;
+    }
   }
 
   /* Au-dela de 1440 px, la liste laissait pres de la moitie de l'ecran vide a
@@ -1321,7 +2009,7 @@
      flancs restent seuls sur la premiere ligne et s'y repartissent. */
   @media (max-width: 1150px) {
     .barre {
-      padding: 10px 16px;
+      padding: calc(10px + var(--sa-haut)) calc(16px + var(--sa-droite)) 10px calc(16px + var(--sa-gauche));
       gap: 10px 16px;
     }
 
@@ -1341,7 +2029,7 @@
      Il se ferme donc en touchant a cote, et la frise se replie. */
   @media (max-width: 900px) {
     .barre {
-      padding: 10px 12px;
+      padding: calc(10px + var(--sa-haut)) calc(12px + var(--sa-droite)) 10px calc(12px + var(--sa-gauche));
       gap: 10px 12px;
     }
 
@@ -1410,16 +2098,138 @@
       --marge-droite: 0px;
     }
 
+    /* Hauteur **definie**, et flex plutot que la grille de `.colonne`. Avec un
+       simple `max-height`, la hauteur restait indefinie : la rangee implicite
+       de la grille prenait toute la hauteur du contenu, `overflow: hidden`
+       rognait le bas, et `.fiche` n'avait jamais rien a faire defiler — la
+       moitie de la notice etait inatteignable. En flex colonne, l'enfant
+       `min-height: 0` se contracte a la boite et son `overflow-y` reprend. */
     .fiche-hote {
       inset: auto 0 0 0;
+      display: flex;
+      flex-direction: column;
       width: auto;
-      max-height: 82%;
+      height: calc(100% - 8px);
       border-radius: var(--r-l) var(--r-l) 0 0;
       transform: translateY(101%);
     }
 
+    .fiche-hote > :global(.fiche) {
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+
+    /* Deux crans. L'apercu cache 55 % de la feuille sous le bord (`PART_CACHEE`
+       dans le script, a garder egal) ; depliee, elle monte entiere. */
     .fiche-hote.ouvert {
+      transform: translateY(55%);
+    }
+
+    .fiche-hote.ouvert.plein {
       transform: translateY(0);
+    }
+
+    /* Pendant le glissement le `transform` en ligne suit le doigt : une
+       transition le ferait trainer derriere lui. */
+    .fiche-hote.glisse {
+      transition: none;
+    }
+
+    /* En apercu, la photographie est bornee plus bas : a 48dvh elle occupait
+       toute la part visible, et le titre — ce qui dit sur quoi on a touche —
+       restait sous le bord. Depliee, la fiche retrouve la borne de
+       `DetailPanel`. */
+    .fiche-hote:not(.plein) :global(.cadre) {
+      max-height: 20dvh;
+    }
+
+    /* 32 px reels plutot qu'une zone etendue : la feuille porte
+       `overflow: hidden`, qui rognerait un `::after` au-dessus d'elle. */
+    .poignee {
+      display: flex;
+      flex: 0 0 auto;
+      align-items: center;
+      justify-content: center;
+      height: 32px;
+      padding: 0;
+      border: none;
+      background: var(--fond-carte);
+      cursor: grab;
+      /* Le geste appartient a la poignee seule : le reste de la feuille
+         defile normalement. */
+      touch-action: none;
+    }
+
+    .poignee span {
+      width: 40px;
+      height: 4px;
+      border-radius: var(--r-pilule);
+      background: var(--bord-appuye);
+    }
+
+    /* --- Barre et onglets ------------------------------------------------ */
+    .barre {
+      min-height: 0;
+      padding: calc(8px + var(--sa-haut)) calc(12px + var(--sa-droite)) 8px calc(12px + var(--sa-gauche));
+      gap: 8px 12px;
+    }
+
+    .marque strong {
+      font-size: 21px;
+    }
+
+    .bascule,
+    .replier {
+      display: none;
+    }
+
+    .hasard {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 44px;
+      padding: 0;
+    }
+
+    .hasard svg {
+      display: block;
+    }
+
+    .libelle-hasard {
+      display: none;
+    }
+
+    .onglets {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      padding: 0 var(--sa-droite) var(--sa-bas) var(--sa-gauche);
+      border-top: 1px solid var(--bord);
+      background: var(--fond-carte);
+    }
+
+    .onglets button {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      min-height: 56px;
+      border: none;
+      background: transparent;
+      color: var(--texte-faible);
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .onglets svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    .onglets button.actif {
+      color: var(--accent);
+      font-weight: 600;
     }
   }
 </style>

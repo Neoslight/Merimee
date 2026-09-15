@@ -8,6 +8,7 @@ artefacts produits : c'est l'oracle de non-régression du parsing.
 from __future__ import annotations
 
 import collections
+import json
 import sys
 from pathlib import Path
 
@@ -16,7 +17,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from merimee_etl.build import fnv1a, shard_of  # noqa: E402
+from merimee_etl.build import fnv1a, points_colonnaires, shard_of  # noqa: E402
 from merimee_etl.config import DETAILS_SHARDS, OUT_DIR  # noqa: E402
 from merimee_etl.normalize import normalize_text, search_key, split_multi, split_vocab  # noqa: E402
 from merimee_etl.parse import (  # noqa: E402
@@ -64,7 +65,22 @@ def test_parse_coords(raw, expected):
     ],
 )
 def test_parse_siecles(raw, siecles, periodes):
-    assert parse_siecles(raw) == (siecles, periodes)
+    assert parse_siecles(raw)[:2] == (siecles, periodes)
+
+
+def test_parse_siecles_signale_un_segment_non_reconnu():
+    # Ni un siècle (`_SIECLE`) ni une période connue (`PERIODES`) : le segment
+    # était perdu sans trace, il rejoint désormais le rejet, comme les
+    # segments hors-format de `parse_protections`.
+    siecles, periodes, rejets = parse_siecles("brouillon")
+    assert siecles == [] and periodes == []
+    assert rejets == ["brouillon"]
+
+
+def test_parse_siecles_melange_reconnu_et_rejete():
+    siecles, periodes, rejets = parse_siecles("16e s.;brouillon")
+    assert siecles == [16]
+    assert rejets == ["brouillon"]
 
 
 @pytest.mark.parametrize(
@@ -102,6 +118,52 @@ def test_parse_protections_signale_les_rejets_sans_les_perdre():
     assert rejets == ["inscrit MH"]
     assert len(events) == 1 and events[0].annee is None
     assert events[0].statut == "inscrit"
+
+
+def test_parse_protections_mois_hors_bornes_signale_sans_perdre_l_evenement():
+    # Un mois brut de 13 n'est pas un mois : `_coerce` le réduit à `None`
+    # silencieusement, mais l'événement doit rester produit (année et statut
+    # lisibles) et le segment doit rejoindre les rejets, comme un segment
+    # illisible.
+    segment = "2019/13/05 : inscrit MH"
+    events, rejets = parse_protections("PA00000000", segment)
+    assert rejets == [segment]
+    assert len(events) == 1
+    assert events[0].annee == 2019
+    assert events[0].mois is None
+    assert events[0].jour == 5
+    assert events[0].statut == "inscrit"
+
+
+def test_parse_protections_jour_hors_bornes_signale_sans_perdre_l_evenement():
+    segment = "2019/05/32 : inscrit MH"
+    events, rejets = parse_protections("PA00000000", segment)
+    assert rejets == [segment]
+    assert events[0].mois == 5
+    assert events[0].jour is None
+
+
+def test_parse_protections_annee_hors_plage_devient_nulle_et_signalee():
+    # `PROTECTION_YEAR_MIN`/`PROTECTION_YEAR_MAX` étaient définies dans
+    # `config.py` mais jamais appliquées : une année hors plage suit
+    # maintenant la même règle qu'un segment illisible — l'événement reste
+    # produit, l'année devient nulle, le segment part dans les rejets.
+    avant = "1500/01/01 : classé MH"
+    events, rejets = parse_protections("PA00000000", avant)
+    assert rejets == [avant]
+    assert events[0].annee is None
+    assert events[0].statut == "classé"
+
+    apres = "2099/01/01 : classé MH"
+    events, rejets = parse_protections("PA00000000", apres)
+    assert rejets == [apres]
+    assert events[0].annee is None
+
+
+def test_parse_protections_annee_en_plage_ne_produit_aucun_rejet():
+    events, rejets = parse_protections("PA00000000", "1840/01/01 : classé MH")
+    assert rejets == []
+    assert events[0].annee == 1840
 
 
 @pytest.mark.parametrize(
@@ -157,6 +219,28 @@ def test_palissy_ids():
     assert palissy_ids(urls) == ["IM10005283", "IM10005235"]
 
 
+def test_points_colonnaires():
+    df = pd.DataFrame({
+        "reference": ["PA1", "PA2", "PA3"],
+        "lat": [48.123456789, None, 43.0],
+        "lon": [2.987654321, None, 5.5],
+        "statut": ["classé", "inscrit", None],
+        "nb_palissy": [3, 0, 250],
+        "siecle_max": [12, None, None],
+    })
+    p = points_colonnaires(df)
+    # La notice sans coordonnées compte dans le total, pas dans le nuage.
+    assert (p["total"], p["geolocalises"]) == (3, 2)
+    assert p["reference"] == ["PA1", "PA3"]
+    assert p["lat"] == [48.12346, 43.0]
+    assert p["lon"] == [2.98765, 5.5]
+    # Le statut nul survit au codage : il ne doit pas devenir « » ni un index faux.
+    assert [p["statuts"][i] for i in p["statut"]] == ["classé", None]
+    assert p["nb"] == [3, 250]
+    assert p["siecle"] == [12, None]
+    json.dumps(p)  # sérialisable tel quel
+
+
 # --------------------------------------------------------------------------
 # Intégration : artefacts vs ANALYSE_MERIMEE.md
 # --------------------------------------------------------------------------
@@ -195,6 +279,23 @@ def test_geolocalisation(monuments):
     assert monuments.lat.notna().sum() == 44_484
     assert monuments.lat.isna().sum() == 2_276
     assert not ((monuments.lat == 0) & (monuments.lon == 0)).any()
+
+
+@pytest.mark.skipif(
+    not (OUT_DIR / "points.json").exists() or not (OUT_DIR / "monuments.parquet").exists(),
+    reason="points.json absent : relancer `python -m merimee_etl`",
+)
+def test_points_instantanes(monuments):
+    """Le nuage du premier écran doit être celui que DuckDB rendra ensuite :
+    sinon la carte change de points sous les yeux au remplacement."""
+    p = json.loads((OUT_DIR / "points.json").read_text(encoding="utf-8"))
+    geo = monuments[monuments.lat.notna()]
+    assert p["total"] == 46_760
+    assert p["geolocalises"] == len(p["reference"]) == 44_484
+    assert p["reference"] == geo.reference.tolist()
+    for cle in ("lon", "lat", "statut", "nb", "siecle"):
+        assert len(p[cle]) == 44_484, cle
+    assert set(p["statuts"]) >= {"classé", "inscrit", "classé+inscrit"}
 
 
 @pytestmark_artifacts
@@ -282,7 +383,7 @@ def test_notice_avec_pipe_litteral(monuments, details):
     notice = monuments.loc[monuments.reference == "PA31000132"]
     assert len(notice) == 1
     assert notice.iloc[0].commune == "Toulouse"
-    assert notice.iloc[0].departement == "31"
+    assert notice.iloc[0].departement_nom == "Haute-Garonne"
     assert len(details.loc[details.reference == "PA31000132"]) == 1
 
 
@@ -315,7 +416,10 @@ def test_hachage_stable():
 @pytestmark_artifacts
 def test_geographie(monuments):
     assert monuments.region.nunique() == 20
-    assert monuments.departement.nunique() == 102
+    # `departement` (le code numérique) est une colonne retirée des artefacts
+    # (jamais lue côté navigateur) ; `departement_nom` reste et porte le même
+    # dénombrement.
+    assert monuments.departement_nom.nunique() == 102
     assert monuments.commune.nunique() >= 16_000
     assert monuments.search_key.str.contains("é").sum() == 0  # accents dépliés
 
@@ -425,6 +529,31 @@ def test_compte_memoire_absent_ne_casse_pas_le_build(tmp_path, monkeypatch):
         assert build._illustrations_memoire() == {}
     finally:
         build._illustrations_memoire.cache_clear()
+
+
+def test_memoire_coupure_en_plein_flux_meme_message_qu_une_panne_reseau(monkeypatch, capsys):
+    """`IncompleteRead` hérite d'`HTTPException`, pas d'`OSError`.
+
+    Un `except OSError` seul laissait filer cette exception-là : une coupure
+    en cours de lecture des 1,36 Go plantait avec une trace Python au lieu du
+    message `source injoignable` que rendent les autres pannes réseau.
+    """
+    import http.client
+
+    from merimee_etl import memoire
+
+    class FluxCoupe:
+        def __enter__(self):
+            raise http.client.IncompleteRead(b"")
+
+        def __exit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(memoire, "references_du_corpus", lambda artefacts: {"PA00000000"})
+    monkeypatch.setattr(memoire, "_lignes_distantes", lambda: FluxCoupe())
+
+    assert memoire.main([]) == 1
+    assert "source injoignable" in capsys.readouterr().err
 
 
 # --------------------------------------------------------------------------

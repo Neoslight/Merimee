@@ -32,6 +32,7 @@ les deux instantanés photo, et comme eux **ce n'est pas une décision
 from __future__ import annotations
 
 import csv
+import http.client
 import io
 import sys
 import urllib.request
@@ -125,7 +126,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         with _lignes_distantes() as flux:
             par_notice, droits, lues = compter(flux, references)
-    except OSError as erreur:
+    # `IncompleteRead` (coupure en plein flux, 1,36 Go à lire) hérite de
+    # `HTTPException`, pas d'`OSError` : sans ce second type, une coupure
+    # réseau en cours de lecture ne produisait pas le même message que les
+    # autres pannes réseau (timeout, DNS, connexion refusée).
+    except (OSError, http.client.HTTPException) as erreur:
         print(f"source injoignable : {erreur}", file=sys.stderr)
         return 1
 
