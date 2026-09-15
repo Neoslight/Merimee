@@ -11,7 +11,8 @@ function etat(partiel: Partial<EtatPartage['filtres']> = {}): EtatPartage {
     filtres: { ...filtresVides(), ...partiel },
     selection: null,
     vue: 'carte',
-    fond: null
+    fond: null,
+    acr: false
   };
 }
 
@@ -41,6 +42,23 @@ describe('aller-retour encoder/decoder', () => {
   it('conserve le fond historique', () => {
     const depart: EtatPartage = { ...etat(), fond: 'cassini' };
     expect(decoder(encoder(depart)).fond).toBe('cassini');
+  });
+
+  it('conserve la couche ACR, absente par defaut', () => {
+    expect(encoder(etat())).not.toContain('acr');
+    expect(decoder('').acr).toBe(false);
+    const depart: EtatPartage = { ...etat(), acr: true };
+    expect(encoder(depart)).toBe('?acr=1');
+    expect(decoder(encoder(depart)).acr).toBe(true);
+  });
+
+  it('rallume la couche ACR pour une fiche ACR partagee sans elle', () => {
+    const etatLu = decoder('?ref=ACR0000002');
+    expect(etatLu.selection).toBe('ACR0000002');
+    expect(etatLu.acr).toBe(true);
+    // Forme normalisee stable : un second aller-retour ne change plus rien.
+    expect(encoder(decoder(encoder(etatLu)))).toBe(encoder(etatLu));
+    expect(decoder('?ref=PA00078066').acr).toBe(false);
   });
 });
 

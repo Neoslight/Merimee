@@ -24,6 +24,10 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | Chemin | Rôle |
 |---|---|
 | `data/raw/merimee.csv` | source, **non versionnée** (100 Mo) |
+| `data/raw/merimee_acr.csv` | label Architecture contemporaine remarquable, **non versionné**, facultatif (5,8 Mo) |
+| `etl/merimee_etl/acr.py` | couche ACR : `acr/points.json` + 8 fragments `acr/fiches/`, **sautée sans source**, hors oracle |
+| `data/ref/*_acr.csv` | instantanés photo ACR, produits par `wikidata --acr` et `commons --acr` |
+| `web/src/lib/acr.ts` / `web/src/lib/db/acr.ts` | couche ACR : logique pure / nuage et `ficheAcr()` au format `Detail`, chargés à la demande |
 | `data/ref/*.csv` | décisions éditoriales, **versionnées** : alias d'auteurs, corrections de vocabulaire |
 | `data/ref/wikidata_images.csv` | instantané tiers, 2,4 Mo — pas une décision éditoriale, cf. `docs/conception-photographies.md` |
 | `data/ref/memoire_illustrations.csv` | instantané tiers, 554 Ko : un nombre par notice, **jamais une image** |
@@ -34,8 +38,8 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `etl/merimee_etl/commons.py` | second instantané photo, séparé de `wikidata.py` — lancé à part |
 | `etl/merimee_etl/memoire.py` | compte les illustrations POP **sans les reprendre** — lancé à part |
 | `web/static/data/points.json` | nuage du premier écran (446 Ko gzip), écrit par `build.py::points_colonnaires`, remplacé par DuckDB dès sa première réponse |
-| `etl/tests/test_pipeline.py` | 73 tests : unitaires sur les cas tordus + intégration sur les artefacts (sautée d'elle-même sans eux) |
-| `etl/tests/test_annexes.py` | 23 tests : fonctions pures des scripts annexes (`wikidata.py`, `commons.py`) et des alias, sans réseau |
+| `etl/tests/test_pipeline.py` | 78 tests : unitaires sur les cas tordus + intégration sur les artefacts (sautée d'elle-même sans eux) |
+| `etl/tests/test_annexes.py` | 24 tests : fonctions pures des scripts annexes (`wikidata.py`, `commons.py`) et des alias, sans réseau |
 | `etl/out/rejets.csv` | segments hors-format rencontrés, jamais supprimés silencieusement |
 | `.nvmrc` / `.github/workflows/ci.yml` | version Node lue par la CI ; workflow GitHub Actions (jobs `etl` et `web`), jamais l'ETL complet ni `tests/e2e/` |
 | `docs/` | contraintes techniques et règles de conception, déplacées de ce fichier et classées par domaine |
@@ -55,8 +59,8 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `web/src/service-worker.ts` | cache des actifs hachés uniquement |
 | `web/scripts/precharger.mjs` | injecte le préchargement du wasm dans le shell HTML après build, chaîné à `build` et `build:pages` |
 | `web/src/lib/components/` | `MonumentMap`, `FacetPanel`, `Jetons`, `Timeline`, `Matrice`, `DetailPanel` |
-| `web/tests/e2e/` | 222 vérifications en Chromium réel : 12 fichiers `NN-domaine.spec.ts` + `_soutien.ts` (`verifier()` adossé à `expect.soft`), `playwright.config.ts` en `workers: 1` / `retries: 0` |
-| `web/tests/unit/` | 59 tests Vitest sur la logique pure : `buildWhere`, `permalien`, `shards`, `teinte`, `points`, distances |
+| `web/tests/e2e/` | 247 vérifications en Chromium réel : 13 fichiers `NN-domaine.spec.ts` + `_soutien.ts` (`verifier()` adossé à `expect.soft`), `playwright.config.ts` en `workers: 1` / `retries: 0` |
+| `web/tests/unit/` | 66 tests Vitest sur la logique pure : `buildWhere`, `permalien`, `shards`, `teinte`, `points`, `acr`, distances |
 | `web/tests/apercu-social.mjs` | régénère la vignette Open Graph depuis l'application |
 | `web/tests/audit-visuel.mjs` | 112 captures + relevés WCAG chiffrés, **hors** `npm run test` |
 
@@ -66,12 +70,14 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 cd etl  && python -m merimee_etl        # ~12 s, écrit web/static/data/
 cd etl  && python -m merimee_etl.wikidata  # rafraîchit l'instantané des photos
 cd etl  && python -m merimee_etl.commons   # complète par les fichiers citant la notice
+cd etl  && python -m merimee_etl.wikidata --acr  # idem pour la couche ACR (après l'ETL)
+cd etl  && python -m merimee_etl.commons --acr
 cd etl  && python -m merimee_etl.memoire   # compte les illustrations POP, 1,36 Go lus en flux
-cd etl  && python -m pytest tests -q    # 96 tests (73 + 23 dans test_annexes.py)
+cd etl  && python -m pytest tests -q    # 102 tests (78 + 24 dans test_annexes.py)
 cd web  && npm run dev                  # http://localhost:5173
 cd web  && npm run check                # svelte-check, doit rester à 0/0
-cd web  && npm run test:unit            # Vitest, 59 tests, logique pure
-cd web  && npm run build && npm run test # build statique + 222 vérifications en Chromium (tests/e2e/)
+cd web  && npm run test:unit            # Vitest, 66 tests, logique pure
+cd web  && npm run build && npm run test # build statique + 247 vérifications en Chromium (tests/e2e/)
 cd web  && npm run apercu               # régénère static/apercu-social.png
 cd web  && npm run audit                # 112 captures + relevés dans .audit-screenshots/
 cd web  && npm run deploy               # predeploy (check + test:unit) puis build /Merimee + push sur gh-pages
@@ -113,6 +119,10 @@ littéral dans un champ quoté.
 
 **Les 2 276 notices sans coordonnées restent accessibles** par la vue liste. Ne pas
 les filtrer hors du corpus sous prétexte qu'elles n'apparaissent pas sur la carte.
+
+**La couche ACR n'entre jamais dans le prédicat.** 1 822 notices (1 743 situées), masquées
+par défaut, sans effet sur filtres, compteurs, liste, frises ni matrice ; ses chiffres ne
+sont pas ceux de l'oracle. Cf. `docs/conception-donnees.md`, section ACR.
 
 **`Date_de_creation_de_la_notice` n'est pas une date métier** (79 % au 1993-03-29,
 date d'informatisation), `Date_de_la_derniere_mise_a_jour` non plus (reprise
@@ -158,6 +168,7 @@ avant de toucher à ce domaine** : cet index oriente, il ne remplace pas la lect
 - le curseur Palissy est débattu à 180 ms, comme la recherche et la recherche de facette
 - la matrice retire deux clés du prédicat et tient en une seule requête matérialisée
 - le tri par proximité a son propre effet, clé de position arrondie à ~100 m, et n'écarte les notices sans coordonnées que de ce tri ; position et tri hors URL
+- couche ACR : second corpus hors prédicat, 8 fragments FNV-1a modulo 8, rien téléchargé avant activation, `ref=ACR…` rallume `acr=1`
 
 ### Carte — [docs/conception-carte.md](docs/conception-carte.md)
 
@@ -171,6 +182,7 @@ avant de toucher à ce domaine** : cet index oriente, il ne remplace pas la lect
 - un toucher interroge une boîte (±16 px au doigt, ±6 à la souris) et retient le plus proche à l'écran ; sous z9 un amas rapproche la vue
 - géolocalisation : contrôle natif, icône en masque peinte par jeton, `--haut-fonds` suit zoom + géoloc (disjonction vérifiée)
 - l'intermittence `AbortError` de la suite s'est réduite avec l'isolation par fichier et le passage au sondage
+- couche ACR posée masquée dans `poserCouches`, au-dessus des monuments, teinte `--acr` ; `couchesTouchables()` ne la nomme que visible
 
 ### Interface — [docs/conception-interface.md](docs/conception-interface.md)
 

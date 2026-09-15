@@ -255,3 +255,43 @@ propriété, la carte se repeindrait au remplacement. Le compte provisoire ne po
 
 **Les rejets sont signalés, pas supprimés.** Un segment de date illisible produit
 quand même un événement (année nulle) et une ligne dans `etl/out/rejets.csv`.
+
+## Couche « Architecture contemporaine remarquable » (ACR)
+
+**Un second corpus, jamais dans le prédicat.** `data/raw/merimee_acr.csv` (5,8 Mo, non
+versionné, export POP du 2026-09-15) : 1 822 notices `ACR…`, 44 colonnes dont les noms
+ne recoupent qu'en partie ceux de `merimee.csv` — `Reference_de_la_notice`,
+`Coordonnees` (« lat,lon » comme le champ WGS84, lu par le même `parse_coords`),
+`Titre_courant`, `Description_historique`, `Description_de_l_edifice`, `Date_de_Label`.
+Aucune facette, aucun compteur, ni la liste, ni les frises, ni la matrice ne la voient :
+c'est un calque de carte et une fiche, rien d'autre.
+
+- **Mesures qui justifient de ne pas dédoublonner** : le label se perd à la protection MH,
+  et le recouvrement tient à 5 renvois `PA` dans `Ancienne_reference_de_la_notice_RENV` ;
+  23 points MH tombent à moins de 30 m d'un point ACR, ce sont des voisins et non des
+  doublons (aucun ne porte `label XXe` dans `Cadre_de_l_etude`).
+- **1 743 situées sur 1 822** : 1 744 coordonnées non vides, une hors des bornes de
+  `parse_coords`. Figé dans `test_couche_acr_volumes`.
+- **Remplissage** : label 99,7 %, auteurs 96,2 %, description 78 %, historique 64 %,
+  intérêt 17,8 % ; les descripteurs techniques (matériaux, couverture…) sont sous 2 % et
+  ne sont pas repris. 13 notices portent deux années de label (`2000 ; 2026`) :
+  `annee_label` retient la première, `annees_label` les garde toutes.
+- **Titres** : 336 `Titre_courant` commencent en minuscule, `titre_acr()` pose la
+  majuscule initiale — seule retouche éditoriale.
+- **Artefacts** (`etl/merimee_etl/acr.py`, lancé par `cli` si la source existe, sinon
+  sauté sans erreur) : `acr/points.json` (61 Ko, 18 Ko gzip) et `acr/fiches/{0..7}.parquet`
+  (2,2 Mo au total). Huit fragments et non un fichier : 1,8 Mo d'un bloc au premier clic
+  était trop sur téléphone. Même FNV-1a que `details`, modulo 8 (`shards.ts::fragmentAcr`).
+- **Rien ne part au démarrage.** Le nuage est demandé à la première activation
+  (`db/acr.ts::pointsAcr`, promesse mémoïsée, libérée sur échec), un fragment au premier
+  clic (`enregistrer`, hors `boot()`). Vérifié en e2e par le compteur d'octets serveur.
+- **Fiche au format `Detail`** : `ficheAcr()` rend les champs de protection vides et
+  ajoute `acr: { annees, datation, interet, description }`. `DetailPanel` aiguille sur
+  le préfixe (`lib/acr.ts::estAcr`) et ne branche que le badge et les sections.
+- **Permalien** : `acr=1`, absent par défaut — aucun lien antérieur ne change. `ref=ACR…`
+  sans `acr=1` rallume la couche au décodage, pour qu'une fiche partagée ait son point ;
+  masquer la couche referme une fiche ACR ouverte.
+- **Photographies** : même pont que Mérimée, instantanés séparés
+  `wikidata_images_acr.csv` (`python -m merimee_etl.wikidata --acr` : les identifiants
+  ACR sont sous **la même propriété `P380`**, 364 notices illustrées soit 20 %) et
+  `commons_images_acr.csv` (`commons --acr`, modèle `{{Mérimée|ACR…}}` sur Commons).

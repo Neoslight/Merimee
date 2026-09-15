@@ -87,6 +87,13 @@
      le grege des terres, la ou il valait sur l'ardoise. */
   --statut-nul: #7d7870;
 
+  /* Couche Architecture contemporaine remarquable. Un bleu, seule famille
+     absente des statuts comme des epoques : ces points ne sont pas des
+     monuments historiques, ils ne doivent se confondre avec aucune teinte de
+     la legende principale. Aplat et texte distincts, comme les statuts. */
+  --acr: #2266a8;
+  --acr-texte: #1f5c96;
+
   /* Tranches d'epoque, sur la carte comme dans la legende. */
   --epoque-1: #7a5c7e;
   --epoque-2: #4d6b74;
@@ -257,6 +264,9 @@
   --inscrit-texte: #e9b063;
   --mixte: #ab8fb0;
   --statut-nul: #7e7a74;
+
+  --acr: #6aa8e0;
+  --acr-texte: #8dbdea;
 
   --epoque-1: #ab8fb0;
   --epoque-2: #7fa3ad;

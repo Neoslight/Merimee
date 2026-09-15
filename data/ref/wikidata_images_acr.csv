@@ -1,0 +1,378 @@
+# Instantané Wikidata, label Architecture contemporaine remarquable :
+# identifiant ACR (P380) -> fichier Commons (P18).
+# Généré par `python -m merimee_etl.wikidata --acr`, jamais à la main.
+reference,fichier
+ACR0000002,Hôtel Ville Bellegarde Valserine Valserhône 1.jpg
+ACR0000003,Église St Pierre Chanel Bourg Bresse 7.jpg
+ACR0000004,Talsperre Genissiat 01 09.jpg
+ACR0000005,Centre Nautique - Lagnieu (FR01) - 2020-09-16 - 5.jpg
+ACR0000006,"Pont de chemin de fer sur le Rhone, à Longeray4-2.jpg"
+ACR0000007,Église Notre Dame Plaine Oyonnax 3.jpg
+ACR0000008,Église Notre-Dame Route Blanche Ségny 03.jpg
+ACR0000011,La Voulte-sur-Rhône - Viaduc ferroviaire -1.JPG
+ACR0000013,Le Pouzin (église).jpg
+ACR0000014,Barragemalarce.JPG
+ACR0000030,Eglise Sainte-Bernadette @ Annecy (45546079895).jpg
+ACR0000031,Basilique Saint-Joseph-des-Fins d'Annecy.jpg
+ACR0000035,Site des Marquisats.jpg
+ACR0000037,Parc des Sports d'Annecy Manpower 1.jpg
+ACR0000052,Avoriaz (6).jpg
+ACR0000064,Bibliothèque municipale Liautey Grenoble.JPG
+ACR0000067,Trois tours de l'Île-Verte à Grenoble.jpg
+ACR0000072,Eglise Saint-Jean - Grenoble.JPG
+ACR0000076,Nuit debout Grenoble 20160409 7026.jpg
+ACR0000077,Alpexpo grenoble.JPG
+ACR0000078,Allee parc Paul-Mistral - Grenoble.JPG
+ACR0000085,Barrage du Chambon (38) - Coursive de service.jpg
+ACR0000089,UGA Bibliotheque universitaire Joseph Fourier.jpg
+ACR0000093,Chapelle du petit séminaire de Voreppe.jpg
+ACR0000124,Photo brussieu chapelle.jpg
+ACR0000128,Cité des étoiles (41784052981).jpg
+ACR0000130,Lyon - Cité Perrache-002.JPG
+ACR0000132,Place Bellecour - Lyon Metro - steps near Place Antonin Poncet (34921782990).jpg
+ACR0000132,Poste 10 Place Antonin Poncet.jpg
+ACR0000133,Orgue Auditorium de Lyon 11.JPG
+ACR0000136,"Manufacture des tabacs, Lyon 3.jpg"
+ACR0000137,Théâtre de la Croix-Rousse à Lyon.JPG
+ACR0000139,Lyon 05 - Immeuble Les Cèdres 1960-001.JPG
+ACR0000139,Lyon 05 - Immeuble Les Cèdres 1960.JPG
+ACR0000140,Exterior of Musée gallo-romain de Fourvière (0).jpg
+ACR0000141,Palais de Flore le 21 novembre 2014.jpg
+ACR0000143,"Lyon 7e - Avenue Jean Jaurès, groupe scolaire Aristide Briand.jpg"
+ACR0000145,Palais des sports de Gerland.jpg
+ACR0000147,Quartier des États-unis 1.JPG
+ACR0000150,Lyon 9e - Église Notre-Dame de l'Annonciation de Vaise 2 (nov 2022).jpg
+ACR0000166,Savoie Col de l'Iséran Hauteur de Passe 03.jpg
+ACR0000170,Hotel de ville Bourg-Saint-Maurice.JPG
+ACR0000172,"Quartier du Biollay (Chambéry, 2013).JPG"
+ACR0000177,Fourneaux - 2013-07-26 - IMG 0992.jpg
+ACR0000178,Chapelle Notre-Dame de l'Assomption @ Fort de Ronce.jpg
+ACR0000180,Église Notre-Dame-de-l'Assomption de Modane.jpg
+ACR0000181,Gare de Modane - IMG 1015.jpg
+ACR0000182,Entrée munitions ouvrage du Lavoir.jpg
+ACR0000189,Eglise-Les-Boisses-Tignes-Savoie.JPG
+ACR0000190,Val-d'Isère - La Daille.jpg
+ACR0000191,Fort Saint-Gobain p1410059.jpg
+ACR0000193,Dijon Palais des sports Jean-Michel Geoffroy 01.jpeg
+ACR0000197,Eglise Saint-Nicolas d'Aïssey.jpg
+ACR0000198,"Besançon, ancienne école d'horlogerie SIDHOR.jpg"
+ACR0000200,Cité jardin Jean Jaurès.jpg
+ACR0000203,Lyceejuleshaag1.jpg
+ACR0000204,"Besançon, l'église Saint-Louis de Montrapon (2).jpg"
+ACR0000205,Le Building Besançon 2018.jpg
+ACR0000210,"Grand-Charmont, Église Saint-François-d'Assise 1.jpg"
+ACR0000219,2020-09 - Chapelle Notre-Dame-des-Ailes de Luxeuil-les-Bains - 05.jpg
+ACR0000222,Vesoul Maison Petitperrin.jpg
+ACR0000223,Villa Kielwasser - Vesoul.jpg
+ACR0000236,Église Ste Bernadette Digoin 19.jpg
+ACR0000239,Sous-préfecture Louhans 5.jpg
+ACR0000240,Archives départementales Saône Loire Mâcon 1.jpg
+ACR0000241,Centre Bert Mâcon 6.jpg
+ACR0000242,Immeuble Mozart Bioux Mâcon 14.jpg
+ACR0000243,Immeubles rue Lacroix Bioux Mâcon 20.jpg
+ACR0000244,Théâtre Escande Mâcon 5.jpg
+ACR0000245,Groupe scolaire Bellevue Paray Monial 7.jpg
+ACR0000246,"Belfort, Église Saint-Louis 1954.jpg"
+ACR0000258,Pont-albert-louppe.jpg
+ACR0000262,Chapelle de l hermitage.png
+ACR0000264,Collège Saint-Vincent de Rennes.jpg
+ACR0000267,Immeuble sauveur.JPG
+ACR0000268,Rennes - Halles centrales 130117-01.jpg
+ACR0000270,Les Horizons Rennes.jpg
+ACR0000272,La mairie de st meen le grand - panoramio.jpg
+ACR0000276,Lorient - église Notre-Dame de Victoire.JPG
+ACR0000281,Lorient Keroman III.jpg
+ACR0000289,Église Saint-Jean Bourges Nord.jpg
+ACR0000290,BourgesMairie.JPG
+ACR0000304,Nançay Observatory D.jpg
+ACR0000309,Raoul Brandon école normale primaire Eure-et-Loir Chartres (France).jpg
+ACR0000311,Gare de Chartres 02.jpg
+ACR0000313,Préfecture d'Eure-et-Loir 21 rue du Général-Koenig Chartres Eure-et-Loir France.jpg
+ACR0000316,"Moulins de Cherisy, depuis le pont de la route de Paris.jpg"
+ACR0000332,Nogent-le-Rotrou - Lycée Rémi Belleau - 1.jpg
+ACR0000351,Déesse mère - Argentomagus.jpg
+ACR0000353,Chinon nuclear power plant.JPG
+ACR0000360,Pont de Langeais.jpg
+ACR0000374,Église Sainte-Jeanne-d'Arc Tours.jpg
+ACR0000375,Sanitas Tours église Saint-Paul.jpg
+ACR0000380,Tours - CCCOD - 2017.jpg
+ACR0000381,Concert hall in Tours - panoramio.jpg
+ACR0000388,Pont de Bonny-sur-Loire.JPG
+ACR0000389,Châlette.Vésines-église.StThérèse-01.JPG
+ACR0000398,Place de l'étape - édifice de l'administration (2026).jpg
+ACR0000399,Orléans - Église Saint-Jean-Bosco - 1.jpg
+ACR0000400,Orléans - église Sainte-Jeanne-d'Arc.jpg
+ACR0000402,Tour Gambetta (2026).jpg
+ACR0000408,Pont de l'Europe (35252).jpg
+ACR0000408,Pont de l'Europe (58652).jpg
+ACR0000408,Pont de l'Europe (59948).jpg
+ACR0000409,Fonds régional d'art contemporain du Centre.jpg
+ACR0000418,Résidence Les Châtaigniers ancienne cité américaine (34450).jpg
+ACR0000418,Résidence Les Châtaigniers ancienne cité américaine (79428).jpg
+ACR0000418,Résidence Les Châtaigniers ancienne cité américaine.jpg
+ACR0000421,Résidence Mondésir.jpg
+ACR0000423,"L'architecture extérieure, la façade..jpg"
+ACR0000427,Pont François Mitterrand (Blois).JPG
+ACR0000442,Centrale-nucleaire-Saint-Laurent-des-Eaux.jpg
+ACR0000446,Ballay-FR-08-église-b1.jpg
+ACR0000448,Église Jeanne d'Arc 08352.JPG
+ACR0000451,Palais de justice de Charleville-Mézières 01.JPG
+ACR0000454,Montmarin-FR-08-chapelle-09.jpg
+ACR0000455,Cité jardin Faure 002.JPG
+ACR0000456,Revin - Pont -1.jpg
+ACR0000457,Revin - Pont -2.jpg
+ACR0000461,Vouziers-FR-08-Hôtel de ville-01.jpg
+ACR0000462,Église Saint-Paul de Warcq 02.JPG
+ACR0000472,Herrlisheim StArbogast 01.JPG
+ACR0000474,Lichtenberg Alsace 05.jpg
+ACR0000477,Cité-jardin Ungemach-Strasbourg(13).jpg
+ACR0000479,Eglise de la Très-Sainte-Trinité-Strasbourg.jpg
+ACR0000480,Église Saint-Vincent-de-Paul de Strasbourg.png
+ACR0000485,Batiment F conseil de l'Europe.JPG
+ACR0000492,Strasbourg synagogue de la Paix février 2014.jpg
+ACR0000494,"Mulhouse, Église du Sacré-Cœur 2.jpg"
+ACR0000500,52123 CHEVILLON BREUIL SUR MARNE 1.jpg
+ACR0000501,Eglise sainte therese.JPG
+ACR0000502,Saint Dizier (44).JPG
+ACR0000504,Notre-Dame Trois-Epis.jpg
+ACR0000506,"Bennwihr, Église Saint-Pierre-et-Saint-Paul 1.jpg"
+ACR0000509,"Colmar, Église Saint-Léon.jpg"
+ACR0000511,"Dornach, Église Saint-François-d'Assise.jpg"
+ACR0000512,Mulhouse Ville Station (5696254515).jpg
+ACR0000516,Tour de l'Europe (Mulhouse) (1).jpg
+ACR0000520,Châlons - collège Duruy.JPG
+ACR0000521,Dontrien Centenaire 00062.jpg
+ACR0000524,ANPAR-pyramide02.jpg
+ACR0000533,Reims église Saint-Vincent-de-Paul.jpg
+ACR0000535,Maison 100 rue Clovis.jpg
+ACR0000541,Reims - Comédie.JPG
+ACR0000549,AZERAILLES.jpg
+ACR0000554,Laxou st paul.JPG
+ACR0000560,Chapelle Marbache.JPG
+ACR0000561,"Mercy-le-Bas, Chapelle Notre-Dame de Lourdes aux Cités.jpg"
+ACR0000562,Chapelle lumieres Mousson.JPG
+ACR0000565,GrdsMoulinsNcy.jpg
+ACR0000567,Nancy église Sainte Anne.JPG
+ACR0000569,Lycée Cyfflé 1005002.jpg
+ACR0000571,Nancy église de la Vierge des Pauvres.JPG
+ACR0000573,Panorama Nancy 2015 (1).jpg
+ACR0000574,Eglise Piennes.jpg
+ACR0000590,"Corny-sur-Moselle, Clocher d'église Saint-Martin.jpg"
+ACR0000594,Eglise Notre-Dame de Wiesberg Forbach.jpg
+ACR0000595,Point de vue 3.jpg
+ACR0000599,Anaconda-2.jpg
+ACR0000600,Metz Eglise saint pierre Borny.JPG
+ACR0000604,Bataville Usine Bata.JPG
+ACR0000607,Plan incliné de Saint-Louis-Arzviller-9735.jpg
+ACR0000609,Vasperviller eglise ShiftN.jpg
+ACR0000619,Notre-Dame-des-Chaumes (Col de la Schlucht).jpg
+ACR0000624,Université lille2.jpg
+ACR0000625,La Piscine Roubaix.jpg
+ACR0000626,"Roubaix, Vélodrome.jpg"
+ACR0000627,"Boulogne-sur-Mer, Saint-Jean-Baptiste.jpg"
+ACR0000630,Mairie du Portel Plage été 2006.jpg
+ACR0000632,Allaines (2).JPG
+ACR0000633,AssevillersChurch1.jpg
+ACR0000634,Athies (Somme) - le porche de l'église.JPG
+ACR0000635,Eglise Saint-Didier de Chaulnes (1).jpg
+ACR0000639,Eglise de Proyart 1.jpg
+ACR0000642,Mairie de Proyart 1.jpg
+ACR0000644,Roisel église 1.jpg
+ACR0000651,1 Evry Cathedral.jpg
+ACR0000653,Courcouronnes Grand Mosquée Innen Waschraum 2.jpg
+ACR0000654,GrandeBorne RueLabyrinthe.JPG
+ACR0000655,JuvisyNDdeFrance.JPG
+ACR0000656,TempleStMarcMassy.JPG
+ACR0000657,SynagogueMassy.JPG
+ACR0000662,Eglise du Saint-Esprit à Viry-Châtillon.jpg
+ACR0000665,Saint-Jean Porte-latine.jpg
+ACR0000666,Boulogne-Billancourt - Église Sante-Thérèse de l'Enfant Jésus - 2.JPG
+ACR0000668,Bourg-la-Reine (l'église de la Pentecôte).JPG
+ACR0000670,Cité de la Butte-Route - Place François Simiand.jpg
+ACR0000671,Usine élévatoire de Clichy.jpg
+ACR0000673,Paroisse luthérienne de Courbevoie-La Garenne-Colombes 02.jpg
+ACR0000675,Fontenay-aux-Roses (l'église des Blagis).jpg
+ACR0000677,TourHertzienneMeudon.jpg
+ACR0000679,ParoisseMontrouge EgliseStLuc.png
+ACR0000680,Résidence Buffalo - Square.jpg
+ACR0000682,"Tours Aillaud, de la prefecture des Hauts de Seine.JPG"
+ACR0000683,Esplanade du Général de Gaulle - Puteaux.jpg
+ACR0000684,Details in Paris in October 1991 12.jpg
+ACR0000691,Vanves Malakoff.JPG
+ACR0000692,Prieuré Sainte-Bathilde.jpg
+ACR0000693,Paris Synagogue Roquette 75.JPG
+ACR0000694,Eglise Saint-Eloi @ Paris 12 (32844367784).jpg
+ACR0000695,Tours Érard - Paris XII (FR75) - 2021-06-05 - 3.jpg
+ACR0000702,Paris 13e - Notre-Dame-de-la-Sagesse - ext 1.JPG
+ACR0000703,"Église Saint-Marcel April 1, 2012.jpg"
+ACR0000704,Couvent Saint-Jacques 2.JPG
+ACR0000706,La fête à Mouchotte - panoramio.jpg
+ACR0000707,Eglise Notre Dame de l'Arche d'Alliance @ Paris (34522534110).jpg
+ACR0000708,Église Notre-Dame-de-la-Salette (Paris) 2.jpg
+ACR0000709,Église Saint Léon - Paris XV (FR75) - 2026-06-28 - 14.jpg
+ACR0000714,Eglise Saint-Ferdinand Ternes Paris.jpg
+ACR0000715,"Cité de la musique, ""We Want Miles"" exhibit 1.jpg"
+ACR0000716,Machines à la Cité des Sciences et de l'Industrie.jpg
+ACR0000717,Paris 19e Église ND Assomption Buttes-Chaumont.JPG
+ACR0000719,"Paris, 19e arrondissement (10775668144).jpg"
+ACR0000720,Synagogue Belleville (Paris ) 02.jpg
+ACR0000724,Musée du quai Branly - 20150801 16h07 (10629).jpg
+ACR0000725,Paris - UNESCO (29775501630).jpg
+ACR0000729,Champagne-sur-Seine - Chapelle orthodoxe russe.jpg
+ACR0000730,Champagne-sur-Seine Saint-François-d'Assise 40012.JPG
+ACR0000731,Grisy-Suisnes-FR-77-église N-D des Roses-03.jpg
+ACR0000740,Rue Téhéran - Bobigny (FR93) - 2022-08-06 - 3.jpg
+ACR0000741,Rue Joséphine Baker - Bobigny (FR93) - 2022-08-01 - 1.jpg
+ACR0000742,Église Tous Saints - Bobigny (FR93) - 2021-01-07 - 4.jpg
+ACR0000743,Bobigny - Prefecture 01.jpg
+ACR0000744,Eglise catholique Saint-Jean-L'Evangéliste Drancy.jpg
+ACR0000747,St Michel de Gargan.jpg
+ACR0000748,Entrée Station Métro Fort Aubervilliers Aubervilliers 1.jpg
+ACR0000756,Cité Guynemer - Saint-Denis (FR93) - 2022-07-17 - 1.jpg
+ACR0000761,France Saint Jean de Cachan 1.JPG
+ACR0000764,Creteil - Palais de Justice.jpg
+ACR0000765,Le lac de Créteil - panoramio (3).jpg
+ACR0000767,Gare Gentilly - Gentilly (FR94) - 2021-01-03 - 8.jpg
+ACR0000768,Immeubles cité Thorez Ivry Seine 5.jpg
+ACR0000774,Église Sts Anges Gardiens St Maurice Val Marne 8.jpg
+ACR0000775,"Église Sainte-Colombe, Villejuif 09.jpg"
+ACR0000777,Gare de Villeneuve-Saint-Georges IMG 6158.JPG
+ACR0000778,Église Notre-Dame-de-Nazareth de Vitry-sur-Seine 01.jpg
+ACR0000780,Image Garges l'église Sainte Geneviève.png
+ACR0000781,"Goussainville (95), église Saint-Michel, rue Simon-BolivaR.jpg"
+ACR0000783,Le Mesnil-Saint-Denis - Skit du Saint-Esprit - 2.jpg
+ACR0000786,Poissy - Église Saint-Louis de Beauregard - 2.jpg
+ACR0000791,Viroflay Église Notre-Dame-des-Chênes.JPG
+ACR0000792,BELLEFONTAINE.jpg
+ACR0000809,Printemps immeuble Molinard FdF.jpg
+ACR0000821,Anctoville le bourg (cropped).jpg
+ACR0000822,FranceNormandieAunaySurOdonEglise.jpg
+ACR0000823,Eglise St Paul-24-02-2023.jpg
+ACR0000826,Hermanville sur Mer - Eglise de La Breche.jpg
+ACR0000829,Église Saint-François-Xavier de Lisieux. Vue ouest.jpg
+ACR0000831,Église Notre-Dame de Noyers-Bocage. Vue sud-est.jpg
+ACR0000832,Église Saint-Paterne de Saint-Pair. Vue sud.jpg
+ACR0000833,Villers-Bocage eglise.JPG
+ACR0000838,Église catholique Saint Michel des vignes à Évreux en France.jpg
+ACR0000842,"Lieurey (Eure, Fr) église.JPG"
+ACR0000844,Saint-André-de-l-eure-mairie.jpg
+ACR0000853,Chapelle Saint-Vincent 03.JPG
+ACR0000854,Monument aux morts d'Equeurdreville.jpeg
+ACR0000855,MarcheCouvertGranville.JPG
+ACR0000856,Hébécrevon - Église.jpg
+ACR0000858,Laulne.jpg
+ACR0000860,Église Saint-Aubin de Pont-Hébert.jpg
+ACR0000861,FranceNormandieQuibouEglise.jpg
+ACR0000862,FranceNormandieRaidsEglise.jpg
+ACR0000864,Église Sainte-Croix de Saint-Lô-8085.jpg
+ACR0000865,Église Saint-Pierre de Villiers-Fossard.jpg
+ACR0000869,Église Saint-Michel d'Argentan. Vue sud-est.jpg
+ACR0000870,Argentan - Town hall.JPG
+ACR0000871,FranceNormandieBagnolesDeLOrneBagnolesEglise.jpg
+ACR0000877,Église Saint-Pierre de Saint-Pierre-du-Regard. Vue sud-ouest.jpg
+ACR0000880,01-Bailly-en-rivière.jpg
+ACR0000882,Église Saint-Wandrille de Belleville-en-Caux.jpg
+ACR0000886,Cargo-sur-la-Seine-devant-Caudebec-en-Caux-DSC 0375.jpg
+ACR0000892,Chapelle Notre-Dame-de-la-Garde-1000572.jpg
+ACR0000893,Blockhaus Fécamp (3) 0018.JPG
+ACR0000895,Forges-les-Eaux Hôtel de ville coté parc.JPG
+ACR0000902,2016 - La Bouille - mairie.jpg
+ACR0000904,Grand Quevilly - Hôtel de Ville.jpeg
+ACR0000909,Gare-Le-Havre22122013.jpg
+ACR0000912,Le havre musee int.jpg
+ACR0000923,Cité ND Gravenchon 29 (3034082863).jpg
+ACR0000929,Pont Boieldieu (12328141653).jpg
+ACR0000932,Entree Docks76 Rouen.JPG
+ACR0000935,Synagogue rue des Bons-Enfants.jpg
+ACR0000944,Seine Pont de Tancarville 20111005 3.jpg
+ACR0000960,Barrage de l'Aigle -1.JPG
+ACR0000963,Aubusson - Hôtel de ville.JPG
+ACR0000984,Vincent Willem van Gogh 043.jpg
+ACR0000986,Musée national de Préhistoire (Les Eyzies-de-Tayac-Sireuil).jpg
+ACR0000987,Périgueux hôpital.JPG
+ACR0000990,Terrasson - Garden of the Imagination.jpg
+ACR0001001,Escuela Nacional de la Magistratura de Francia.jpg
+ACR0001020,Cap-Ferret Eglise.JPG
+ACR0001031,Centre d'art et du paysage Vassivière.JPG
+ACR0001035,BFM Limoges.JPG
+ACR0001037,Cité des Coutures depuis la gare.JPG
+ACR0001045,Opéra-théâtre de Limoges (jour).JPG
+ACR0001050,Vue du Pont du Dognon qui enjambe le Taurion.jpg
+ACR0001052,Hossegor église.JPG
+ACR0001053,Chapelle de l'hôpital Layné.jpg
+ACR0001054,Arènes plumaçon 1.JPG
+ACR0001061,Castelmoron-sur-Lot - Pont sur le Lot -1.JPG
+ACR0001064,Anglet Mairie.jpg
+ACR0001074,Biarritz Natacha.JPG
+ACR0001075,St Pierre Pau.jpg
+ACR0001080,Musée Sainte-Croix Poitiers.jpg
+ACR0001085,Eté 2007 019.jpg
+ACR0001109,Aerial view of Port Camargue.jpg
+ACR0001113,Nemausus.jpg
+ACR0001137,Chateau d'eau de l'hopital Marchant Pierre Debeaux architecte 1963.jpg
+ACR0001141,Juncasse facade principale loin.jpg
+ACR0001145,Pont Saint-Michel Toulouse.JPG
+ACR0001153,Cap de Long lac remplissage (5).JPG
+ACR0001153,Neouvielle Lac de Cap de Long from Pas du Chat panorama.jpg
+ACR0001153,Orédon lac (11).JPG
+ACR0001154,Barrage du lac de Migouélou.jpg
+ACR0001158,Centrale hydroélectrique de Pragnères (Hautes-Pyrénées) 1.jpg
+ACR0001161,Cap d'Agde - Port Saint-Martin01.jpg
+ACR0001167,Aerial view of La Grande-Motte 01.jpg
+ACR0001173,Eglise Saint-Esprit (Montpellier).JPG
+ACR0001177,Antigone nuit 02.jpg
+ACR0001182,Tour triangle.jpg
+ACR0001212,BOUAYE (2).jpg
+ACR0001216,Hôtel-Dieu Nantes.JPG
+ACR0001217,Nantes - cité du Haut-Pavé (02).JPG
+ACR0001218,Eglise-Saint-Luc-de-Nantes.jpg
+ACR0001220,Hôtel La Pérouse.jpg
+ACR0001221,Immeuble Delamarre - Nantes (FR44) - 2022-09-19 - 1.jpg
+ACR0001223,Marché de Talensac - 3.JPG
+ACR0001231,Saint Gohard.jpg
+ACR0001236,Bibliothèque municipale toussaint Angers exterieur jardin.jpg
+ACR0001238,Nouvelles Galeries (Angers).jpg
+ACR0001240,Église Notre-Dame d'Ingrandes.jpg
+ACR0001257,Bloc 1 entrée ouvrage de Restefond.jpg
+ACR0001261,Egl sacre coeur antibes.jpg
+ACR0001262,"Paolo Monti - Servizio fotografico (Milano, 1962) - BEIC 6328569.jpg"
+ACR0001263,Villa aujourdhui.jpg
+ACR0001266,Musée national Fernand Léger.jpg
+ACR0001270,Cannes - Observatoire de Super-Cannes.JPG
+ACR0001283,Musée national Marc Chagall 2.jpg
+ACR0001299,08 Fondation Maeght.JPG
+ACR0001301,Stazione di San Dalmazzo di Tenda.jpg
+ACR0001302,"Théoule-sur-Mer-Miramar, Le Paleis Bulles - panoramio.jpg"
+ACR0001309,Marina Baie des Anges - panoramio (2).jpg
+ACR0001324,Rhone river Church Saint-Pierre-de-Trinquetaille in Arles.jpg
+ACR0001337,Marseille Provence Airport 2017 05.jpg
+ACR0001354,Avenue de la Viste 2.jpg
+ACR0001401,Lycée Alphonse-Daudet (Tarascon).JPG
+ACR0001411,L'entrée des Aittes.jpg
+ACR0001417,Bloc 1 (entrée).jpg
+ACR0001427,17-Chauliere.jpg
+ACR0001434,"La cité lacustre de Port Grimaud, vue du ciel.jpg"
+ACR0001439,Vue Anse Sablettes Seyne Mer 2.jpg
+ACR0001464,Avignon - La Poste.JPG
+ACR0001465,Carpentras - Lycée Victor Hugo 2.JPG
+ACR0001466,Mont de piété - piscine 3.jpg
+ACR0001467,Le Vialle de GRILLON et son beffroi.JPG
+ACR0001468,Le Thor - Cave coopérative viticole.JPG
+ACR0001469,Coustellet coopértive vinicole du Luberon.jpg
+ACR0001470,Crédit agricole d'Orange.jpg
+ACR0001473,Aéroport de La Réunion-Roland-Garros 01.jpg
+ACR0001542,Ballon de Paris @ Parc André Citroën @ Paris (33145680103).jpg
+ACR0001572,La cuisine cenre d'art et de design @SURVOL.jpg
+ACR0001725,Echenoz Gymnase (1932).jpg
+ACR0001847,Temple protestant Mâcon 10.jpg
+ACR0001893,Ensemble de maisons individuelles groupées (16554).jpg
+ACR0001893,Ensemble de maisons individuelles groupées (16801).jpg
+ACR0001893,Ensemble de maisons individuelles groupées.jpg
+ACR0001935,Musée sarrebourg.jpg
+ACR0002008,Le centre de recherche de Bibracte à Glux-en-Glenne.jpg
+ACR0002009,Bibracte (Mont Beuvray) 17.jpg
+ACR0002026,Archives Départementales de l'Aude 2023 (1).jpg
+ACR0002031,El Barcarès 8.jpg
+ACR0002032,Canet-en-Roussillon - Eglise Notre-Dame-des-Flots.jpg
+ACR0002033,Cerbère - Phare du cap Cerbère.jpg
+ACR0002037,"Bundesarchiv Bild 146-1989-107-24, Frankreich, Einsatz gegen die Resistance.jpg"

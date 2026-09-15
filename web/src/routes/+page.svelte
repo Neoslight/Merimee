@@ -3,6 +3,8 @@
   import FacetPanel from '$lib/components/FacetPanel.svelte';
   import Jetons from '$lib/components/Jetons.svelte';
   import MonumentMap from '$lib/components/MonumentMap.svelte';
+  import { pointsAcr } from '$lib/db/acr';
+  import { estAcr } from '$lib/acr';
   import {
     auHasard,
     cardinalites,
@@ -89,7 +91,7 @@
   // Le compte provisoire ne porte que ce que la barre et la liste lisent ;
   // classes, inscrits et objets arrivent avec la premiere reponse de DuckDB.
   let nuageMoteur = false;
-  if (browser && encoder({ filtres: initial.filtres, selection: null, vue: 'carte', fond: null }) === '') {
+  if (browser && encoder({ filtres: initial.filtres, selection: null, vue: 'carte', fond: null, acr: false }) === '') {
     fetch(`${base}/data/points.json`)
       .then((r) => (r.ok ? r.json() : null))
       .then((brut) => {
@@ -104,6 +106,26 @@
   }
 
   let selection = $state<string | null>(initial.selection);
+
+  // --- Couche Architecture contemporaine remarquable -------------------------
+  // Un bonus d'affichage, hors du filtrage croise : ni `filters`, ni les
+  // compteurs, ni la liste ne la voient. Masquee par defaut ; son nuage ne part
+  // qu'a la premiere activation.
+  let acrVisible = $state(initial.acr);
+  let pointsAcrCarte = $state.raw<GeoJSON.FeatureCollection | null>(null);
+
+  $effect(() => {
+    if (!acrVisible || pointsAcrCarte) return;
+    pointsAcr().then((nuage) => {
+      if (nuage) pointsAcrCarte = nuage;
+    });
+  });
+
+  // Masquer la couche referme la fiche ACR ouverte : elle designerait un point
+  // qui n'est plus a l'ecran.
+  $effect(() => {
+    if (!acrVisible && estAcr(selection)) selection = null;
+  });
   // Cran de la feuille de fiche sur telephone, cf. « Feuille a crans » plus
   // bas. Declare ici : `ouvrirFiche` le lit avant que ce bloc n'arrive.
   type Cran = 'apercu' | 'plein';
@@ -366,7 +388,7 @@
   let derniereSelection = initial.selection;
 
   $effect(() => {
-    const requete = encoder({ filtres: filters, selection, vue, fond });
+    const requete = encoder({ filtres: filters, selection, vue, fond, acr: acrVisible });
     if (requete === derniereRequete) return;
     const fiche = selection !== derniereSelection;
     derniereRequete = requete;
@@ -394,6 +416,7 @@
     selection = etat.selection;
     vue = etat.vue;
     fond = etat.fond;
+    acrVisible = etat.acr;
     cible = etat.filtres.texte ? 'historiques' : 'titres';
     terme = etat.filtres.texte || etat.filtres.recherche;
   });
@@ -405,7 +428,7 @@
   async function copierLien() {
     // Seul endroit ou la vue de carte entre dans une URL. L'URL vivante n'en
     // porte pas : un simple deplacement ne doit rien reecrire.
-    const requete = encoder({ filtres: filters, selection, vue, fond }, vueCarte?.vueCourante());
+    const requete = encoder({ filtres: filters, selection, vue, fond, acr: acrVisible }, vueCarte?.vueCourante());
     const lien = location.origin + location.pathname + requete;
     try {
       await navigator.clipboard.writeText(lien);
@@ -829,6 +852,8 @@
           {selection}
           vueInitiale={cadrageInitial}
           bind:fond
+          bind:acr={acrVisible}
+          pointsAcr={pointsAcrCarte}
           bind:suivreVue
           friseOuverte={friseOuverte}
           {reserveBas}

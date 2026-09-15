@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from merimee_etl.commons import photographie  # noqa: E402
 from merimee_etl.config import MAX_IMAGES  # noqa: E402
 from merimee_etl.parse import _alias_key  # noqa: E402
-from merimee_etl.wikidata import restreindre  # noqa: E402
+from merimee_etl.wikidata import REQUETE, requete_sparql, restreindre  # noqa: E402
 
 # --------------------------------------------------------------------------
 # wikidata.restreindre
@@ -57,6 +57,14 @@ def test_restreindre_trie_par_reference():
 
 def test_restreindre_sans_couples_rend_liste_vide():
     assert restreindre([], {"PA00000001"}) == []
+
+
+def test_requete_sparql_parametree_par_prefixe():
+    # La couche ACR interroge la même propriété `P380` : seul le préfixe change.
+    assert 'STRSTARTS(?ref, "ACR")' in requete_sparql("ACR")
+    assert 'STRSTARTS(?ref, "PA")' in REQUETE
+    with pytest.raises(ValueError):
+        requete_sparql('PA") } #')
 
 
 # --------------------------------------------------------------------------

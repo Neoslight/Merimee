@@ -8,8 +8,9 @@ import sys
 import time
 from pathlib import Path
 
+from .acr import construire as construire_acr
 from .build import transform, write_artifacts
-from .config import OUT_DIR, RAW_CSV, REPORT_DIR
+from .config import OUT_DIR, RAW_ACR, RAW_CSV, REPORT_DIR
 from .load import load_raw
 from .texte import construire as construire_index
 
@@ -21,6 +22,8 @@ def _human(size: int) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="merimee_etl", description=__doc__)
     parser.add_argument("--raw", type=Path, default=RAW_CSV, help="CSV source")
+    parser.add_argument("--acr", type=Path, default=RAW_ACR,
+                        help="CSV du label Architecture contemporaine remarquable (facultatif)")
     parser.add_argument("--out", type=Path, default=OUT_DIR, help="dossier des artefacts")
     parser.add_argument("--report", type=Path, default=REPORT_DIR, help="rapports de rejets")
     parser.add_argument("--no-strict", action="store_true",
@@ -48,6 +51,13 @@ def main(argv: list[str] | None = None) -> int:
         sizes.update(index)
     else:
         print("index plein texte non construit (duckdb ou extension fts absente)")
+
+    # Couche ACR : facultative, et sans effet sur les artefacts ci-dessus.
+    acr = construire_acr(args.acr, args.out)
+    if acr:
+        sizes.update(acr)
+    else:
+        print(f"couche ACR non construite ({args.acr} absent)")
 
     args.report.mkdir(parents=True, exist_ok=True)
     rejets_path = args.report / "rejets.csv"

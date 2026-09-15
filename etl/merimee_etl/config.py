@@ -6,8 +6,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 RAW_CSV = ROOT / "data" / "raw" / "merimee.csv"
+# Label « Architecture contemporaine remarquable » : un second corpus, facultatif.
+# Absent, le pipeline produit les Monuments historiques seuls, sans erreur.
+RAW_ACR = ROOT / "data" / "raw" / "merimee_acr.csv"
 REF_DIR = ROOT / "data" / "ref"
 OUT_DIR = ROOT / "web" / "static" / "data"
+ACR_SOUS_DOSSIER = "acr"
+# 1 822 fiches ACR pèsent 1,8 Mo en un seul Parquet, textes longs compris :
+# trop pour un premier clic sur téléphone. Huit fragments d'environ 225 Ko,
+# même hachage que `details`.
+ACR_SHARDS = 8
 REPORT_DIR = ROOT / "etl" / "out"
 
 SEP = "|"

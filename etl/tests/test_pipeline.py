@@ -17,6 +17,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from merimee_etl import acr  # noqa: E402
 from merimee_etl.build import fnv1a, points_colonnaires, shard_of  # noqa: E402
 from merimee_etl.config import DETAILS_SHARDS, OUT_DIR  # noqa: E402
 from merimee_etl.normalize import normalize_text, search_key, split_multi, split_vocab  # noqa: E402
@@ -465,6 +466,85 @@ def test_images_absentes_ne_cassent_pas_le_build(tmp_path, monkeypatch):
         assert build._images_commons() == {}
     finally:
         build._images_commons.cache_clear()
+
+
+# --------------------------------------------------------------------------
+# Couche Architecture contemporaine remarquable (`acr.py`)
+# --------------------------------------------------------------------------
+
+
+def test_acr_annees_label():
+    # 13 notices portent l'attribution puis le renouvellement, 5 aucune date.
+    assert acr.annees_label("2003") == [2003]
+    assert acr.annees_label("2000 ; 2026") == [2000, 2026]
+    assert acr.annees_label("") == []
+
+
+def test_acr_titre_majuscule_initiale():
+    assert acr.titre_acr("pont à hauban dit pont Albert-Caquot") == "Pont à hauban dit pont Albert-Caquot"
+    assert acr.titre_acr("Hôtel de ville ") == "Hôtel de ville"
+    assert acr.titre_acr("") == ""
+
+
+def test_acr_transformer_ligne_minimale(tmp_path, monkeypatch):
+    from merimee_etl import build
+
+    monkeypatch.setattr(build, "REF_DIR", tmp_path)  # aucun instantané photo
+    ligne = {c: "" for c in acr.COLONNES}
+    ligne.update({
+        "Reference_de_la_notice": "ACR0000002",
+        "Titre_courant": "hôtel de ville",
+        "Commune_forme_editoriale": "Donzère;La Garde-Adhémart",
+        "Coordonnees": "46.1077711035412,5.825944937722621",
+        "Date_de_Label": "2000 ; 2026",
+        "Auteur_de_l_edifice": "Kohn Roger (architecte);Lavergne Max (architecte)",
+        "Denominations": "édifice public;mairie",
+    })
+    fiches = acr.transformer(pd.DataFrame([ligne]))
+    f = fiches.iloc[0]
+    assert f.titre == "Hôtel de ville"
+    assert f.commune == "Donzère, La Garde-Adhémart"
+    # `Coordonnees` est « lat,lon », comme le champ WGS84 de Mérimée.
+    assert f.lat == pytest.approx(46.10777) and f.lon == pytest.approx(5.82594)
+    assert f.annee_label == 2000 and f.annees_label == [2000, 2026]
+    assert f.denominations == ["édifice public", "mairie"]
+    assert f.commons == []
+    p = acr.points_acr(fiches)
+    assert p["reference"] == ["ACR0000002"] and p["annee"] == [2000]
+
+
+def test_acr_source_absente_ne_construit_rien(tmp_path):
+    assert acr.construire(tmp_path / "absent.csv", tmp_path) is None
+    assert not (tmp_path / "acr").exists()
+
+
+pytestmark_acr = pytest.mark.skipif(
+    not (OUT_DIR / "acr" / "fiches").exists(),
+    reason="couche ACR absente : `data/raw/merimee_acr.csv` puis `python -m merimee_etl`",
+)
+
+
+@pytestmark_acr
+def test_couche_acr_volumes():
+    """Export POP du 2026-09-15 : 1 822 notices, 1 743 situées.
+
+    Le CSV porte 1 744 coordonnées non vides ; une tombe hors des bornes de
+    `parse_coords`, comme pour Mérimée elle reste accessible par sa fiche.
+    """
+    fragments = sorted((OUT_DIR / "acr" / "fiches").glob("*.parquet"))
+    fiches = pd.concat([pd.read_parquet(f) for f in fragments], ignore_index=True)
+    assert len(fiches) == 1_822
+    assert fiches.reference.is_unique
+    assert fiches.reference.str.fullmatch(r"ACR\d{7}").all()
+    assert fiches.lat.notna().sum() == 1_743
+    for chemin in fragments:
+        refs = pd.read_parquet(chemin, columns=["reference"]).reference
+        assert refs.map(acr.fragment_acr).eq(int(chemin.stem)).all()
+
+    p = json.loads((OUT_DIR / "acr" / "points.json").read_text(encoding="utf-8"))
+    assert p["total"] == 1_822 and p["geolocalises"] == len(p["reference"]) == 1_743
+    assert set(p["reference"]).isdisjoint(pd.read_parquet(OUT_DIR / "monuments.parquet",
+                                                          columns=["reference"]).reference)
 
 
 @pytestmark_artifacts

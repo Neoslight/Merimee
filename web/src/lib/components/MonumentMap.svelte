@@ -34,6 +34,12 @@
      *  sur telephone. Un point choisi qui tomberait dessous est ramene dans la
      *  part visible : on toucherait sinon un monument pour ne plus le voir. */
     reserveBas?: number;
+    /** Couche Architecture contemporaine remarquable affichee. Liee a la page,
+     *  qui l'ecrit dans l'URL. Hors du filtrage croise : aucun filtre ne s'y
+     *  applique. */
+    acr?: boolean;
+    /** Nuage de la couche, `null` tant qu'elle n'a jamais ete affichee. */
+    pointsAcr?: GeoJSON.FeatureCollection | null;
     onselect: (reference: string) => void;
     onbbox: (bbox: [number, number, number, number] | null) => void;
   }
@@ -46,9 +52,22 @@
     suivreVue = $bindable(),
     friseOuverte,
     reserveBas = 0,
+    acr = $bindable(false),
+    pointsAcr = null,
     onselect,
     onbbox
   }: Props = $props();
+
+  const VIDE: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+
+  /** Couches interrogees au toucher : la couche ACR n'y entre que visible —
+   *  `queryRenderedFeatures` ignore deja une couche masquee, mais la nommer
+   *  avant qu'elle existe leverait. */
+  function couchesTouchables(map: MapLibreMap): string[] {
+    return acr && map.getLayer('acr-points')
+      ? ['monuments-points', 'acr-points']
+      : ['monuments-points'];
+  }
 
   /** Commandes de la legende depliees, sur telephone seulement : a cette
    *  largeur le rail et la densite prenaient une seconde rangee de legende,
@@ -345,6 +364,40 @@
         'circle-radius': 11
       }
     });
+
+    // Couche ACR, **au-dessus** des monuments : 1 743 points parmi 44 484, ils
+    // disparaitraient dessous. Posee meme masquee, pour que la bascule ne soit
+    // qu'un `setLayoutProperty` et survive a un `setStyle` du theme.
+    map.addSource('acr', { type: 'geojson', data: untrack(() => pointsAcr) ?? VIDE });
+    map.addLayer({
+      id: 'acr-points',
+      type: 'circle',
+      source: 'acr',
+      layout: { visibility: acr ? 'visible' : 'none' },
+      paint: {
+        'circle-color': palette.acr,
+        // Plus opaques et plus larges que les monuments a l'echelle nationale :
+        // une couche que l'on vient d'allumer doit se voir, et elle est cent
+        // fois moins dense.
+        'circle-opacity': ['interpolate', ['linear'], ['zoom'], 4, 0.8, 10, 0.95],
+        'circle-stroke-color': liseret(),
+        'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 4, 0.6, 9, 1, 13, 2],
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 2.4, 7, 3, 10, 5.5, 14, 9]
+      }
+    });
+    map.addLayer({
+      id: 'acr-selection',
+      type: 'circle',
+      source: 'acr',
+      layout: { visibility: acr ? 'visible' : 'none' },
+      filter: ['==', ['get', 'reference'], selection ?? ''],
+      paint: {
+        'circle-color': 'transparent',
+        'circle-stroke-color': palette.carteSelection,
+        'circle-stroke-width': 2,
+        'circle-radius': 11
+      }
+    });
   }
 
   $effect(() => {
@@ -387,6 +440,14 @@
         if (!map.getLayer('monuments-points')) return [];
         const boite = conteneur.getBoundingClientRect();
         return map.queryRenderedFeatures({ layers: ['monuments-points'] }).map((f) => {
+          const p = map.project((f.geometry as GeoJSON.Point).coordinates as [number, number]);
+          return { reference: f.properties?.reference, x: boite.left + p.x, y: boite.top + p.y };
+        });
+      },
+      rendusAcr: () => {
+        if (!map.getLayer('acr-points')) return [];
+        const boite = conteneur.getBoundingClientRect();
+        return map.queryRenderedFeatures({ layers: ['acr-points'] }).map((f) => {
           const p = map.project((f.geometry as GeoJSON.Point).coordinates as [number, number]);
           return { reference: f.properties?.reference, x: boite.left + p.x, y: boite.top + p.y };
         });
@@ -440,6 +501,8 @@
       map.getCanvas().style.cursor = '';
       popup.remove();
     });
+    map.on('mouseenter', 'acr-points', () => (map.getCanvas().style.cursor = 'pointer'));
+    map.on('mouseleave', 'acr-points', () => (map.getCanvas().style.cursor = ''));
     // Clic sur la carte entiere, et non sur la couche : l'ecouteur de couche ne
     // repond qu'au pixel exact d'un cercle. On interroge une boite autour du
     // contact et on retient le point le plus proche **a l'ecran** — l'ordre
@@ -451,7 +514,7 @@
       const { x, y } = event.point;
       const touches = map.queryRenderedFeatures(
         [[x - r, y - r], [x + r, y + r]],
-        { layers: ['monuments-points'] }
+        { layers: couchesTouchables(map) }
       );
       // Une source GeoJSON peut rendre la meme entite sur deux tuiles voisines.
       const vus = new Set<string>();
@@ -524,6 +587,22 @@
   $effect(() => {
     if (!pret) return;
     carte?.setFilter('monuments-selection', ['==', ['get', 'reference'], selection ?? '']);
+    carte?.setFilter('acr-selection', ['==', ['get', 'reference'], selection ?? '']);
+  });
+
+  // Couche ACR : meme regle que le `setData` des monuments ci-dessus, `pret`
+  // en premiere lecture pour se rejouer apres un `setStyle`.
+  $effect(() => {
+    const source = pret ? (carte?.getSource('acr') as maplibregl.GeoJSONSource) : null;
+    if (!source) return;
+    source.setData(pointsAcr ?? VIDE);
+  });
+
+  $effect(() => {
+    if (!pret || !carte) return;
+    const visibilite = acr ? 'visible' : 'none';
+    carte.setLayoutProperty('acr-points', 'visibility', visibilite);
+    carte.setLayoutProperty('acr-selection', 'visibility', visibilite);
   });
 
   // Recentrage sous la feuille de fiche. Il ne part que si le point est hors
@@ -537,7 +616,9 @@
     if (!pret || !carte || !ref || reserve <= 0) return;
     const map = carte;
     untrack(() => {
-      const trouvee = points.features.find((f) => f.properties?.reference === ref);
+      const trouvee =
+        points.features.find((f) => f.properties?.reference === ref) ??
+        pointsAcr?.features.find((f) => f.properties?.reference === ref);
       if (!trouvee) return;
       const [lon, lat] = (trouvee.geometry as GeoJSON.Point).coordinates;
       const p = map.project([lon, lat]);
@@ -587,6 +668,7 @@
   $effect(() => {
     if (!pret || !carte) return;
     carte.setPaintProperty('monuments-points', 'circle-stroke-color', liseret());
+    carte.setPaintProperty('acr-points', 'circle-stroke-color', liseret());
   });
 
   /** Densite et fond historique repondent a deux questions incompatibles :
@@ -618,6 +700,8 @@
     // une couleur inchangee. Il vit dans l'effet des fonds historiques, qui
     // porte deja ces deux dependances.
     carte.setPaintProperty('monuments-selection', 'circle-stroke-color', palette.carteSelection);
+    carte.setPaintProperty('acr-points', 'circle-color', palette.acr);
+    carte.setPaintProperty('acr-selection', 'circle-stroke-color', palette.carteSelection);
     carte.setPaintProperty('monuments-densite', 'heatmap-color', rampeChaleur());
     etatCarte.chaleurHaute = palette.chaleur4;
   });
@@ -677,6 +761,9 @@
         <span class="cle"><i style="background:{palette[tranche.cle]}"></i>{tranche.titre}</span>
       {/each}
     {/if}
+    {#if acr}
+      <span class="cle"><i style="background:{palette.acr}"></i>archi. contemporaine</span>
+    {/if}
     <!-- Visible sur telephone seulement : ailleurs les commandes sont
          toujours depliees. -->
     <button class="reglages frappe-44" aria-expanded={reglagesOuverts}
@@ -707,6 +794,15 @@
     <button class="densite frappe-44-v" class:actif={densite} onclick={basculerDensite}
             aria-pressed={densite} title="Afficher la densité plutôt que les points seuls">
       densité
+    </button>
+    <!-- Un corpus en plus, pas un reglage de lecture : sous son propre filet.
+         Aucun filtre ne s'y applique, les compteurs ne le voient pas. -->
+    <i class="separateur" aria-hidden="true"></i>
+    <button class="bascule-acr frappe-44-v" class:actif={acr} onclick={() => (acr = !acr)}
+            aria-pressed={acr}
+            aria-label="Architecture contemporaine remarquable"
+            title="Afficher les édifices labellisés Architecture contemporaine remarquable — hors filtres">
+      archi. contemporaine
     </button>
   </div>
 </div>
@@ -912,6 +1008,7 @@
   }
 
   .densite,
+  .bascule-acr,
   .fonds > button {
     border: 1px solid var(--bord);
     background: var(--fond-carte);
@@ -936,6 +1033,21 @@
     border-color: var(--inscrit);
     background: color-mix(in srgb, var(--inscrit) 14%, transparent);
     color: var(--inscrit-texte);
+    font-weight: 600;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .bascule-acr:hover {
+      border-color: var(--acr);
+      color: var(--acr-texte);
+    }
+  }
+
+  /* Allumee, la bascule prend la teinte de ses points : c'est sa legende. */
+  .bascule-acr.actif {
+    border-color: var(--acr);
+    background: color-mix(in srgb, var(--acr) 14%, transparent);
+    color: var(--acr-texte);
     font-weight: 600;
   }
 

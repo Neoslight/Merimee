@@ -1,5 +1,7 @@
 <script lang="ts">
   import { detail, type Detail } from '$lib/db/queries';
+  import { ficheAcr } from '$lib/db/acr';
+  import { estAcr, libelleLabel } from '$lib/acr';
   import { formaterDistance, nf, romain } from '$lib/format';
   import { distanceMetres } from '$lib/geo';
   import { position } from '$lib/state/position.svelte';
@@ -34,6 +36,9 @@
 
   let fiche = $state<Detail | null>(null);
   let erreur = $state<string | null>(null);
+  /** Notice du label Architecture contemporaine remarquable : meme gabarit,
+   *  sans les sections propres a la protection. */
+  const acr = $derived(fiche?.acr ?? null);
 
   $effect(() => {
     const ref = reference;
@@ -44,7 +49,7 @@
     }
     let annule = false;
     erreur = null;
-    detail(ref)
+    (estAcr(ref) ? ficheAcr(ref) : detail(ref))
       .then((resultat) => {
         if (!annule) {
           fiche = resultat;
@@ -343,13 +348,22 @@
       </p>
       <h2>{fiche.titre}</h2>
       <p class="badges">
-        <span class="badge {fiche.statut === 'classé' ? 'or' : fiche.statut === 'inscrit' ? 'bleu' : 'violet'}">
-          {fiche.statut}{fiche.partiel ? ' (partiellement)' : ''}
-        </span>
-        {#if fiche.siecles.length}
-          <span class="badge sourd">{fiche.siecles.map(romain).join(' · ')}</span>
+        {#if acr}
+          <!-- Pas un statut de protection : le label se perd precisement quand
+               l'edifice est protege au titre des monuments historiques. -->
+          <span class="badge label-acr" title="Architecture contemporaine remarquable">
+            {libelleLabel(acr.annees)}
+          </span>
+          {#if fiche.siecle_detail}<span class="badge sourd">{fiche.siecle_detail}</span>{/if}
+        {:else}
+          <span class="badge {fiche.statut === 'classé' ? 'or' : fiche.statut === 'inscrit' ? 'bleu' : 'violet'}">
+            {fiche.statut}{fiche.partiel ? ' (partiellement)' : ''}
+          </span>
+          {#if fiche.siecles.length}
+            <span class="badge sourd">{fiche.siecles.map(romain).join(' · ')}</span>
+          {/if}
+          {#each fiche.periodes as periode}<span class="badge sourd">{periode}</span>{/each}
         {/if}
-        {#each fiche.periodes as periode}<span class="badge sourd">{periode}</span>{/each}
       </p>
       <p class="actions">
         <a href={popUrl(fiche.reference)} target="_blank" rel="noreferrer">
@@ -398,6 +412,9 @@
       {#if fiche.siecle_detail}
         <dt>Campagne principale</dt><dd>{fiche.siecle_detail}</dd>
       {/if}
+      {#if acr?.datation}
+        <dt>Datation</dt><dd>{acr.datation}</dd>
+      {/if}
       {#if fiche.proprietaires.length}
         <dt>Propriété</dt><dd>{fiche.proprietaires.join(', ')}</dd>
       {/if}
@@ -406,24 +423,40 @@
       {/if}
     </dl>
 
-    <section>
-      <h3>Actes de protection</h3>
-      <ol class="actes">
-        {#each fiche.actes as acte}
-          <li><time>{dateActe(acte)}</time><span>{acte.libelle}</span></li>
-        {:else}
-          <li class="sourd">aucun acte daté dans la notice</li>
-        {/each}
-      </ol>
-      {#if fiche.precision_protection}
-        <p class="precision">{fiche.precision_protection}</p>
+    {#if acr}
+      {#if acr.interet}
+        <section>
+          <h3>Intérêt</h3>
+          <p class="texte">{acr.interet}</p>
+        </section>
       {/if}
-    </section>
+    {:else}
+      <section>
+        <h3>Actes de protection</h3>
+        <ol class="actes">
+          {#each fiche.actes as acte}
+            <li><time>{dateActe(acte)}</time><span>{acte.libelle}</span></li>
+          {:else}
+            <li class="sourd">aucun acte daté dans la notice</li>
+          {/each}
+        </ol>
+        {#if fiche.precision_protection}
+          <p class="precision">{fiche.precision_protection}</p>
+        {/if}
+      </section>
+    {/if}
 
     {#if fiche.historique}
       <section>
         <h3>Historique</h3>
         <p class="texte">{fiche.historique}</p>
+      </section>
+    {/if}
+
+    {#if acr?.description}
+      <section>
+        <h3>Description</h3>
+        <p class="texte">{acr.description}</p>
       </section>
     {/if}
 
@@ -434,6 +467,7 @@
       </section>
     {/if}
 
+    {#if !acr || fiche.liens_externes.length}
     <section>
       <h3>Ressources</h3>
       <ul class="liens">
@@ -441,7 +475,11 @@
           <li><a href={fiche.archiv_mh} target="_blank" rel="noreferrer">Dossier Archiv-MH</a></li>
         {/if}
         {#each fiche.liens_externes as lien, i}
-          <li><a href={lien} target="_blank" rel="noreferrer">Arrêté / document {i + 1}</a></li>
+          <li>
+            <a href={lien} target="_blank" rel="noreferrer">
+              {acr ? 'Document' : 'Arrêté / document'} {i + 1}
+            </a>
+          </li>
         {/each}
         {#if fiche.nb_palissy > 0}
           <li>
@@ -453,6 +491,7 @@
         {/if}
       </ul>
     </section>
+    {/if}
 
     {#if fiche.palissy.length}
       <section>
@@ -650,6 +689,14 @@
     border-color: var(--mixte);
     background: color-mix(in srgb, var(--mixte) 12%, transparent);
     color: var(--mixte);
+  }
+
+  /* Label ACR : la teinte des points de la couche, pour qu'on relie la fiche
+     au bleu que l'on vient de toucher. */
+  .label-acr {
+    border-color: var(--acr);
+    background: color-mix(in srgb, var(--acr) 12%, transparent);
+    color: var(--acr-texte);
   }
 
   .sourd {

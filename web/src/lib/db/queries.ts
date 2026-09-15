@@ -400,10 +400,18 @@ export interface Detail {
   lon: number | null;
   lat: number | null;
   actes: { annee: number | null; mois: number | null; jour: number | null; libelle: string }[];
+  /** Present pour une notice du label Architecture contemporaine remarquable
+   *  seulement (`db/acr.ts`) : la fiche en tire son badge et ses sections. */
+  acr?: {
+    annees: number[];
+    datation: string;
+    interet: string;
+    description: string;
+  };
 }
 
 /** Arrow renvoie les colonnes `LIST` sous forme de vecteurs. */
-function toArray<T>(value: unknown): T[] {
+export function toArray<T>(value: unknown): T[] {
   if (!value) return [];
   if (Array.isArray(value)) return value as T[];
   const vector = value as { toArray?: () => ArrayLike<T> };

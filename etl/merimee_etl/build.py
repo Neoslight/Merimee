@@ -100,8 +100,17 @@ def _images_commons() -> dict[str, list[str]]:
     Absents, la colonne vaut la liste vide partout et les artefacts restent
     valides — c'est ce qui permet aux tests de tourner hors-ligne.
     """
+    return lire_instantanes(_INSTANTANES)
+
+
+def lire_instantanes(noms: tuple[str, ...]) -> dict[str, list[str]]:
+    """Fusionne des instantanés `reference,fichier`, dans l'ordre donné.
+
+    Partagé avec la couche ACR (`acr.py`), dont les instantanés ont le même
+    schéma mais des fichiers distincts.
+    """
     images: dict[str, list[str]] = defaultdict(list)
-    for nom in _INSTANTANES:
+    for nom in noms:
         path = Path(REF_DIR) / nom
         if not path.exists():
             continue

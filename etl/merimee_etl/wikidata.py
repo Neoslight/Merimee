@@ -20,6 +20,7 @@ tierce, qui vieillit et se rafraîchit par cette commande.
 
 from __future__ import annotations
 
+import argparse
 import csv
 import ssl
 import sys
@@ -34,15 +35,25 @@ from .config import MAX_IMAGES, OUT_DIR, REF_DIR
 
 ENDPOINT = "https://query.wikidata.org/sparql"
 
-# Restreinte au préfixe `PA` : le corpus des immeubles protégés ne contient que
-# ces références. Sans le filtre, la requête ramène aussi les notices
-# d'inventaire `IA`, absentes d'ici.
-REQUETE = """
-SELECT ?ref ?img WHERE {
+def requete_sparql(prefixe: str) -> str:
+    """Requête restreinte à un préfixe de référence.
+
+    `PA` pour le corpus des immeubles protégés : sans le filtre, la requête
+    ramène aussi les notices d'inventaire `IA`, absentes d'ici. `ACR` pour la
+    couche du label : ses identifiants sont portés par la **même** propriété
+    `P380` — 578 items le 2026-09-15, dont 392 illustrés.
+    """
+    if not prefixe.isalnum():
+        raise ValueError(f"préfixe invalide : {prefixe!r}")
+    return f"""
+SELECT ?ref ?img WHERE {{
   ?item wdt:P380 ?ref ; wdt:P18 ?img .
-  FILTER(STRSTARTS(?ref, "PA"))
-}
+  FILTER(STRSTARTS(?ref, "{prefixe}"))
+}}
 """
+
+
+REQUETE = requete_sparql("PA")
 
 # Le service impose un agent nommé ; une requête anonyme est refusée.
 AGENT = "MerimeeDashboard/1.0 (https://github.com/Neoslight/Merimee)"
@@ -50,11 +61,18 @@ AGENT = "MerimeeDashboard/1.0 (https://github.com/Neoslight/Merimee)"
 PREFIXE = "http://commons.wikimedia.org/wiki/Special:FilePath/"
 
 SORTIE = Path(REF_DIR) / "wikidata_images.csv"
+SORTIE_ACR = Path(REF_DIR) / "wikidata_images_acr.csv"
 
 ENTETE = [
     "# Instantané Wikidata : identifiant Mérimée (P380) -> fichier Commons (P18).",
     "# Généré par `python -m merimee_etl.wikidata`, jamais à la main.",
     "# Ce n'est pas une décision éditoriale, c'est une base tierce datée.",
+]
+
+ENTETE_ACR = [
+    "# Instantané Wikidata, label Architecture contemporaine remarquable :",
+    "# identifiant ACR (P380) -> fichier Commons (P18).",
+    "# Généré par `python -m merimee_etl.wikidata --acr`, jamais à la main.",
 ]
 
 
@@ -74,9 +92,9 @@ def _contexte_tls() -> ssl.SSLContext:
     return ssl.create_default_context(cafile=certifi.where())
 
 
-def interroger(timeout: int = 300) -> list[tuple[str, str]]:
+def interroger(timeout: int = 300, prefixe: str = "PA") -> list[tuple[str, str]]:
     """Couples (référence, nom de fichier Commons), dans l'ordre du service."""
-    url = f"{ENDPOINT}?{urllib.parse.urlencode({'query': REQUETE})}"
+    url = f"{ENDPOINT}?{urllib.parse.urlencode({'query': requete_sparql(prefixe)})}"
     requete = urllib.request.Request(
         url, headers={"Accept": "text/csv", "User-Agent": AGENT}
     )
@@ -115,13 +133,14 @@ def restreindre(couples: list[tuple[str, str]], references: set[str]) -> list[di
     return lignes
 
 
-def references_du_corpus(artefacts: Path) -> set[str]:
+def references_du_corpus(artefacts: Path, acr: bool = False) -> set[str]:
     """Références réellement produites par le pipeline.
 
     Se lit sur `monuments.parquet` plutôt que sur le CSV source : c'est ce que
-    le navigateur interroge, et le fichier fait 2,3 Mo contre 100.
+    le navigateur interroge, et le fichier fait 2,3 Mo contre 100. La couche
+    ACR se lit de même sur ses fragments `acr/fiches/`.
     """
-    chemin = artefacts / "monuments.parquet"
+    chemin = artefacts / ("acr/fiches" if acr else "monuments.parquet")
     if not chemin.exists():
         raise SystemExit(
             f"{chemin} introuvable : lancer `python -m merimee_etl` d'abord."
@@ -129,10 +148,10 @@ def references_du_corpus(artefacts: Path) -> set[str]:
     return set(pd.read_parquet(chemin, columns=["reference"]).reference)
 
 
-def ecrire(lignes: list[dict], sortie: Path = SORTIE) -> int:
+def ecrire(lignes: list[dict], sortie: Path = SORTIE, entete: list[str] = ENTETE) -> int:
     sortie.parent.mkdir(parents=True, exist_ok=True)
     with sortie.open("w", encoding="utf-8", newline="") as fh:
-        for commentaire in ENTETE:
+        for commentaire in entete:
             fh.write(commentaire + "\n")
         writer = csv.DictWriter(fh, fieldnames=["reference", "fichier"])
         writer.writeheader()
@@ -141,12 +160,18 @@ def ecrire(lignes: list[dict], sortie: Path = SORTIE) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    references = references_du_corpus(OUT_DIR)
+    parser = argparse.ArgumentParser(prog="merimee_etl.wikidata", description=__doc__)
+    parser.add_argument("--acr", action="store_true",
+                        help="couche Architecture contemporaine remarquable")
+    args = parser.parse_args(argv)
+    sortie = SORTIE_ACR if args.acr else SORTIE
+
+    references = references_du_corpus(OUT_DIR, acr=args.acr)
     print(f"corpus                : {len(references):>7,}".replace(",", " "))
 
     print(f"interrogation de {ENDPOINT} ...")
     try:
-        couples = interroger()
+        couples = interroger(prefixe="ACR" if args.acr else "PA")
     except OSError as erreur:
         print(f"service injoignable : {erreur}", file=sys.stderr)
         return 1
@@ -154,11 +179,11 @@ def main(argv: list[str] | None = None) -> int:
 
     lignes = restreindre(couples, references)
     couvertes = len({ligne["reference"] for ligne in lignes})
-    taille = ecrire(lignes)
+    taille = ecrire(lignes, sortie, ENTETE_ACR if args.acr else ENTETE)
 
     part = 100 * couvertes / len(references) if references else 0
     print(f"notices illustrées    : {couvertes:>7,} ({part:.1f} %)".replace(",", " "))
-    print(f"{SORTIE} : {taille / 1_048_576:.1f} Mo")
+    print(f"{sortie} : {taille / 1_048_576:.1f} Mo")
     print("relancer `python -m merimee_etl` pour reporter dans les fragments.")
     return 0
 

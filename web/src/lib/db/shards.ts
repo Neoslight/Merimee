@@ -25,3 +25,10 @@ export function fnv1a(texte: string): number {
 export function fragmentDe(reference: string): number {
   return fnv1a(reference) % NB_FRAGMENTS;
 }
+
+/** Fiches de la couche ACR : meme hachage, huit fragments (`acr.py::ACR_SHARDS`). */
+export const NB_FRAGMENTS_ACR = 8;
+
+export function fragmentAcr(reference: string): number {
+  return fnv1a(reference) % NB_FRAGMENTS_ACR;
+}

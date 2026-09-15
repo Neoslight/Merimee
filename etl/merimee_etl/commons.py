@@ -50,15 +50,25 @@ import pandas as pd
 from .config import MAX_IMAGES, OUT_DIR, REF_DIR
 from .wikidata import AGENT, _contexte_tls
 from .wikidata import SORTIE as SORTIE_WIKIDATA
+from .wikidata import SORTIE_ACR as SORTIE_WIKIDATA_ACR
 
 API = "https://commons.wikimedia.org/w/api.php"
 
 SORTIE = Path(REF_DIR) / "commons_images.csv"
+# Les pages Commons citent aussi les notices ACR par le modèle `{{Mérimée|ACR…}}` :
+# la même recherche `insource:` s'y applique sans changement.
+SORTIE_ACR = Path(REF_DIR) / "commons_images_acr.csv"
 
 ENTETE = [
     "# Instantané Wikimedia Commons : fichiers dont la page cite la référence Mérimée.",
     "# Généré par `python -m merimee_etl.commons`, jamais à la main.",
     "# Complète `wikidata_images.csv` ; ce n'est pas une décision éditoriale.",
+]
+
+ENTETE_ACR = [
+    "# Instantané Wikimedia Commons : fichiers dont la page cite une référence ACR.",
+    "# Généré par `python -m merimee_etl.commons --acr`, jamais à la main.",
+    "# Complète `wikidata_images_acr.csv` ; ce n'est pas une décision éditoriale.",
 ]
 
 # Une pause courte suffit : l'API de recherche est servie par CirrusSearch, et
@@ -112,34 +122,34 @@ def fichiers_citant(reference: str) -> list[str]:
     return [nom for nom in noms if photographie(nom)][:MAX_IMAGES]
 
 
-def _references_couvertes() -> set[str]:
+def _references_couvertes(instantane: Path = SORTIE_WIKIDATA) -> set[str]:
     """Notices déjà illustrées par l'instantané Wikidata."""
-    if not SORTIE_WIKIDATA.exists():
+    if not instantane.exists():
         return set()
-    with SORTIE_WIKIDATA.open(encoding="utf-8", newline="") as fh:
+    with instantane.open(encoding="utf-8", newline="") as fh:
         lignes = (ligne for ligne in fh if not ligne.startswith("#"))
         return {row["reference"] for row in csv.DictReader(lignes)}
 
 
-def _deja_traitees() -> tuple[list[dict], set[str]]:
+def _deja_traitees(sortie: Path = SORTIE) -> tuple[list[dict], set[str]]:
     """Lignes déjà écrites, et les références qu'elles couvrent.
 
     Seules les notices trouvées apparaissent : une notice cherchée sans succès
     sera recherchée au prochain passage, et c'est voulu — Commons s'enrichit.
     """
-    if not SORTIE.exists():
+    if not sortie.exists():
         return [], set()
-    with SORTIE.open(encoding="utf-8", newline="") as fh:
+    with sortie.open(encoding="utf-8", newline="") as fh:
         lignes = (ligne for ligne in fh if not ligne.startswith("#"))
         acquises = list(csv.DictReader(lignes))
     return acquises, {row["reference"] for row in acquises}
 
 
-def ecrire(lignes: list[dict], sortie: Path = SORTIE) -> int:
+def ecrire(lignes: list[dict], sortie: Path = SORTIE, entete: list[str] = ENTETE) -> int:
     sortie.parent.mkdir(parents=True, exist_ok=True)
     ordonnees = sorted(lignes, key=lambda row: (row["reference"], row["fichier"]))
     with sortie.open("w", encoding="utf-8", newline="") as fh:
-        for commentaire in ENTETE:
+        for commentaire in entete:
             fh.write(commentaire + "\n")
         writer = csv.DictWriter(fh, fieldnames=["reference", "fichier"])
         writer.writeheader()
@@ -153,17 +163,21 @@ def main(argv: list[str] | None = None) -> int:
                         help="ne traiter que N notices (essai)")
     parser.add_argument("--pause", type=float, default=PAUSE,
                         help="secondes entre deux requêtes")
+    parser.add_argument("--acr", action="store_true",
+                        help="couche Architecture contemporaine remarquable")
     args = parser.parse_args(argv)
 
-    chemin = OUT_DIR / "monuments.parquet"
+    chemin = OUT_DIR / ("acr/fiches" if args.acr else "monuments.parquet")
     if not chemin.exists():
         print(f"{chemin} introuvable : lancer `python -m merimee_etl` d'abord.",
               file=sys.stderr)
         return 1
 
+    sortie = SORTIE_ACR if args.acr else SORTIE
+    entete = ENTETE_ACR if args.acr else ENTETE
     corpus = list(pd.read_parquet(chemin, columns=["reference"]).reference)
-    couvertes = _references_couvertes()
-    acquises, trouvees = _deja_traitees()
+    couvertes = _references_couvertes(SORTIE_WIKIDATA_ACR if args.acr else SORTIE_WIKIDATA)
+    acquises, trouvees = _deja_traitees(sortie)
 
     manquantes = [ref for ref in corpus
                   if ref not in couvertes and ref not in trouvees]
@@ -182,14 +196,14 @@ def main(argv: list[str] | None = None) -> int:
         if rang % 250 == 0:
             # Sauvegarde intermédiaire : 25 minutes de réseau ne doivent pas
             # tenir dans un seul processus.
-            ecrire(acquises)
+            ecrire(acquises, sortie, entete)
             print(f"  {rang:>6} interrogées, {nouvelles:>5} fichiers retenus")
         time.sleep(args.pause)
 
-    taille = ecrire(acquises)
+    taille = ecrire(acquises, sortie, entete)
     gagnees = len({row["reference"] for row in acquises})
     print(f"notices complétées    : {gagnees:>7,}".replace(",", " "))
-    print(f"{SORTIE} : {taille / 1024:.0f} Ko")
+    print(f"{sortie} : {taille / 1024:.0f} Ko")
     print("relancer `python -m merimee_etl` pour reporter dans les fragments.")
     return 0
 

@@ -44,6 +44,7 @@ const NOMS = {
   inscrit: '--inscrit',
   mixte: '--mixte',
   statutNul: '--statut-nul',
+  acr: '--acr',
   epoque1: '--epoque-1',
   epoque2: '--epoque-2',
   epoque3: '--epoque-3',
@@ -83,6 +84,7 @@ export type Palette = Record<keyof typeof NOMS, string>;
  *  sans couleur serait invisible. */
 const REPLI: Palette = {
   classe: '#b8381d', inscrit: '#cf6910', mixte: '#542566', statutNul: '#7d7870',
+  acr: '#2266a8',
   epoque1: '#7a5c7e', epoque2: '#4d6b74', epoque3: '#6f7f52', epoque4: '#c9933b',
   epoque5: '#c85a32',
   carteLiseret: '#eceae4', carteLiseretSurClair: '#2b2620',

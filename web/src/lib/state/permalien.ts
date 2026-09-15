@@ -25,6 +25,7 @@
  * regarde revenait a renvoyer le destinataire sur la France entiere.
  */
 import { ANNEE_MAX, ANNEE_MIN, filtresVides, type Filters } from './filters.svelte';
+import { estAcr } from '$lib/acr';
 
 /** Vue occupant la scene centrale. `carte` est le defaut, donc absent de l'URL. */
 export type Vue = 'carte' | 'matrice' | 'liste';
@@ -48,6 +49,9 @@ export interface EtatPartage {
   selection: string | null;
   vue: Vue;
   fond: FondHistorique | null;
+  /** Couche Architecture contemporaine remarquable affichee. Absente = masquee,
+   *  donc aucun lien anterieur ne change de sens. */
+  acr: boolean;
 }
 
 /** Position de depart de la carte. Ce n'est pas un filtre : elle ne restreint
@@ -100,6 +104,7 @@ export function encoder(etat: EtatPartage, cadrage?: VueCarte | null): string {
   if (etat.filtres.nbPalissy > 0) p.set('objets', String(etat.filtres.nbPalissy));
   if (etat.vue !== 'carte') p.set('vue', etat.vue);
   if (etat.fond) p.set('fond', etat.fond);
+  if (etat.acr) p.set('acr', '1');
   if (etat.selection) p.set('ref', etat.selection);
   if (cadrage) p.set('c', `${cadrage.lon},${cadrage.lat},${cadrage.zoom}`);
   const chaine = p.toString();
@@ -161,11 +166,16 @@ export function decoder(chaine: string): EtatPartage & { cadrage: VueCarte | nul
   const ref = p.get('ref') ?? p.get('notice');
   const vue = p.get('vue') as Vue | null;
   const fond = p.get('fond') as FondHistorique | null;
+  const selection = ref && REFERENCE.test(ref) ? ref : null;
   return {
     filtres,
-    selection: ref && REFERENCE.test(ref) ? ref : null,
+    selection,
     vue: vue && VUES.includes(vue) ? vue : 'carte',
     fond: fond && FONDS.includes(fond) ? fond : null,
+    // Une fiche ACR ouverte sans sa couche montrerait une notice sans point sur
+    // la carte : le lien la rallume. L'encodage emet alors `acr=1`, et la forme
+    // normalisee reste stable d'un aller-retour a l'autre.
+    acr: p.get('acr') === '1' || estAcr(selection),
     cadrage: decoderVue(p.get('c'))
   };
 }

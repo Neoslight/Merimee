@@ -5,6 +5,7 @@ web/static/data/*.parquet
 web/static/data/points.json
 web/static/data/details/
 web/static/data/texte/
+web/static/data/acr/
 
 # Python
 __pycache__/

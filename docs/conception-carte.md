@@ -198,3 +198,24 @@ recouvrements, Paris et un bourg à sept monuments rendent le même aplat. Un pr
 assombrit sans borne. La couche qui fait ce travail existe déjà : `heatmap` accumule dans
 une texture et passe le total dans une rampe choisie. **L'accumulation par alpha donne le
 grain, la heatmap donne la quantité ; ne pas demander à l'une le travail de l'autre.**
+
+**La couche ACR est posée dans `poserCouches`, masquée, au-dessus des monuments.**
+Source `acr`, couches `acr-points` et `acr-selection`, ajoutées après `monuments-selection`
+: 1 743 points sous 44 484 disparaîtraient. Posée même éteinte, pour que la bascule ne
+soit qu'un `setLayoutProperty` et que la couche survive au `setStyle` du thème par le
+même chemin que tout le reste. Ses effets (`setData`, visibilité, filtre de sélection)
+lisent `pret` en premier, comme les autres.
+
+- **Teinte** : `--acr`, un bleu — seule famille absente des statuts et des époques. Ce ne
+  sont pas des monuments historiques, ils ne doivent se confondre avec aucune clé de la
+  légende principale. Le liseré suit `liseret()` comme les monuments.
+- **Rayon et opacité plus forts** que les monuments à l'échelle nationale (2,4 px, 0,8) :
+  cent fois moins denses, ils ne saturent rien, et une couche qu'on vient d'allumer doit
+  se voir. Toujours interpolés par zoom, jamais un littéral.
+- **Toucher** : `couchesTouchables()` n'ajoute `acr-points` à `queryRenderedFeatures` que
+  couche visible et posée — nommer une couche absente lève. Même règle du plus proche à
+  l'écran, même zoom d'amas.
+- **Bascule** dans `.commandes`, après la densité et sous son propre filet : c'est un
+  corpus en plus, pas un réglage de lecture. Allumée, elle prend la teinte de ses points
+  et une clé « archi. contemporaine » s'ajoute à la légende.
+- `__carteOutils.rendusAcr()` expose les points ACR rendus à Playwright, comme `rendus()`.
