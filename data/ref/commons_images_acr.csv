@@ -1,0 +1,7 @@
+# Instantané Wikimedia Commons : fichiers dont la page cite une référence ACR.
+# Généré par `python -m merimee_etl.commons --acr`, jamais à la main.
+# Complète `wikidata_images_acr.csv` ; ce n'est pas une décision éditoriale.
+reference,fichier
+ACR0000259,"Magasin de commerce "" Dibab "".jpg"
+ACR0000282,Chambre de commerce de Lorient et du Morbihan.JPG
+ACR0000329,"Résidence Jean-Macé vue d'ensemble Mainvilliers (Eure-et-Loir, France).jpg"
