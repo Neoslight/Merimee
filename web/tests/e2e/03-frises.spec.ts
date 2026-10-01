@@ -1,7 +1,7 @@
 /**
- * Les deux frises (epoque de construction, annee de protection) et la
- * matrice siecle x decennie : gestes a la souris (clic, glissement) et au
- * clavier, repli/depli, et croisement avec le corpus.
+ * Les deux frises (epoque de construction, annee de protection) : gestes a la
+ * souris (clic, glissement) et au clavier, repli/depli, et croisement avec le
+ * corpus. La matrice siecle x decennie, qui vivait ici, a ete supprimee.
  */
 import { test, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import {
@@ -11,7 +11,6 @@ import {
   fermerServeur,
   ouvrirFiltres,
   ouvrirFrises,
-  total,
   verifier,
   type InfosServeur
 } from './_soutien';
@@ -36,7 +35,7 @@ test.afterAll(async () => {
   await fermerServeur(infos.serveur);
 });
 
-test('frises et matrice', async () => {
+test('frises', async () => {
   await test.step('brossage de l’axe construction (siecles)', async () => {
     await ouvrirFrises(page);
     const piste = (await page.locator('.piste-siecles').boundingBox())!;
@@ -142,48 +141,17 @@ test('frises et matrice', async () => {
     );
   });
 
-  await test.step('matrice siecle x decennie', async () => {
-    await page.locator('.bascule button', { hasText: 'Matrice' }).click();
-    await attendre(page, '.matrice svg rect');
-    const cellules = await page.locator('.matrice svg rect').count();
-    verifier('matrice rendue', cellules > 100, `${cellules} cellules`);
-
-    const note = await page.locator('.matrice .note').textContent();
-    verifier('occurrences ecartees signalees', /\d/.test(note ?? ''), (note ?? 'absente').trim());
-
-    await page.locator('.matrice svg rect').nth(60).click();
-    await page.waitForFunction(() => /siecle=/.test(location.search) && /annees=/.test(location.search), null, {
-      timeout: 20_000
-    });
-    verifier(
-      'un clic dans la matrice pose siecle et plage d annees',
-      /siecle=/.test(page.url()) && /annees=/.test(page.url()),
-      page.url().split('?')[1] ?? ''
-    );
-    await page.waitForFunction(
-      () => {
-        const el = document.querySelector('.chiffres span b');
-        return el && Number.parseInt(el.textContent!.replace(/\D/g, ''), 10) < 46760;
-      },
-      null,
-      { timeout: 20_000 }
-    );
-    const croise2 = await total(page);
-    verifier('la matrice restreint le corpus', croise2 > 0 && croise2 < 46760, `obtenu ${croise2}`);
-
-    await page.getByRole('button', { name: /effacer \d+ filtres?/ }).click();
-    await attendreTotal(page, 46760);
-    await page.locator('.bascule button', { hasText: 'Carte' }).click();
-  });
-
-  await test.step('un lien ?vue=matrice affiche la matrice directement', async () => {
+  await test.step('un ancien lien ?vue=matrice retombe sur la carte', async () => {
+    // La vue a ete supprimee, pas les liens qui la portaient : ils s'ouvrent
+    // sur la carte, sans erreur, et l'URL est renormalisee.
     await page.goto(`${infos.url}?vue=matrice`, { waitUntil: 'domcontentloaded' });
-    await attendre(page, '.matrice svg rect', 30_000);
-    const cellules = await page.locator('.matrice svg rect').count();
-    verifier('un permalien vue=matrice affiche la matrice sans clic prealable', cellules > 100, `${cellules} cellules`);
+    await attendre(page, '.chiffres b');
+    verifier('vue=matrice ouvre la carte', await page.locator('.maplibregl-canvas').isVisible());
+    verifier('aucune liste ni matrice par-dessus', (await page.locator('.liste, .matrice').count()) === 0);
+    verifier('deux vues dans la barre', (await page.locator('.bascule button').count()) === 2);
     await page.goto(infos.url, { waitUntil: 'domcontentloaded' });
     await attendre(page, '.chiffres b');
   });
 
-  verifier('aucune erreur console (frises et matrice)', erreursConsole.length === 0, erreursConsole.slice(0, 3).join(' | '));
+  verifier('aucune erreur console (frises)', erreursConsole.length === 0, erreursConsole.slice(0, 3).join(' | '));
 });

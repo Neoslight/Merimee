@@ -219,66 +219,6 @@ export async function histogrammeProtections(f: Filters): Promise<BarreAnnee[]> 
   `);
 }
 
-export interface Cellule {
-  siecle: number;
-  decennie: number;
-  n: number;
-}
-
-export interface Matrice {
-  cellules: Cellule[];
-  /** Occurrences anterieures au 10e siecle, hors des axes. Signalees, pas tues. */
-  ecartees: number;
-}
-
-/** En deca, les effectifs sont anecdotiques (341 occurrences pour neuf siecles)
- *  et neuf lignes presque vides ecraseraient la partie lisible. */
-export const SIECLE_MATRICE_MIN = 10;
-
-/**
- * Croisement epoque de construction x decennie de protection : ce que les deux
- * frises suggerent cote a cote sans jamais le montrer ensemble.
- *
- * Les couples sont dedoublonnes. Sans `DISTINCT`, une notice portant deux actes
- * dans la meme decennie compterait deux fois dans la meme cellule.
- *
- * Les deux filtres d'axe sont retires du predicat, comme une facette est
- * comptee sans elle-meme : la matrice reste explorable une fois une cellule
- * choisie.
- *
- * Une seule requete, et non deux : les deux anciennes partageaient la meme CTE
- * `couples` mais se serialisaient sur la connexion unique — `Promise.all` ne
- * les parallelise pas, cf. `mesures.sql` plus haut dans le fichier. `couples`
- * est `MATERIALIZED` pour n'etre calculee qu'une fois malgre les deux lectures
- * qui suivent ; la ligne des ecartees porte un `siecle` sentinelle (`-1`, hors
- * du domaine des siecles) pour voyager dans le meme resultset sans que `NULL`
- * n'ait a se distinguer d'un siecle authentique. Verifie ligne a ligne contre
- * l'ancienne forme en duckdb Python sur 5 predicats (aucun filtre, un domaine,
- * un statut, une region, deux filtres combines) : memes cellules, meme compte
- * d'ecartees a chaque fois.
- */
-export async function matrice(f: Filters): Promise<Matrice> {
-  const where = buildWhere(f, ['siecles', 'anneeProtection']);
-  const couples = `
-    SELECT DISTINCT s.reference, s.siecle, (p.annee // 10) * 10 AS decennie
-    FROM (SELECT reference, unnest(siecles) AS siecle FROM monuments WHERE ${where}) s
-    JOIN protections p USING (reference)
-    WHERE p.annee IS NOT NULL
-  `;
-  const lignes = await query<{ siecle: number; decennie: number; n: number }>(`
-    WITH couples AS MATERIALIZED (${couples})
-    SELECT siecle::INT AS siecle, decennie::INT AS decennie, count(*)::INT AS n
-    FROM couples WHERE siecle >= ${SIECLE_MATRICE_MIN}
-    GROUP BY 1, 2
-    UNION ALL
-    SELECT -1, -1, count(*)::INT AS n FROM couples WHERE siecle < ${SIECLE_MATRICE_MIN}
-    ORDER BY siecle, decennie
-  `);
-  const cellules = lignes.filter((l) => l.siecle !== -1);
-  const ecartees = lignes.find((l) => l.siecle === -1)?.n ?? 0;
-  return { cellules, ecartees };
-}
-
 export interface Ligne {
   reference: string;
   titre: string;

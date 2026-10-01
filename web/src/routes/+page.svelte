@@ -12,18 +12,15 @@
     histogrammeProtections,
     histogrammeSiecles,
     liste,
-    matrice,
     points,
     totaux,
     type BarreAnnee,
     type BarreSiecle,
     type Compte,
     type Ligne,
-    type Matrice as DonneesMatrice,
     type Totaux
   } from '$lib/db/queries';
   import {
-    ANNEE_MAX,
     countActive,
     filters,
     jetonsActifs,
@@ -136,19 +133,15 @@
   // ecrit l'URL, et le fond en fait partie. Son opacite, elle, reste dans le
   // composant — dosage de lecture, pas etat d'exploration.
   let fond = $state<FondHistorique | null>(initial.fond);
-  let croisement = $state.raw<DonneesMatrice>({ cellules: [], ecartees: 0 });
 
-  // Timeline et Matrice importent Observable Plot (209 Ko minifie, ~65 Ko
-  // gzip) et partaient jusqu'ici dans le chunk de page, charge avant meme que
-  // `boot()` de duckdb.ts puisse commencer — alors que la frise est fermee au
-  // chargement et que la matrice n'est qu'une des trois vues. Les deux ne sont
-  // donc plus importes statiquement : `import()` les charge au premier besoin
-  // (frise ouverte, vue matrice), et le composant reste `null` le temps du
-  // telechargement — d'ou les emplacements reserves du gabarit, cf. le style.
+  // Timeline importe Observable Plot (209 Ko minifie, ~65 Ko gzip) et partait
+  // jusqu'ici dans le chunk de page, charge avant meme que `boot()` de
+  // duckdb.ts puisse commencer — alors que la frise est fermee au chargement.
+  // Elle n'est donc plus importee statiquement : `import()` la charge a la
+  // premiere ouverture, et le composant reste `null` le temps du
+  // telechargement — d'ou l'emplacement reserve du gabarit, cf. le style.
   type ComposantTimeline = (typeof import('$lib/components/Timeline.svelte'))['default'];
-  type ComposantMatrice = (typeof import('$lib/components/Matrice.svelte'))['default'];
   let TimelineComp = $state<ComposantTimeline | null>(null);
-  let MatriceComp = $state<ComposantMatrice | null>(null);
 
   $effect(() => {
     if (friseOuverte && !TimelineComp) {
@@ -158,13 +151,6 @@
     }
   });
 
-  $effect(() => {
-    if (vue === 'matrice' && !MatriceComp) {
-      import('$lib/components/Matrice.svelte').then((m) => {
-        MatriceComp = m.default;
-      });
-    }
-  });
   let terme = $state(initial.filtres.texte || initial.filtres.recherche);
 
   // Cible de la saisie. Les deux recherches s'excluent : `search_key` est
@@ -242,7 +228,6 @@
   let jeton = 0;
   let jetonFacettes = 0;
   let jetonFrise = 0;
-  let jetonMatrice = 0;
 
   /** Un echec n'est signale que s'il concerne encore le cycle en cours. */
   function echec(vivant: () => boolean) {
@@ -360,23 +345,8 @@
       .catch(echec(() => mien === jetonFrise));
   });
 
-  // `vue` etait lu dans le corps de l'effet principal, ce qui en faisait une
-  // dependance de l'effet **entier** : basculer carte -> liste relancait les
-  // quatorze requetes sans qu'aucun filtre ait bouge. La matrice a donc son
-  // propre effet, le seul a dependre de `vue`. Il ne lit plus `croisement` non
-  // plus — l'ancien `Promise.resolve(croisement)` faisait de l'effet principal
-  // un lecteur de ce qu'il ecrivait lui-meme.
-  $effect(() => {
-    signature;
-    if (vue !== 'matrice') return;
-    const mien = ++jetonMatrice;
-    matrice(filters)
-      .then((m) => {
-        if (mien !== jetonMatrice) return;
-        croisement = m;
-      })
-      .catch(echec(() => mien === jetonMatrice));
-  });
+  // Aucun de ces effets ne lit `vue` : basculer carte -> liste ne doit relancer
+  // aucune requete tant qu'aucun filtre n'a bouge.
 
   // --- Permalien -----------------------------------------------------------
   // L'URL est la seule memoire partageable de l'exploration. On y ecrit par
@@ -684,7 +654,7 @@
   );
 
   // Pose `inert` sur tout ce qui n'est pas le calque modal courant, depuis
-  // l'exterieur : la carte, la matrice et la frise appartiennent a d'autres
+  // l'exterieur : la carte et la frise appartiennent a d'autres
   // composants, `inert` se pose donc sur leurs racines sans qu'ils aient
   // besoin de le connaitre. Le voile bloque deja le pointeur ; ceci bloque le
   // clavier, que le voile ne couvre pas.
@@ -719,16 +689,8 @@
 
   const VUES: { cle: Vue; titre: string }[] = [
     { cle: 'carte', titre: 'Carte' },
-    { cle: 'matrice', titre: 'Matrice' },
     { cle: 'liste', titre: 'Liste' }
   ];
-
-  // Un clic dans la matrice pose les deux axes d'un coup. La decennie devient
-  // une plage d'annees pleine, pas une annee unique.
-  function choisirCellule(siecle: number, decennie: number) {
-    filters.siecles = [siecle];
-    filters.anneeProtection = [decennie, Math.min(ANNEE_MAX, decennie + 9)];
-  }
 
   // Message de surface, qui s'efface seul : il informe d'un geste reste sans
   // effet, il n'attend pas de reponse.
@@ -781,8 +743,8 @@
     <div class="centre-barre">
       <nav class="bascule">
         {#each VUES as choix (choix.cle)}
-          <!-- Trois boutons en rang : la zone de frappe ne s'etend qu'en
-               hauteur, sinon celle de « Matrice » recouvrirait « Carte ». -->
+          <!-- Deux boutons en rang : la zone de frappe ne s'etend qu'en
+               hauteur, sinon celle de « Liste » recouvrirait « Carte ». -->
           <button
             class="frappe-44-v"
             class:actif={vue === choix.cle}
@@ -889,23 +851,6 @@
           onselect={ouvrirFiche}
           onbbox={(bbox) => (filters.bbox = bbox)}
         />
-
-        {#if vue === 'matrice'}
-          {#if MatriceComp}
-            <MatriceComp
-              cellules={croisement.cellules}
-              ecartees={croisement.ecartees}
-              siecleSelection={filters.siecles}
-              plage={filters.anneeProtection}
-              oncellule={choisirCellule}
-            />
-          {:else}
-            <!-- Meme empreinte que Matrice : elle est en `position: absolute;
-                 inset: 0`, donc le calque suffit a reserver sa place sans
-                 dupliquer sa taille. -->
-            <div class="matrice-attente" aria-hidden="true"></div>
-          {/if}
-        {/if}
 
         {#if vue === 'liste'}
           <div class="liste">
@@ -1129,9 +1074,6 @@
              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           {#if choix.cle === 'carte'}
             <path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6z" /><path d="M9 4v14M15 6v14" />
-          {:else if choix.cle === 'matrice'}
-            <rect x="4" y="4" width="6" height="6" rx="1" /><rect x="14" y="4" width="6" height="6" rx="1" />
-            <rect x="4" y="14" width="6" height="6" rx="1" /><rect x="14" y="14" width="6" height="6" rx="1" />
           {:else}
             <path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" />
           {/if}
@@ -1437,8 +1379,8 @@
 
   /* Le tiroir se commande depuis le coin ou il s'ouvre, avec le compte des
      criteres poses : c'est tout ce qui en reste visible une fois referme.
-     z-index 4 : au-dessus de la liste et de la matrice (3), qui recouvrent la
-     scene et pour lesquelles les filtres comptent autant, mais sous le voile
+     z-index 4 : au-dessus de la liste (3), qui recouvre la scene et pour
+     laquelle les filtres comptent autant, mais sous le voile
      (5) et le tiroir (6), qu'il n'a pas a percer.
 
      C'est une surface posee, pas un aplat plein. Le fond de carte suit
@@ -1586,8 +1528,8 @@
     min-height: 0;
     overflow: hidden;
     background: var(--carte-terre);
-    /* Empreinte du bouton flottant. La liste et la matrice recouvrent la scene :
-       sans cette reserve leur titre passerait dessous. Meme procede que
+    /* Empreinte du bouton flottant. La liste recouvre la scene : sans cette
+       reserve son titre passerait dessous. Meme procede que
        `--marge-gauche` pour les commandes MapLibre — le composant ne connait
        pas le bouton, il lit une variable heritee. */
     --reserve-filtres: 126px;
@@ -2012,18 +1954,10 @@
     }
   }
 
-  /* Emplacements reserves le temps que le chunk Plot arrive, cf. le
-     commentaire du script. La matrice se contente de remplir son calque
-     (`position: absolute; inset: 0`, identique au composant reel) ; la frise
-     n'a pas ce luxe, elle occupe une ligne de grille dimensionnee par son
+  /* Emplacement reserve le temps que le chunk Plot arrive, cf. le commentaire
+     du script. La frise occupe une ligne de grille dimensionnee par son
      contenu, d'ou la hauteur mesuree en dur ci-dessous — directement sur le
      panneau reel, aux deux gabarits, pas deduite des paddings. */
-  .matrice-attente {
-    position: absolute;
-    inset: 0;
-    z-index: 3;
-    background: var(--fond);
-  }
 
   .frise-attente {
     height: 168px;
@@ -2130,8 +2064,8 @@
       font-size: 11px;
     }
 
-    /* La liste et la matrice occupent toute la scene sur un ecran etroit : le
-       bouton flottant se pose au-dessus de leur titre, et non plus a cote. */
+    /* La liste occupe toute la scene sur un ecran etroit : le bouton flottant
+       se pose au-dessus de son titre, et non plus a cote. */
     .scene {
       --reserve-filtres: 0px;
     }
@@ -2270,7 +2204,7 @@
 
     .onglets {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(3, 1fr);
       padding: 0 var(--sa-droite) var(--sa-bas) var(--sa-gauche);
       border-top: 1px solid var(--bord);
       background: var(--fond-carte);

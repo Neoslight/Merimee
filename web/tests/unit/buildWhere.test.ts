@@ -26,7 +26,7 @@ describe('except', () => {
     expect(where).toContain("region IN ('Bretagne')");
   });
 
-  it('retire plusieurs cles quand `except` est une liste, comme la matrice', () => {
+  it('retire plusieurs cles quand `except` est une liste', () => {
     const filtres = f({
       siecles: [12],
       anneeProtection: [1900, 1950],

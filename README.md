@@ -8,10 +8,6 @@ douzaine de facettes, et double frise temporelle : époque de construction d'un 
 année de l'arrêté de protection de l'autre — de la première liste Mérimée de 1840
 jusqu'aux arrêtés de 2026.
 
-Une troisième vue croise les deux axes en une matrice : **ce qui a été protégé, et
-quand**. Les années 1920 classent le 16e siècle, les années 1980-90 se tournent vers
-le 18e et le 19e — le déplacement du regard patrimonial se lit d'un coup d'œil.
-
 Les filtres posés s'affichent en puces sous la barre : on voit lesquels sont actifs et
 on en retire un seul d'un clic. Les deux panneaux — facettes à gauche, fiche à droite —
 sont des tiroirs qui flottent au-dessus de la carte au lieu de la compresser. Le bouton
@@ -84,9 +80,9 @@ npm run test:unit              # Vitest, 52 tests sur la logique pure
 npm run build && npm run test  # build statique + 181 vérifications en Chromium
 ```
 
-`npm run test` lance Chromium sur le build, réparti en 12 fichiers
+`npm run test` lance Chromium sur le build, réparti en 13 fichiers
 (`tests/e2e/*.spec.ts`) qui couvrent le démarrage de DuckDB-Wasm, le filtrage croisé,
-la recherche dans une facette au-delà des 40 valeurs affichées, la matrice, les
+la recherche dans une facette au-delà des 40 valeurs affichées, les
 permaliens, le chemin clavier des deux frises, le gabarit téléphone, les deux
 thèmes — contraste calculé dans chacun, polices réellement servies, aucune couleur en
 dur hors d'`app.css` —, les puces de filtres actifs, le brossage des siècles, et le

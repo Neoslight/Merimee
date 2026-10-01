@@ -1,7 +1,7 @@
 # Règles de conception — interface
 
 Déplacé de `CLAUDE.md`. Couvre `+page.svelte`, `app.css`, `app.html`, et les
-composants `FacetPanel`, `Jetons`, `Timeline`, `Matrice`, `DetailPanel`. Lire
+composants `FacetPanel`, `Jetons`, `Timeline`, `DetailPanel`. Lire
 cette page avant de toucher à la mise en page, au focus, au clavier ou à
 l'accessibilité.
 
@@ -51,12 +51,11 @@ le tiroir s'ouvre et **s'efface tant qu'il est ouvert** : la croix de l'en-tête
 tiroir est alors le seul geste de fermeture, et le bouton revient avec elle. Deux
 conséquences :
 
-- **z-index 4**, au-dessus de la liste et de la matrice (3), qui recouvrent la scène et
-  pour lesquelles les filtres comptent autant, mais sous le voile (5) et le tiroir (6) ;
+- **z-index 4**, au-dessus de la liste (3), qui recouvre la scène et pour laquelle
+  les filtres comptent autant, mais sous le voile (5) et le tiroir (6) ;
 - **son empreinte est une variable héritée**, `--reserve-filtres`, posée par la scène et
-  lue par le titre de la liste et par celui de la matrice. Même procédé que
-  `--marge-gauche` pour les commandes MapLibre : ni la liste ni la matrice n'ont à
-  connaître l'existence de ce bouton. Elle tombe à zéro quand le tiroir est ouvert, et
+  lue par le titre de la liste. Même procédé que `--marge-gauche` pour les commandes
+  MapLibre : la liste n'a pas à connaître l'existence de ce bouton. Elle tombe à zéro quand le tiroir est ouvert, et
   sur gabarit étroit, où le bouton passe **au-dessus** du titre et non à côté ;
 - **c'est une surface posée, pas un aplat plein.** Le fond de carte suit désormais le
   thème, mais cela ne change rien ici : le bouton appartient à l'interface et suit le
@@ -174,7 +173,7 @@ n'intervient qu'au passage suivant.
 
 **`inert` est posé depuis `+page.svelte`, jamais par les composants qu'il couvre.** Sur
 gabarit étroit, quand un calque devient modal (fiche ouverte, ou tiroir ouvert), tout ce
-qui n'est pas ce calque — la carte, la matrice, la frise, appartenant chacune à un autre
+qui n'est pas ce calque — la carte, la frise, appartenant chacune à un autre
 composant — reçoit `inert` depuis l'extérieur, par sélection DOM sur les enfants de
 `.scene` et quelques éléments hors scène. Le voile bloque déjà le pointeur ; `inert`
 bloque le clavier, que le voile ne couvre pas, sans qu'aucun composant n'ait à savoir
@@ -200,18 +199,15 @@ lexique ignore, cf. `docs/conception-donnees.md`) — seul le bouton s'ajoute.
 cinq secondes (`role="status"`). Même surface que `.alerte-position`, sans bouton.
 Premier porteur : « Au hasard » sous un filtre qui ne garde aucune notice.
 
-**`Timeline` et `Matrice` sont chargés en `import()` dynamique, pas importés
-statiquement.** Les deux portent Observable Plot (209 Ko minifié, ~65 Ko gzip), et
-partaient jusque-là dans le chunk unique de la page — 1,33 Mo / 378 Ko gzip, chargé
-avant même que `boot()` de `duckdb.ts` puisse commencer — alors que la frise est
-**fermée par défaut** sous 900 px et que la matrice n'est qu'une des trois vues.
-`+page.svelte` déclenche l'`import()` par effet (`friseOuverte` pour `Timeline`,
-`vue === 'matrice'` pour `Matrice`) et garde le composant à `null` le temps du
-téléchargement. Deux emplacements réservés évitent un bond de mise en page pendant
-ce court chargement : `.matrice-attente` reprend l'empreinte de `Matrice`
-(`position: absolute; inset: 0`), `.frise-attente` reprend la hauteur mesurée du
-panneau réel aux deux gabarits (168 px large, 317 px sous 900 px) — directement sur
-le panneau, pas déduite de ses paddings.
+**`Timeline` est chargée en `import()` dynamique, pas importée statiquement.** Elle
+porte Observable Plot (209 Ko minifié, ~65 Ko gzip), qui partait jusque-là dans le
+chunk unique de la page — 1,33 Mo / 378 Ko gzip, chargé avant même que `boot()` de
+`duckdb.ts` puisse commencer — alors que la frise est **fermée par défaut**.
+`+page.svelte` déclenche l'`import()` par effet (`friseOuverte`) et garde le composant
+à `null` le temps du téléchargement. Un emplacement réservé évite un bond de mise en
+page pendant ce court chargement : `.frise-attente` reprend la hauteur mesurée du
+panneau réel aux deux gabarits (168 px large, 317 px sous 900 px) — directement sur le
+panneau, pas déduite de ses paddings.
 
 **Le nom accessible d'une puce porte l'action, pas la valeur** (`aria-label="Retirer le
 filtre architecture militaire"`). Sinon la puce et l'option de même libellé dans le
@@ -326,8 +322,7 @@ corrigent ensemble :
   de facettes, sa liste d'options imbriquée, fiche. Sans lui, tirer vers le bas en haut
   de l'un d'eux remonte au navigateur et déclenche le pull-to-refresh : **rechargement
   complet du wasm et perte de l'exploration en cours** ;
-- **le `ResizeObserver` de la frise et celui de la matrice ne retiennent qu'une mesure
-  par image.** Chaque mesure retenue reconstruit intégralement le graphique
+- **le `ResizeObserver` de la frise ne retient qu'une mesure par image.** Chaque mesure retenue reconstruit intégralement le graphique
   (`Plot.plot()` puis `replaceChildren`), pas seulement son échelle.
 
 **La fiche en feuille ne défilait pas, et la cause était la grille.** `.fiche-hote`
@@ -357,8 +352,8 @@ Entrée bascule (`click` de `detail` nul). Cinq points à ne pas défaire :
 - **la carte ramène le point choisi au-dessus de la feuille** (`reserveBas`), seulement
   s'il tombe dessous, sans `essential: true`.
 
-**Sur téléphone, les vues passent au pied de l'écran.** `.onglets` (Carte / Matrice /
-Liste / Frises) remplace `.bascule` et `.replier`, masqués sous 768 px : les vues sous le
+**Sur téléphone, les vues passent au pied de l'écran.** `.onglets` (Carte / Liste /
+Frises) remplace `.bascule` et `.replier`, masqués sous 768 px : les vues sous le
 pouce, et la barre du haut rendue à la marque, au compteur et à la recherche (≤ 120 px au
 lieu d'environ 150). « Au hasard » y devient un dé, nom accessible inchangé. Les onglets
 entrent dans la liste `dehors` de l'effet `inert`. Tablette et ordinateur n'en voient

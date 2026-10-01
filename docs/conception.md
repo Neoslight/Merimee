@@ -7,7 +7,7 @@ crédits photo…) sous un seul titre. Quatre fichiers, chacun lisible seul :
 
 | Fichier | Domaine |
 |---|---|
-| [conception-donnees.md](conception-donnees.md) | Modèle `LIST`, facettes, plein texte, permalien, cycle de requêtes, matrice |
+| [conception-donnees.md](conception-donnees.md) | Modèle `LIST`, facettes, plein texte, permalien, cycle de requêtes |
 | [conception-carte.md](conception-carte.md) | MapLibre, fonds historiques, teinte du fond clair, densité, liseré |
 | [conception-interface.md](conception-interface.md) | Mise en page, focus, clavier, accessibilité, thème, panneaux |
 | [conception-photographies.md](conception-photographies.md) | Wikidata, Commons, Mémoire, cadrage des images de fiche |

@@ -60,11 +60,11 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `web/src/lib/format.ts` | `romain`, `nf`, formats de nombres — étaient recopiés dans plusieurs composants |
 | `web/src/service-worker.ts` | cache des actifs hachés uniquement |
 | `web/scripts/precharger.mjs` | injecte le préchargement du wasm dans le shell HTML après build, chaîné à `build` et `build:pages` |
-| `web/src/lib/components/` | `MonumentMap`, `FacetPanel`, `Jetons`, `Timeline`, `Matrice`, `DetailPanel` |
-| `web/tests/e2e/` | 256 vérifications en Chromium réel : 13 fichiers `NN-domaine.spec.ts` + `_soutien.ts` (`verifier()` adossé à `expect.soft`), `playwright.config.ts` en `workers: 1` / `retries: 0` |
+| `web/src/lib/components/` | `MonumentMap`, `FacetPanel`, `Jetons`, `Timeline`, `DetailPanel` |
+| `web/tests/e2e/` | 254 vérifications en Chromium réel : 13 fichiers `NN-domaine.spec.ts` + `_soutien.ts` (`verifier()` adossé à `expect.soft`), `playwright.config.ts` en `workers: 1` / `retries: 0` |
 | `web/tests/unit/` | 73 tests Vitest sur la logique pure : `buildWhere`, `permalien`, `shards`, `teinte`, `points`, `acr`, `camera`, distances |
 | `web/tests/apercu-social.mjs` | régénère la vignette Open Graph depuis l'application |
-| `web/tests/audit-visuel.mjs` | 112 captures + relevés WCAG chiffrés, **hors** `npm run test` |
+| `web/tests/audit-visuel.mjs` | 104 captures + relevés WCAG chiffrés, **hors** `npm run test` |
 
 ## Commandes
 
@@ -79,9 +79,9 @@ cd etl  && python -m pytest tests -q    # 102 tests (78 + 24 dans test_annexes.p
 cd web  && npm run dev                  # http://localhost:5173
 cd web  && npm run check                # svelte-check, doit rester à 0/0
 cd web  && npm run test:unit            # Vitest, 73 tests, logique pure
-cd web  && npm run build && npm run test # build statique + 256 vérifications en Chromium (tests/e2e/)
+cd web  && npm run build && npm run test # build statique + 254 vérifications en Chromium (tests/e2e/)
 cd web  && npm run apercu               # régénère static/apercu-social.png
-cd web  && npm run audit                # 112 captures + relevés dans .audit-screenshots/
+cd web  && npm run audit                # 104 captures + relevés dans .audit-screenshots/
 cd web  && npm run deploy               # predeploy (check + test:unit) puis build /Merimee + push sur gh-pages
 ```
 
@@ -123,7 +123,7 @@ littéral dans un champ quoté.
 les filtrer hors du corpus sous prétexte qu'elles n'apparaissent pas sur la carte.
 
 **La couche ACR n'entre jamais dans le prédicat.** 1 822 notices (1 743 situées), masquées
-par défaut, sans effet sur filtres, compteurs, liste, frises ni matrice ; ses chiffres ne
+par défaut, sans effet sur filtres, compteurs, liste ni frises ; ses chiffres ne
 sont pas ceux de l'oracle. Cf. `docs/conception-donnees.md`, section ACR.
 
 **`Date_de_creation_de_la_notice` n'est pas une date métier** (79 % au 1993-03-29,
@@ -169,7 +169,7 @@ avant de toucher à ce domaine** : cet index oriente, il ne remplace pas la lect
 - un jeton monotone écarte les réponses périmées, jamais n'annule le travail déjà payé
 - le cycle de requêtes est éclaté en quatre effets, conditionnés à l'ouverture des panneaux
 - le curseur Palissy est débattu à 180 ms, comme la recherche et la recherche de facette
-- la matrice retire deux clés du prédicat et tient en une seule requête matérialisée
+- la matrice a été supprimée ; `buildWhere` garde sa liste `except`, et `?vue=matrice` retombe sur la carte
 - le tri par proximité a son propre effet, clé de position arrondie à ~100 m, et n'écarte les notices sans coordonnées que de ce tri ; position et tri hors URL
 - couche ACR : second corpus hors prédicat, 8 fragments FNV-1a modulo 8, rien téléchargé avant activation, `ref=ACR…` rallume `acr=1`
 
@@ -195,7 +195,7 @@ avant de toucher à ce domaine** : cet index oriente, il ne remplace pas la lect
 - les deux panneaux repliables sont fermés au chargement à toutes les largeurs (3 requêtes au démarrage plutôt que 14)
 - le bouton Filtres vit au coin de la carte et s'efface tant qu'il est ouvert
 - la frise suit le thème, se replie partout, et les deux axes ont désormais un chemin clavier complet
-- `Timeline`/`Matrice` sont chargés en `import()` dynamique, hors du chunk de page
+- `Timeline` est chargée en `import()` dynamique, hors du chunk de page
 - les deux panneaux sont des calques (`position: absolute`), jamais une colonne de grille qui comprime la carte
 - le focus suit les calques ouverts par un geste, jamais ceux posés par un permalien, toujours en `preventScroll` ; `inert` est posé depuis la page, tiroir fermé compris
 - `Échap` global ferme le calque le plus haut ; les composants qui le gèrent localement appellent `preventDefault`
@@ -258,10 +258,6 @@ mesurée), pas le *quoi*.
   Guerre de Cent Ans et Révolution sur l'axe *construction*, 1840 (première liste
   Mérimée), 1913 (loi) et 1962 (Malraux) sur l'axe *protection*. Les mélanger sur une
   seule frise serait faux.
-- **Matrice typologie × siècle**, variante de la matrice existante : `domaines` compte
-  **18 valeurs distinctes** (architecture domestique 19 154, religieuse 15 567,
-  militaire 1 688…), soit 18 × 12 cellules, comparable aux 205 actuelles.
-  `denominations` en compte 706 et ne fait pas un axe.
 - Export CSV de la sélection courante, et liste paginée au-delà des 200 lignes.
 - Filtres « figures » préréglés (Vauban, Guimard, Le Corbusier) en un clic, au-dessus
   de la facette auteurs existante. Devenus de simples liens depuis les permaliens.

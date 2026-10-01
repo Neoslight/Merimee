@@ -42,7 +42,7 @@ for (const nom of readdirSync(SORTIE)) {
 const { serveur, url: BASE } = await demarrer(chemin('../build'), 4181);
 
 // `AUDIT_GABARITS` et `AUDIT_THEMES` restreignent la passe — utiles pour
-// eprouver un geste sans repayer 112 captures.
+// eprouver un geste sans repayer 104 captures.
 const seulement = (nom, tous) => {
   const v = process.env[nom];
   return v ? tous.filter((t) => v.split(',').includes(t.cle ?? t)) : tous;
@@ -116,7 +116,7 @@ async function effacerFiltres(page) {
  * Ramene l'application a son etat d'arrivee sans rechargement.
  *
  * Un `goto` couterait un reamorcage DuckDB par etat ; le defaire geste par
- * geste est le seul chemin tenable sur 112 captures. L'ordre compte : la fiche
+ * geste est le seul chemin tenable sur 104 captures. L'ordre compte : la fiche
  * d'abord (elle referme le tiroir derriere elle sur gabarit etroit), les
  * filtres ensuite, les calques en dernier.
  */
@@ -312,16 +312,6 @@ const ETATS = [
       await page.fill('.recherche', 'jubé');
       await page.waitForTimeout(3500);
     }
-  },
-
-  {
-    cle: 'defaut',
-    vue: 'matrice',
-    poser: async (page) => {
-      await page.locator(SELECTEUR_VUE, { hasText:'Matrice' }).click();
-      await attendre(page, '.matrice svg', 25_000);
-      await page.waitForTimeout(1200);
-    }
   }
 ];
 
@@ -496,7 +486,7 @@ const RELEVE = () => {
 
   // --- Chevauchements -------------------------------------------------------
   const PANNEAUX =
-    '.legende, .fonds, .fiche, .facettes, .jetons, .frise, .bascule, .chiffres, .marque, .centre-barre, .liste, .matrice, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-top-right, .scene > button.filtres, .renvoi-photo';
+    '.legende, .fonds, .fiche, .facettes, .jetons, .frise, .bascule, .chiffres, .marque, .centre-barre, .liste, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-top-right, .scene > button.filtres, .renvoi-photo';
   const candidats = [
     ...new Set([...interactifs, ...[...document.querySelectorAll(PANNEAUX)].filter(visible)])
   ].slice(0, 140);

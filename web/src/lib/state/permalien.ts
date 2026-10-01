@@ -27,10 +27,13 @@
 import { ANNEE_MAX, ANNEE_MIN, filtresVides, type Filters } from './filters.svelte';
 import { estAcr } from '$lib/acr';
 
-/** Vue occupant la scene centrale. `carte` est le defaut, donc absent de l'URL. */
-export type Vue = 'carte' | 'matrice' | 'liste';
+/** Vue occupant la scene centrale. `carte` est le defaut, donc absent de l'URL.
+ *
+ *  `matrice` a existe : un lien deja partage qui la porte retombe sur la
+ *  carte, comme toute valeur inconnue, sans erreur. */
+export type Vue = 'carte' | 'liste';
 
-const VUES: readonly Vue[] = ['carte', 'matrice', 'liste'];
+const VUES: readonly Vue[] = ['carte', 'liste'];
 
 /**
  * Fond de carte historique superpose, `null` quand il n'y en a pas.

@@ -236,7 +236,7 @@ export function imprimerReleves(mesures: Releve[]): void {
  * chunks compiles pour trouver celui qui contient un message d'erreur propre
  * a Plot (`unknown scale`, absent de tout le reste du bundle). C'est ce
  * fichier qui ne doit partir sur le reseau qu'au premier besoin — frise
- * ouverte ou vue matrice — et jamais avant.
+ * ouverte — et jamais avant.
  */
 /** Chemin absolu et taille en octets du binaire wasm du build courant. */
 export function infosWasm(): { chemin: string; octets: number } {

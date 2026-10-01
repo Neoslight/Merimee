@@ -101,7 +101,7 @@ const cache = new Map<string, Promise<string>>();
  * Materialise, si besoin, la table des references portant tous les `termes`
  * — c'est-a-dire le resultat que `clauseTexte` inlinait jusqu'ici dans
  * **chaque** requete du cycle : `totaux`, `points`, les huit facettes de
- * `cardinalites`, les deux histogrammes, `matrice`. Chacune reprenait le
+ * `cardinalites`, les deux histogrammes. Chacune reprenait le
  * scan `postings` + jointure `docs` + `GROUP BY/HAVING`, en mono-thread, sur
  * une connexion unique qui les serialise — mesure en duckdb Python sur les
  * Parquet de `texte/`, `SET threads=1` : cycle (points, totaux, cardinalites,

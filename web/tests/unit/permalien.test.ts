@@ -117,7 +117,9 @@ describe('validation a la lecture', () => {
 
   it('retombe sur la vue carte pour une valeur inconnue', () => {
     expect(decoder('?vue=n-importe-quoi').vue).toBe('carte');
-    expect(decoder('?vue=matrice').vue).toBe('matrice');
+    // La matrice a ete supprimee : un lien deja partage retombe sur la carte.
+    expect(decoder('?vue=matrice').vue).toBe('carte');
+    expect(decoder('?vue=liste').vue).toBe('liste');
   });
 
   it('retombe sur aucun fond pour une valeur inconnue', () => {

@@ -65,13 +65,6 @@ const NOMS = {
   chaleur4: '--chaleur-4',
   barreSourde: '--barre-sourde',
   friseTexteFaible: '--frise-texte-faible',
-  matrice0: '--matrice-0',
-  matrice1: '--matrice-1',
-  matrice2: '--matrice-2',
-  matrice3: '--matrice-3',
-  matrice4: '--matrice-4',
-  matriceTexte: '--matrice-texte',
-  matriceCerclee: '--matrice-cerclee',
   accent: '--accent',
   accentPlein: '--accent-plein',
   bord: '--bord'
@@ -94,8 +87,6 @@ const REPLI: Palette = {
   chaleur0: 'rgba(236, 234, 228, 0)', chaleur1: '#e6d0a8', chaleur2: '#c9933b',
   chaleur3: '#a9531f', chaleur4: '#431b09',
   barreSourde: '#cdc6b5', friseTexteFaible: '#6e6a62',
-  matrice0: '#f4efe4', matrice1: '#e6d0a8', matrice2: '#c9933b', matrice3: '#a9531f',
-  matrice4: '#431b09', matriceTexte: '#f8f7f4', matriceCerclee: '#1a1d20',
   accent: '#b94723', accentPlein: '#c85a32', bord: '#eae6dc'
 };
 

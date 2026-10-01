@@ -80,7 +80,7 @@ scorer. Quatre points à ne pas défaire :
 **Le prédicat plein texte est résolu une fois par cycle, pas réinjecté à chaque
 requête.** `clauseTexte()` inlinait jusqu'ici le scan `postings` + jointure `docs`
 + `GROUP BY/HAVING` dans **chaque** requête du cycle (`totaux`, `points`, les huit
-facettes de `cardinalites`, les deux histogrammes, `matrice`), en mono-thread, sur
+facettes de `cardinalites`, les deux histogrammes), en mono-thread, sur
 la connexion unique qui les sérialise. `preparerClauseTexte()` (`db/texte.ts`)
 matérialise désormais ce résultat dans une table temporaire, une par jeu de termes
 (`texte_sel_<termes>`), avant que `termesResolus` ne soit publié — `clauseTexte()`
@@ -199,11 +199,11 @@ regarde.** (La liste en a reçu un cinquième depuis, cf. « Tri par proximité 
   premier écran : neuf requêtes sur quatorze partaient pour un DOM que personne ne
   regarde. L'effet **dépend** de l'état d'ouverture, donc ouvrir le panneau le rejoue —
   rien ne s'affiche périmé, et aucun rafraîchissement explicite n'est à écrire ;
-- **`vue` ne déclenche plus que la matrice.** Il était lu dans le corps de l'effet
-  principal, ce qui en faisait une dépendance de l'effet **entier** : basculer carte →
-  liste relançait les quatorze requêtes sans qu'aucun filtre ait bougé. Au passage,
-  l'ancien `Promise.resolve(croisement)` faisait de cet effet un lecteur de ce qu'il
-  écrivait lui-même ;
+- **`vue` ne déclenche plus rien.** Il était lu dans le corps de l'effet principal,
+  ce qui en faisait une dépendance de l'effet **entier** : basculer carte → liste
+  relançait les quatorze requêtes sans qu'aucun filtre ait bougé. Aucun effet de
+  requête ne le lit plus depuis la suppression de la matrice, qui en était le dernier
+  lecteur ;
 - **six états sont passés en `$state.raw`** — `facettes`, `barresSiecles`,
   `barresAnnees`, `cardinaux`, `compteurs`, `resultats` — pour la raison déjà écrite au
   dessus de `pointsCarte` : réaffectés en bloc, jamais mutés en place.
@@ -221,21 +221,11 @@ effet, qui recopie `filters` vers la poignée, existe pour `reset()` et le retra
 puce ; il lit `filters` sous `untrack`, sinon l'écriture différée rejouerait l'effet qui
 l'a produite.
 
-**La matrice retire un filtre par axe.** `buildWhere` accepte une liste de clés
-à exclure ; `matrice()` en passe deux (`siecles`, `anneeProtection`), sinon
-choisir une cellule réduirait la matrice à cette seule cellule. Les couples
-(notice, siècle, décennie) sont dédoublonnés : une notice à deux actes dans la
-même décennie compterait deux fois. Les siècles antérieurs au 10e sortent des
-axes mais leur nombre est affiché sous le graphique. Elle tient désormais en **une
-seule requête** plutôt que deux : les deux anciennes partageaient la même CTE
-`couples` mais se sérialisaient sur la connexion unique (`Promise.all` ne les
-parallélise pas). `couples` est `MATERIALIZED` pour n'être calculée qu'une fois
-malgré les deux lectures qui suivent ; la ligne des écartées porte un `siecle`
-sentinelle (`-1`, hors du domaine des siècles) pour voyager dans le même résultset
-sans que `NULL` n'ait à se distinguer d'un siècle authentique. Vérifié ligne à ligne
-contre l'ancienne forme en duckdb Python sur 5 prédicats (aucun filtre, un domaine,
-un statut, une région, deux filtres combinés) : mêmes cellules, même compte
-d'écartées à chaque fois.
+**La matrice siècle × décennie a été supprimée.** Vue entière, sans chemin clavier ni
+légende, elle répétait en plus dense ce que les deux frises disent côte à côte.
+`buildWhere` garde sa liste de clés à exclure (`except`), qui lui servait à retirer un
+filtre par axe : c'est un mécanisme général, éprouvé en Vitest. Un lien `?vue=matrice`
+déjà partagé retombe sur la carte, comme toute valeur de `vue` inconnue.
 
 **`Detail.auteurs`** (`queries.ts`) porte la liste consolidée des auteurs — celle
 qu'utilise déjà la facette — distincte d'`auteurs_detail`, qui garde la forme brute
@@ -279,7 +269,7 @@ versionné, export POP du 2026-09-15) : 1 822 notices `ACR…`, 44 colonnes dont
 ne recoupent qu'en partie ceux de `merimee.csv` — `Reference_de_la_notice`,
 `Coordonnees` (« lat,lon » comme le champ WGS84, lu par le même `parse_coords`),
 `Titre_courant`, `Description_historique`, `Description_de_l_edifice`, `Date_de_Label`.
-Aucune facette, aucun compteur, ni la liste, ni les frises, ni la matrice ne la voient :
+Aucune facette, aucun compteur, ni la liste, ni les frises ne la voient :
 c'est un calque de carte et une fiche, rien d'autre.
 
 - **Mesures qui justifient de ne pas dédoublonner** : le label se perd à la protection MH,

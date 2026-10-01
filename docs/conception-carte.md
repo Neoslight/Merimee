@@ -171,9 +171,9 @@ que tout le dispositif fait porter la différence par les jetons. La rampe de de
 elle, n'est pas concernée : **densité et fond historique s'excluent mutuellement**,
 l'une agrège, l'autre situe.
 
-**La rampe de densité s'inverse avec le thème**, comme celle de la matrice : en sombre
-elle monte vers le crème, en clair elle descend vers le brun, sur les valeurs de
-`--matrice-1..4`, déjà éprouvées sur un fond clair. `--chaleur-0` reste **transparent**
+**La rampe de densité s'inverse avec le thème** : en sombre elle monte vers le crème,
+en clair elle descend vers le brun (`--chaleur-1..4`, les valeurs de l'ancienne
+matrice, éprouvées sur un fond clair). `--chaleur-0` reste **transparent**
 dans les deux cas — `heatmap-density` vaut zéro sur toute la surface sans donnée, et un
 zéro opaque laverait la vue entière. Elle est réinjectée par l'effet de palette et non
 seulement par `poserCouches()` : elle doit suivre le thème par un chemin qui lui est

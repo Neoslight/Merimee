@@ -130,9 +130,8 @@ test('amorçage et données', async () => {
   });
 
   await test.step('chargement differe d’Observable Plot', async () => {
-    // Timeline et Matrice importent Plot (209 Ko minifie) derriere un
-    // `import()` : tant que la frise est fermee et qu'on n'est pas en vue
-    // matrice, aucun octet du chunk qui le porte ne doit partir.
+    // Timeline importe Plot (209 Ko minifie) derriere un `import()` : tant que
+    // la frise est fermee, aucun octet du chunk qui le porte ne doit partir.
     const chunkPlot = trouverChunkPlot();
     const requetesChunk: string[] = [];
     page.on('request', (r) => {
