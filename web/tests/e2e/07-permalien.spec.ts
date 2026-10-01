@@ -30,9 +30,15 @@ test.afterAll(async () => {
 
 test('permalien', async () => {
   let lienCopie = '';
+  // Centre de la carte avant le deplacement : la vue de depart est une
+  // emprise cadree, son centre depend de la fenetre et ne s'ecrit plus en dur.
+  let centreAvant: [number, number] = [0, 0];
+  const centre = () =>
+    page.evaluate(() => (window as unknown as { __carteOutils: { centre: () => [number, number] } }).__carteOutils.centre());
 
   await test.step('un deplacement de carte ne reecrit pas l’URL', async () => {
     const urlAvantPan = page.url();
+    centreAvant = await centre();
     const toile = (await page.locator('.maplibregl-canvas').boundingBox())!;
     await page.mouse.move(toile.x + toile.width / 2, toile.y + toile.height / 2);
     await page.mouse.down();
@@ -54,7 +60,8 @@ test('permalien', async () => {
     verifier('le lien copie porte la vue de carte', Boolean(cadrage), lienCopie.split('?')[1] ?? lienCopie);
     verifier(
       'la vue copiee est celle apres deplacement',
-      Boolean(cadrage) && (Math.abs(Number(cadrage![1]) - 2.6) > 0.05 || Math.abs(Number(cadrage![2]) - 46.6) > 0.05),
+      Boolean(cadrage) &&
+        (Math.abs(Number(cadrage![1]) - centreAvant[0]) > 0.05 || Math.abs(Number(cadrage![2]) - centreAvant[1]) > 0.05),
       cadrage ? `c=${cadrage[1]},${cadrage[2]},${cadrage[3]}` : 'aucun cadrage'
     );
   });
@@ -112,6 +119,25 @@ test('permalien', async () => {
     verifier(
       'retour arriere referme la fiche',
       (await page.locator('.fiche .fermer').count()) === 0 && !/[?&]ref=/.test(page.url()),
+      page.url().slice(-60)
+    );
+
+    // `page.url` de SvelteKit garde l'adresse du chargement sous le routage
+    // superficiel : relue au retour, elle ramenait la vue carte alors que la
+    // barre d'adresse disait `vue=liste`.
+    verifier('retour arriere garde la vue liste', (await page.locator('.liste').count()) === 1, page.url().slice(-40));
+
+    // Fermer a la croix remplace l'entree d'historique au lieu d'en empiler
+    // une : le bouton retour ne doit pas rouvrir la fiche qu'on vient de quitter.
+    await page.locator('.liste button').first().click();
+    await attendre(page, '.fiche .fermer');
+    await page.locator('.fiche .fermer').click();
+    await page.waitForSelector('.fiche .fermer', { state: 'detached', timeout: 10_000 }).catch(() => {});
+    await page.goBack();
+    await page.waitForTimeout(500);
+    verifier(
+      'retour arriere apres fermeture a la croix ne rouvre pas la fiche',
+      (await page.locator('.fiche .fermer').count()) === 0 && page.url().startsWith(infos.url),
       page.url().slice(-60)
     );
   });

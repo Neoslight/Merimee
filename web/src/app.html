@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="description" content="Exploration cartographique et chronologique des 46 760 immeubles protégés au titre des monuments historiques (base Mérimée)." />
     <link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
+    <!-- Teinte de la barre du navigateur mobile. Sans valeur ici : elle est
+         posee par `theme.svelte.ts`, qui la lit dans `app.css` — toute couleur
+         y vit, et elle doit suivre le theme choisi, pas celui du systeme. -->
+    <meta name="theme-color" />
     <!-- La feuille CARTO puis ses sprites, polices et tuiles partent d'un autre
          domaine : sur un reseau mobile, la poignee de main TLS se paie avant la
          moindre tuile. Deux hotes, releves dans style.json : la feuille sur

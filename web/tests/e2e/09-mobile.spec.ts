@@ -135,6 +135,19 @@ test('gabarit téléphone', async () => {
     verifier('fiche en feuille remontante', (await page.locator('.fiche-hote.ouvert').count()) === 1);
     verifier('ouverte en apercu', (await page.locator('.fiche-hote.plein').count()) === 0);
 
+    // La position, pas seulement les classes : le focus pose par le geste
+    // faisait defiler `.scene` vers la feuille translatee, qui couvrait alors
+    // tout l'ecran alors que ses classes disaient « apercu ».
+    await page.waitForTimeout(400);
+    const pose = await page.evaluate(() => {
+      const scene = document.querySelector('.scene')!;
+      const s = scene.getBoundingClientRect();
+      const hote = document.querySelector('.fiche-hote')!.getBoundingClientRect();
+      return { defile: scene.scrollTop, part: (hote.top - s.top) / s.height };
+    });
+    verifier('ouvrir la fiche au doigt ne fait pas defiler la scene', pose.defile === 0, JSON.stringify(pose));
+    verifier('l’apercu laisse plus de la moitie de la scene au-dessus de lui', pose.part > 0.5, JSON.stringify(pose));
+
     const apercu = await page.evaluate(() => ({
       barre: (document.querySelector('.barre') as HTMLElement | null)?.inert,
       ficheHote: (document.querySelector('.fiche-hote') as HTMLElement | null)?.inert
@@ -219,7 +232,11 @@ test('toucher un point à côté l’ouvre quand même', async () => {
 
 test('géolocalisation et tri à proximité', async ({ browser }: { browser: Browser }) => {
   const erreurs: string[] = [];
-  const geo = await browser.newContext({ ...TELEPHONE, geolocation: ICI, permissions: ['geolocation'] });
+  const geo = await browser.newContext({
+    ...TELEPHONE,
+    geolocation: ICI,
+    permissions: ['geolocation', 'clipboard-read', 'clipboard-write']
+  });
   const p = await geo.newPage();
   journaliser(p, erreurs);
   await p.goto(infos.url, { waitUntil: 'domcontentloaded' });
@@ -245,6 +262,19 @@ test('géolocalisation et tri à proximité', async ({ browser }: { browser: Bro
   await p.locator('.liste li button').first().click();
   await attendre(p, '.fiche .distance');
   verifier('la fiche dit la distance', /de vous/.test(await p.locator('.fiche .distance').innerText()));
+
+  // La carte est centree sur l'utilisateur : le lien copie ne doit pas porter
+  // cette vue, qui dirait ou il se tient.
+  await p.waitForFunction(
+    () => ((window as unknown as { __carteOutils?: { zoom: () => number } }).__carteOutils?.zoom() ?? 0) >= 13,
+    undefined,
+    { timeout: 10_000 }
+  );
+  await p.getByRole('button', { name: 'Copier le lien de la notice' }).click();
+  await p.waitForTimeout(400);
+  const lien = decodeURIComponent(await p.evaluate(() => navigator.clipboard.readText()));
+  verifier('le lien copie apres geolocalisation porte la notice', /[?&]ref=PA/.test(lien), lien.split('?')[1] ?? lien);
+  verifier('et tait la vue centree sur l’utilisateur', !/[?&]c=/.test(lien), lien.split('?')[1] ?? lien);
 
   await p.getByRole('button', { name: 'Mobilier' }).click();
   await p.waitForTimeout(600);

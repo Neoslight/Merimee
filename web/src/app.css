@@ -327,6 +327,15 @@
   box-sizing: border-box;
 }
 
+/* Le zoom par double-tap est un geste de la **fenetre** : il se neutralise a
+   la racine. Pose sur `button` et `a` seulement, un double-tap sur le texte
+   d'une fiche ou dans le tiroir zoomait la page entiere, carte comprise. Le
+   pincement, lui, reste permis hors de la carte — c'est le seul agrandissement
+   du texte qu'offre un telephone. */
+html {
+  touch-action: manipulation;
+}
+
 html,
 body {
   height: 100%;

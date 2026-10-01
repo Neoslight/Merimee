@@ -252,8 +252,12 @@
   // qui n'arrive qu'une fois la requete resolue.
   let noeud: HTMLElement | undefined;
 
+  // `preventScroll` n'est pas une precaution : sur telephone la feuille est
+  // translatee sous le bord, et le navigateur faisait defiler `.scene` de
+  // 354 px pour amener le focus a l'ecran — la feuille couvrait tout et la
+  // carte sortait du champ. `overflow: hidden` n'empeche pas ce defilement.
   export function focaliser() {
-    noeud?.focus();
+    noeud?.focus({ preventScroll: true });
   }
 </script>
 

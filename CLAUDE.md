@@ -54,13 +54,15 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `web/src/lib/teinte.ts` | repeint le fond clair par **nature de couche**, jamais par identifiant |
 | `web/src/lib/state/carte.svelte.ts` | ce que la carte a réellement peint — le seul témoin d'un repeint muet |
 | `web/src/lib/carte/fonds.ts` | table des fonds historiques IGN et construction des tuiles — extrait de `MonumentMap.svelte` |
+| `web/src/lib/carte/camera.ts` | cadrage, calculs purs : emprise de départ, marges, et quand taire la vue dans un lien copié |
+| `web/src/lib/statuts.ts` | libellé, glose et définition de chaque niveau de protection — source unique de la légende |
 | `web/src/lib/photo.ts` | cadrage des photographies de fiche, calculs purs — extrait de `DetailPanel.svelte` |
 | `web/src/lib/format.ts` | `romain`, `nf`, formats de nombres — étaient recopiés dans plusieurs composants |
 | `web/src/service-worker.ts` | cache des actifs hachés uniquement |
 | `web/scripts/precharger.mjs` | injecte le préchargement du wasm dans le shell HTML après build, chaîné à `build` et `build:pages` |
 | `web/src/lib/components/` | `MonumentMap`, `FacetPanel`, `Jetons`, `Timeline`, `Matrice`, `DetailPanel` |
-| `web/tests/e2e/` | 247 vérifications en Chromium réel : 13 fichiers `NN-domaine.spec.ts` + `_soutien.ts` (`verifier()` adossé à `expect.soft`), `playwright.config.ts` en `workers: 1` / `retries: 0` |
-| `web/tests/unit/` | 66 tests Vitest sur la logique pure : `buildWhere`, `permalien`, `shards`, `teinte`, `points`, `acr`, distances |
+| `web/tests/e2e/` | 256 vérifications en Chromium réel : 13 fichiers `NN-domaine.spec.ts` + `_soutien.ts` (`verifier()` adossé à `expect.soft`), `playwright.config.ts` en `workers: 1` / `retries: 0` |
+| `web/tests/unit/` | 73 tests Vitest sur la logique pure : `buildWhere`, `permalien`, `shards`, `teinte`, `points`, `acr`, `camera`, distances |
 | `web/tests/apercu-social.mjs` | régénère la vignette Open Graph depuis l'application |
 | `web/tests/audit-visuel.mjs` | 112 captures + relevés WCAG chiffrés, **hors** `npm run test` |
 
@@ -76,8 +78,8 @@ cd etl  && python -m merimee_etl.memoire   # compte les illustrations POP, 1,36 
 cd etl  && python -m pytest tests -q    # 102 tests (78 + 24 dans test_annexes.py)
 cd web  && npm run dev                  # http://localhost:5173
 cd web  && npm run check                # svelte-check, doit rester à 0/0
-cd web  && npm run test:unit            # Vitest, 66 tests, logique pure
-cd web  && npm run build && npm run test # build statique + 247 vérifications en Chromium (tests/e2e/)
+cd web  && npm run test:unit            # Vitest, 73 tests, logique pure
+cd web  && npm run build && npm run test # build statique + 256 vérifications en Chromium (tests/e2e/)
 cd web  && npm run apercu               # régénère static/apercu-social.png
 cd web  && npm run audit                # 112 captures + relevés dans .audit-screenshots/
 cd web  && npm run deploy               # predeploy (check + test:unit) puis build /Merimee + push sur gh-pages
@@ -160,9 +162,10 @@ avant de toucher à ce domaine** : cet index oriente, il ne remplace pas la lect
 - colonnes mortes retirées des Parquet, jamais lues côté navigateur : **−10 % sur `monuments.parquet`**
 - une facette annonce ce qu'elle cache, sans son propre filtre ; sa recherche descend en SQL (40 valeurs affichées, tout le reste cherchable)
 - plein texte précalculé par l'ETL, résolu **une fois par cycle** dans une table temporaire (LRU 8), pas réinjecté à chaque requête
-- `USING SAMPLE` ignore le filtre — « Au hasard » veut `ORDER BY random()`
+- `USING SAMPLE` ignore le filtre — « Au hasard » veut `ORDER BY random()` ; `has_historique` y est un ordre, pas un filtre
+- le retour arrière lit `location` sur `popstate`, jamais `page.url` — SvelteKit y garde l'adresse du chargement sous `pushState`/`replaceState`
 - deux filtres ont un miroir hors de `filters` (recherche, bbox) qu'un simple `retirer()` ne suffit pas à effacer
-- permalien : paramètre répété pour les valeurs multiples, `bbox` exclue, vue à part, comparaison de chaînes normalisées
+- permalien : paramètre répété pour les valeurs multiples, `bbox` exclue, vue à part (tue si elle montre la position de l'utilisateur), comparaison de chaînes normalisées ; seule l'ouverture d'une fiche empile, la fermeture remplace
 - un jeton monotone écarte les réponses périmées, jamais n'annule le travail déjà payé
 - le cycle de requêtes est éclaté en quatre effets, conditionnés à l'ouverture des panneaux
 - le curseur Palissy est débattu à 180 ms, comme la recherche et la recherche de facette
@@ -173,6 +176,8 @@ avant de toucher à ce domaine** : cet index oriente, il ne remplace pas la lect
 ### Carte — [docs/conception-carte.md](docs/conception-carte.md)
 
 - les commandes de la carte sont rangées par question : légende, fonds historiques, zoom, zone visible
+- la vue de départ est une emprise (`METROPOLE`) cadrée avec marges, plus un centre et un zoom fixes
+- la légende porte un titre et une glose par niveau de protection (`lib/statuts.ts`) ; les couleurs ne bougent pas
 - le fond clair est repeint couche par couche **par nature**, jamais par identifiant CARTO
 - le thème sombre n'est pas repeint : `teinter()` sort immédiatement
 - le liseré des points vaut le sol, et bascule au sombre sous un fond historique ≥ 50 % d'opacité
@@ -192,7 +197,7 @@ avant de toucher à ce domaine** : cet index oriente, il ne remplace pas la lect
 - la frise suit le thème, se replie partout, et les deux axes ont désormais un chemin clavier complet
 - `Timeline`/`Matrice` sont chargés en `import()` dynamique, hors du chunk de page
 - les deux panneaux sont des calques (`position: absolute`), jamais une colonne de grille qui comprime la carte
-- le focus suit les calques ouverts par un geste, jamais ceux posés par un permalien ; `inert` est posé depuis la page
+- le focus suit les calques ouverts par un geste, jamais ceux posés par un permalien, toujours en `preventScroll` ; `inert` est posé depuis la page, tiroir fermé compris
 - `Échap` global ferme le calque le plus haut ; les composants qui le gèrent localement appellent `preventDefault`
 - deux états vides (`.vide-liste`, `.vide-carte`) évitent qu'un filtre trop serré laisse un écran blanc
 - les cibles touchent 44 px par un `::after` transparent, jamais par un agrandissement de la pilule

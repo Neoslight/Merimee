@@ -11,6 +11,8 @@
   import { erreurDepuisCode, position } from '$lib/state/position.svelte';
   import { teinter } from '$lib/teinte';
   import { HISTORIQUES, tuiles } from '$lib/carte/fonds';
+  import { devoilePosition, margesDepart, METROPOLE } from '$lib/carte/camera';
+  import { STATUTS } from '$lib/statuts';
   import type { FondHistorique, VueCarte } from '$lib/state/permalien';
 
   interface Props {
@@ -73,9 +75,6 @@
    *  largeur le rail et la densite prenaient une seconde rangee de legende,
    *  en permanence, pour un reglage qu'on touche une fois. */
   let reglagesOuverts = $state(false);
-
-  /** Vue par defaut : la France entiere. */
-  const DEPART: VueCarte = { lon: 2.6, lat: 46.6, zoom: 4.7 };
 
   let conteneur: HTMLDivElement;
   let carte: MapLibreMap | undefined = $state();
@@ -253,9 +252,16 @@
   }
 
   /** Vue courante, arrondie. Lue par la page au moment de copier le lien —
-   *  jamais ecrite dans l'URL vivante, qui clignoterait a chaque deplacement. */
+   *  jamais ecrite dans l'URL vivante, qui clignoterait a chaque deplacement.
+   *
+   *  Nulle aussi quand elle montrerait ou se tient l'utilisateur : apres « Me
+   *  localiser », la carte est centree sur lui, et un lien copie ne doit pas
+   *  le dire (`devoilePosition`). */
   export function vueCourante(): VueCarte | null {
     if (!carte) return null;
+    const b = carte.getBounds();
+    const bornes = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()] as const;
+    if (devoilePosition(carte.getZoom(), bornes, position.courante)) return null;
     const c = carte.getCenter();
     return {
       lon: Math.round(c.lng * 1000) / 1000,
@@ -403,12 +409,19 @@
   $effect(() => {
     // La vue de depart est lue sans dependance : c'est une condition initiale.
     // La suivre ici detruirait et recreerait la carte a chaque deplacement.
-    const depart = untrack(() => vueInitiale ?? DEPART);
+    //
+    // Sans vue portee par le lien, la carte cadre la metropole : une emprise,
+    // et non un centre et un zoom, qui ne valaient que pour un ecran large.
+    const depart = untrack(() => vueInitiale);
     const map = new maplibregl.Map({
       container: conteneur,
       style: fondPose,
-      center: [depart.lon, depart.lat],
-      zoom: depart.zoom,
+      ...(depart
+        ? { center: [depart.lon, depart.lat] as [number, number], zoom: depart.zoom }
+        : {
+            bounds: [...METROPOLE] as [number, number, number, number],
+            fitBoundsOptions: { padding: margesDepart(conteneur.clientWidth) }
+          }),
       // L'attribution est posee a la main, en bas a **droite** : a gauche, sa
       // pastille « i » se posait sur la legende. La fiche, qui l'en avait
       // chassee, ne la recouvre plus — `--marge-droite` l'ecarte.
@@ -452,7 +465,8 @@
           return { reference: f.properties?.reference, x: boite.left + p.x, y: boite.top + p.y };
         });
       },
-      zoom: () => map.getZoom()
+      zoom: () => map.getZoom(),
+      centre: () => map.getCenter().toArray()
     };
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
     // Sous le zoom, dans la meme colonne : c'est un outil de cadrage, comme
@@ -743,27 +757,42 @@
 
 <div class="legende" class:compacte={friseOuverte} class:deplie={reglagesOuverts}>
   <div class="cles">
-    {#if densite}
-      <!-- Sous la densite, les teintes de statut ne disent plus rien : la
-           legende montre la rampe qui est effectivement a l'ecran. -->
-      <span class="cle">
-        <i class="rampe"
-           style="background:linear-gradient(90deg,{palette.chaleur1},{palette.chaleur2},{palette.chaleur3},{palette.chaleur4})"
-        ></i>
-        de quelques notices à plusieurs centaines
-      </span>
-    {:else if mode === 'statut'}
-      <span class="cle"><i style="background:{palette.classe}"></i>classé</span>
-      <span class="cle"><i style="background:{palette.inscrit}"></i>inscrit</span>
-      <span class="cle"><i style="background:{palette.mixte}"></i>les deux</span>
-    {:else}
-      {#each TRANCHES as tranche (tranche.cle)}
-        <span class="cle"><i style="background:{palette[tranche.cle]}"></i>{tranche.titre}</span>
-      {/each}
-    {/if}
-    {#if acr}
-      <span class="cle"><i style="background:{palette.acr}"></i>archi. contemporaine</span>
-    {/if}
+    <!-- Le titre dit de quoi parlent les couleurs. Sans lui, « classé » et
+         « inscrit » etaient trois mots de metier poses sur la carte : rien ne
+         disait que ce sont des niveaux de protection. -->
+    <div class="liste-cles" class:empilees={!densite && mode === 'statut'}>
+      {#if densite}
+        <!-- Sous la densite, les teintes de statut ne disent plus rien : la
+             legende montre la rampe qui est effectivement a l'ecran. -->
+        <p class="titre-legende">Densité de monuments</p>
+        <span class="cle">
+          <i class="rampe"
+             style="background:linear-gradient(90deg,{palette.chaleur1},{palette.chaleur2},{palette.chaleur3},{palette.chaleur4})"
+          ></i>
+          de quelques notices à plusieurs centaines
+        </span>
+      {:else if mode === 'statut'}
+        <!-- Une ligne par niveau, du plus fort au plus faible, chacune avec sa
+             glose : le mot seul ne disait ni la hierarchie ni ce que le cas
+             mixte designe. Texte dans `lib/statuts.ts`. -->
+        <p class="titre-legende">Niveau de protection</p>
+        {#each STATUTS as statut (statut.valeur)}
+          <span class="cle">
+            <i style="background:{palette[statut.jeton]}"></i>
+            <b>{statut.libelle}</b>
+            <span class="glose">{statut.glose}</span>
+          </span>
+        {/each}
+      {:else}
+        <p class="titre-legende">Époque de construction</p>
+        {#each TRANCHES as tranche (tranche.cle)}
+          <span class="cle"><i style="background:{palette[tranche.cle]}"></i>{tranche.titre}</span>
+        {/each}
+      {/if}
+      {#if acr}
+        <span class="cle"><i style="background:{palette.acr}"></i>archi. contemporaine</span>
+      {/if}
+    </div>
     <!-- Visible sur telephone seulement : ailleurs les commandes sont
          toujours depliees. -->
     <button class="reglages frappe-44" aria-expanded={reglagesOuverts}
@@ -895,9 +924,37 @@
 
   .cles {
     display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .liste-cles {
+    display: flex;
+    flex: 1 1 auto;
     flex-wrap: wrap;
     align-items: center;
     gap: 6px 14px;
+    min-width: 0;
+  }
+
+  /* Les niveaux de protection se lisent en colonne, du plus fort au plus
+     faible : a plat, la hierarchie ne se voyait pas. */
+  .liste-cles.empilees {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    gap: 5px;
+  }
+
+  /* Meme voix que `.etiquette` et `.titre-outil` : un intitule, pas une cle. */
+  .titre-legende {
+    flex: 0 0 100%;
+    margin: 0 0 1px;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--texte-tenu);
   }
 
   .cle {
@@ -905,6 +962,11 @@
     align-items: center;
     gap: 6px;
     white-space: nowrap;
+  }
+
+  .cle b {
+    font-weight: 600;
+    color: var(--texte);
   }
 
   .reglages {
@@ -932,6 +994,7 @@
   }
 
   .cle i {
+    flex: 0 0 auto;
     width: 9px;
     height: 9px;
     border-radius: 50%;
@@ -1255,8 +1318,16 @@
        se lit pas — et abandonne ses commandes, qui reviennent des que la frise
        se referme. Le repli ne vaut **que** sur ce gabarit : au large, les deux
        panneaux cohabitent sans se disputer la place. */
-    .legende.compacte .commandes {
+    .legende.compacte .commandes,
+    .legende.compacte .titre-legende,
+    .legende.compacte .glose {
       display: none;
+    }
+
+    .legende.compacte .liste-cles.empilees {
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: 6px 14px;
     }
   }
 

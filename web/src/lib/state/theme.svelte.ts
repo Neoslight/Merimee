@@ -131,6 +131,10 @@ export function appliquer(choix: Theme) {
     const valeur = calcule.getPropertyValue(propriete).trim();
     if (valeur) palette[cle] = valeur;
   }
+  // La barre du navigateur mobile prend la teinte de la barre du produit,
+  // qu'elle prolonge. Hors de `palette` : ni MapLibre ni Plot ne la lisent.
+  const barre = calcule.getPropertyValue('--fond-carte').trim();
+  if (barre) document.querySelector('meta[name="theme-color"]')?.setAttribute('content', barre);
 }
 
 /** Ne fait que retourner l'etat : c'est l'effet de la page qui appelle

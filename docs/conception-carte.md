@@ -37,6 +37,24 @@ sont désormais séparées par ce qu'elles font :
   d'affichage. Conséquence sur l'état, cf. `docs/conception-donnees.md` : `suivreVue` a
   quitté `MonumentMap` pour la page.
 
+**La vue de départ est une emprise, pas un centre et un zoom.** `2.6, 46.6, z4.7`
+était réglé sur un écran large : sur un téléphone en portrait le même couple montrait
+l'Espagne et la Méditerranée, la moitié nord du pays hors champ. Sans `c=` dans le
+lien, la carte cadre `METROPOLE` (`lib/carte/camera.ts`) par l'option `bounds` du
+constructeur, avec les marges de `margesDepart()` — la colonne d'outils à droite, la
+légende en bas, plus haute sous 900 px où elle prend toute la largeur. `camera.ts` est
+pur : il dit où cadrer, `MonumentMap` reste le seul à déplacer la caméra.
+
+**La légende dit de quoi parlent les couleurs.** `classé · inscrit · les deux`, sans
+titre, étaient trois mots de métier : les visiteurs n'y lisaient ni une hiérarchie ni
+ce que « les deux » désignait. Elle porte désormais un titre (« Niveau de
+protection », « Époque de construction », « Densité de monuments ») et, en mode
+statut, **une ligne par niveau, du plus fort au plus faible**, chacune avec sa glose.
+Le texte vit dans `lib/statuts.ts`, source unique pour la légende, et à terme le
+filtre et la fiche. **Les couleurs n'ont pas bougé** : la teinte la plus dense portait
+déjà le niveau le plus fort. Frise ouverte sur gabarit étroit (`.compacte`), titre et
+gloses cèdent et les clés reviennent à plat.
+
 **Un toucher vise une boîte, pas un pixel.** L'écouteur de couche MapLibre
 (`map.on('click', 'monuments-points')`) ne répond qu'au pixel exact d'un cercle : un
 point mesure 1,2 à 4,5 px de rayon jusqu'à z10, et au doigt le toucher relevait du

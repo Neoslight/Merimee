@@ -461,7 +461,10 @@ export async function detail(reference: string): Promise<Detail> {
 }
 
 /**
- * Une notice au hasard parmi celles dont l'historique est renseigne.
+ * Une notice au hasard, de preference parmi celles dont l'historique est
+ * renseigne : `has_historique` est un **ordre**, pas un filtre. En filtre, le
+ * bouton restait muet des que la selection courante ne gardait que des
+ * notices sans historique.
  *
  * `ORDER BY random() LIMIT 1` et non `USING SAMPLE 1 ROWS` : l'echantillon
  * passe **sous** le filtre dans le plan, il tirait donc une ligne de la table
@@ -473,8 +476,8 @@ export async function detail(reference: string): Promise<Detail> {
 export async function auHasard(f: Filters): Promise<string | null> {
   const [row] = await query<{ reference: string }>(`
     SELECT reference FROM monuments
-    WHERE has_historique AND ${buildWhere(f)}
-    ORDER BY random() LIMIT 1
+    WHERE ${buildWhere(f)}
+    ORDER BY has_historique DESC, random() LIMIT 1
   `);
   return row?.reference ?? null;
 }

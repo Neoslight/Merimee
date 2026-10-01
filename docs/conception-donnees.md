@@ -139,7 +139,12 @@ table entière puis lui appliquait le prédicat : `has_historique` ne couvrant q
 notices sur 46 760, le bouton « Au hasard » restait muet une fois sur deux — mesuré,
 trois clics sans effet sur cinq. `ORDER BY random() LIMIT 1` corrige, et
 `07-permalien.spec.ts` le verrouille (`au hasard ouvre une fiche`). Le tri de
-46 760 lignes ne coûte rien à côté d'un bouton qui ne répond pas.
+46 760 lignes ne coûte rien à côté d'un bouton qui ne répond pas. Même raison pour
+`has_historique`, devenu un **ordre** (`ORDER BY has_historique DESC, random()`) et non
+plus un filtre : sous une sélection qui ne garde que des notices sans historique, le
+bouton restait muet. Il préfère toujours une notice qui a quelque chose à lire, et
+retombe sur les autres plutôt que sur rien ; sous un filtre vide, la page le dit
+(`avis`).
 
 **Deux filtres ont un état miroir hors de `filters`.** `retirer()` ne suffit donc pas,
 et c'est la page qui complète : `recherche` a le champ de la barre, qui l'alimente par
@@ -155,14 +160,25 @@ sélectionnée. Trois points non négociables : les valeurs multiples passent pa
 déjà une virgule, tout séparateur imprimable serait ambigu ; `bbox` est **exclue**,
 sinon chaque pan de carte réécrirait l'URL ; la **vue** (`c=lon,lat,zoom`) suit une
 règle à part — jamais écrite dans l'URL vivante, ajoutée seulement au lien produit par
-« Copier le lien », et consommée au chargement. Conséquence à ne pas rouvrir :
-l'effet URL → état compare des chaînes **normalisées** (`encoder(decoder(search))`) et
-non la chaîne brute, sinon `c=` paraît toujours différent de l'état, les deux effets se
-renvoient la balle et le `replaceState` part avant que SvelteKit ait monté sa racine
-(`Cannot read properties of undefined (reading '$set')`) ; l'écriture se fait par `replaceState`,
-sauf l'ouverture d'une fiche qui empile (`pushState`) pour que le retour arrière la
-referme. `decoder` valide toute valeur : l'URL est éditable à la main et ses chaînes
-finissent dans `lit()`.
+« Copier le lien », et consommée au chargement — et **tue quand elle montrerait où se
+tient l'utilisateur** (`devoilePosition`, `lib/carte/camera.ts`) : après « Me
+localiser » la carte est centrée sur lui, et le lien copié le disait à cent mètres
+près. Conséquence à ne pas rouvrir : la lecture URL → état compare des chaînes
+**normalisées** (`encoder(decoder(search))`) et non la chaîne brute, sinon `c=` paraît
+toujours différent de l'état ; l'écriture se fait par `replaceState`, sauf
+l'**ouverture** d'une fiche qui empile (`pushState`) pour que le retour arrière la
+referme. La fermeture, elle, remplace : elle empilait aussi, et le retour arrière
+rouvrait la fiche qu'on venait de quitter. `decoder` valide toute valeur : l'URL est
+éditable à la main et ses chaînes finissent dans `lit()`.
+
+**Le retour arrière lit `location`, pas `page.url`.** Sous le routage superficiel
+(`pushState` / `replaceState` de `$app/navigation`), SvelteKit conserve dans `page.url`
+l'adresse du **chargement** et la restitue à chaque `popstate`. L'effet qui la relisait
+rejouait donc l'état d'arrivée : ouvrir une fiche depuis la liste puis revenir ramenait
+la vue carte sous une barre d'adresse qui disait `vue=liste`, et un filtre retiré
+depuis le chargement serait revenu. La page écoute `popstate` et décode
+`location.search` (`relireUrl`). `07-permalien.spec.ts` vérifie que la vue liste
+survit au retour, et qu'un retour après fermeture à la croix ne rouvre rien.
 
 **Un jeton monotone annule les résultats obsolètes** dans `+page.svelte` : une
 requête lente ne doit jamais écraser une plus récente. Il **écarte le résultat, il ne

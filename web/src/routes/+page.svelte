@@ -48,7 +48,6 @@
   import { formaterDistance, nf } from '$lib/format';
   import { browser } from '$app/environment';
   import { pushState, replaceState } from '$app/navigation';
-  import { page } from '$app/state';
   import { tick, untrack } from 'svelte';
   import { base } from '$app/paths';
   import { versCollection } from '$lib/db/points';
@@ -384,13 +383,17 @@
   // remplacement : chaque clic de facette empilerait sinon une entree
   // d'historique. Seule l'ouverture d'une fiche empile, parce que refermer la
   // fiche est precisement ce que le bouton retour doit faire.
+  //
+  // La **fermeture**, elle, remplace. Le test etait `selection !==
+  // derniereSelection`, vrai dans les deux sens : fermer a la croix empilait
+  // une entree, et le bouton retour rouvrait la fiche qu'on venait de quitter.
   let derniereRequete = encoder(initial);
   let derniereSelection = initial.selection;
 
   $effect(() => {
     const requete = encoder({ filtres: filters, selection, vue, fond, acr: acrVisible });
     if (requete === derniereRequete) return;
-    const fiche = selection !== derniereSelection;
+    const fiche = selection !== null && selection !== derniereSelection;
     derniereRequete = requete;
     derniereSelection = selection;
     // Une chaine vide serait resolue comme « URL courante » : viser le chemin.
@@ -401,13 +404,19 @@
 
   // Sens inverse : apres un retour arriere, l'URL fait foi.
   //
+  // C'est `location` qui est lue, sur `popstate`, et non `page.url` : avec le
+  // routage superficiel (`pushState` / `replaceState`), SvelteKit garde dans
+  // `page.url` l'adresse du **chargement**, et la restitue telle quelle a
+  // chaque retour. Un retour arriere rejouait donc l'etat d'arrivee — la vue
+  // liste retombait sur la carte, un filtre retire revenait — pendant que la
+  // barre d'adresse disait autre chose.
+  //
   // La comparaison se fait sur la **forme normalisee** — decodee puis reencodee
   // — et non sur la chaine brute. Un lien partage porte `c=`, que `encoder`
-  // n'emet jamais : compare tel quel, il paraissait toujours different de
-  // l'etat, cet effet et son symetrique se renvoyaient la balle, et le
-  // `replaceState` partait avant que SvelteKit ait monte sa racine.
-  $effect(() => {
-    const etat = decoder(page.url.search);
+  // n'emet jamais : compare tel quel, il paraitrait toujours different de
+  // l'etat.
+  function relireUrl() {
+    const etat = decoder(location.search);
     const requete = encoder(etat);
     if (requete === derniereRequete) return;
     derniereRequete = requete;
@@ -419,7 +428,7 @@
     acrVisible = etat.acr;
     cible = etat.filtres.texte ? 'historiques' : 'titres';
     terme = etat.filtres.texte || etat.filtres.recherche;
-  });
+  }
 
   // Le presse-papier peut etre refuse (contexte non securise, permission) :
   // l'echec bascule sur une selection manuelle plutot que de ne rien faire.
@@ -491,12 +500,15 @@
         ? foyerFiche
         : document.querySelector<HTMLElement>('.maplibregl-canvas');
     foyerFiche = null;
-    repli?.focus();
+    repli?.focus({ preventScroll: true });
   }
 
+  // `preventScroll` : au moment du focus le tiroir est encore translate hors
+  // de la scene, et le navigateur ferait defiler `.scene` pour l'y amener —
+  // `overflow: hidden` masque la barre de defilement, pas le defilement.
   function ouvrirTiroir() {
     facettesOuvertes = true;
-    tick().then(() => titreTiroir?.focus());
+    tick().then(() => titreTiroir?.focus({ preventScroll: true }));
   }
 
   function fermerTiroir() {
@@ -676,9 +688,14 @@
   // composants, `inert` se pose donc sur leurs racines sans qu'ils aient
   // besoin de le connaitre. Le voile bloque deja le pointeur ; ceci bloque le
   // clavier, que le voile ne couvre pas.
+  //
+  // Le tiroir ferme est inerte lui aussi, a toutes les largeurs : translate
+  // hors de la scene, il gardait une douzaine d'arrets de tabulation
+  // invisibles, annonces par un lecteur d'ecran.
   $effect(() => {
     if (!browser) return;
     const modal = calqueModal;
+    const tiroirFerme = !facettesOuvertes;
     const scene = document.querySelector('.scene');
     const dehors = [
       document.querySelector('.barre'),
@@ -695,7 +712,8 @@
         (modal === 'tiroir' && el.classList.contains('facettes')) ||
         (modal === 'fiche' && el.classList.contains('fiche-hote')) ||
         el.classList.contains('voile');
-      el.inert = modal !== null && !estCalque;
+      el.inert =
+        (modal !== null && !estCalque) || (tiroirFerme && el.classList.contains('facettes'));
     }
   });
 
@@ -712,9 +730,20 @@
     filters.anneeProtection = [decennie, Math.min(ANNEE_MAX, decennie + 9)];
   }
 
+  // Message de surface, qui s'efface seul : il informe d'un geste reste sans
+  // effet, il n'attend pas de reponse.
+  let avis = $state<string | null>(null);
+
+  $effect(() => {
+    if (!avis) return;
+    const minuteur = setTimeout(() => (avis = null), 5000);
+    return () => clearTimeout(minuteur);
+  });
+
   async function hasard() {
     const ref = await auHasard(filters);
     if (ref) ouvrirFiche(ref);
+    else avis = 'Aucune notice à tirer au sort avec ces filtres.';
   }
 
   const actifs = $derived(countActive(filters));
@@ -726,7 +755,7 @@
   const tiroirPose = $derived(facettesOuvertes && !etroit);
 </script>
 
-<svelte:window onkeydown={surEchap} />
+<svelte:window onkeydown={surEchap} onpopstate={relireUrl} />
 
 <svelte:head>
   <title>{titreFiche ? `${titreFiche} — Mérimée` : 'Mérimée — monuments historiques'}</title>
@@ -979,6 +1008,10 @@
              couvre pas la carte qu'on regarde deja. -->
         {#if !erreur && compteurs && amorcage.phase !== 'pret'}
           <div class="amorce-discrete" role="status">{LIBELLES[amorcage.phase]}</div>
+        {/if}
+
+        {#if avis}
+          <div class="avis" role="status">{avis}</div>
         {/if}
 
         {#if position.erreur}
@@ -1913,7 +1946,9 @@
   }
 
   /* Meme famille que `.vide-carte`, mais en haut : l'erreur de position ne
-     doit pas cacher l'endroit de la carte qu'on regardait. */
+     doit pas cacher l'endroit de la carte qu'on regardait. `.avis` est la
+     meme surface sans bouton : elle s'efface seule. */
+  .avis,
   .alerte-position {
     position: absolute;
     top: 64px;
@@ -1932,6 +1967,10 @@
     box-shadow: var(--ombre-carte);
     font-size: 12px;
     color: var(--texte-moyen);
+  }
+
+  .avis {
+    padding: 10px 16px;
   }
 
   .alerte-position p {

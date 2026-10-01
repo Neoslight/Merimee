@@ -154,6 +154,16 @@ compris), ne déplace jamais le focus — rouvrir un lien ne doit pas voler le f
 lecteur d'écran qui n'a rien demandé. Si le foyer d'origine a disparu (un filtre qui
 retire la ligne de liste visée), le repli se fait sur la carte plutôt que nulle part.
 
+**Ces `focus()` portent tous `preventScroll: true`, et ce n'est pas une précaution.**
+Un calque est encore translaté hors de la scène à l'instant où il reçoit le focus ; le
+navigateur fait alors défiler `.scene` pour l'amener à l'écran — `overflow: hidden`
+masque la barre de défilement, pas le défilement. Sur téléphone, ouvrir une fiche au
+doigt décalait la scène de 354 px : la feuille en aperçu couvrait tout l'écran et la
+carte sortait du champ, alors que ses classes disaient « aperçu ». Par permalien, sans
+focus, tout était juste. `09-mobile.spec.ts` vérifie désormais la **position**
+(`scrollTop` de la scène, part laissée au-dessus de la feuille), plus seulement les
+classes.
+
 **Un seul écouteur `Échap` global**, posé sur `window` (`surEchap`), ferme le calque le
 plus haut avec les mêmes fonctions que sa croix. Convention partagée avec les
 composants qui gèrent `Échap` localement (le module des cartes anciennes, par
@@ -168,7 +178,9 @@ qui n'est pas ce calque — la carte, la matrice, la frise, appartenant chacune 
 composant — reçoit `inert` depuis l'extérieur, par sélection DOM sur les enfants de
 `.scene` et quelques éléments hors scène. Le voile bloque déjà le pointeur ; `inert`
 bloque le clavier, que le voile ne couvre pas, sans qu'aucun composant n'ait à savoir
-qu'il peut être rendu inerte.
+qu'il peut être rendu inerte. Le même effet rend inerte **le tiroir fermé, à toutes
+les largeurs** : translaté hors de la scène, il gardait douze arrêts de tabulation
+invisibles, annoncés par un lecteur d'écran.
 
 **`<title>` est dynamique**, posé par `<svelte:head>` dans `+page.svelte` :
 `{titre} — Mérimée` quand une fiche est ouverte, `Mérimée — monuments historiques`
@@ -183,6 +195,10 @@ silencieusement blanches. Les deux portent le même message et le même bouton
 recherche plein texte, `.vide-liste` ne répète pas le message : `.portee` dit déjà
 pourquoi (le plafond structurel des 24 819 notices indexées, et les mots que le
 lexique ignore, cf. `docs/conception-donnees.md`) — seul le bouton s'ajoute.
+
+**`.avis` dit un geste resté sans effet**, en haut de la scène, et s'efface seul après
+cinq secondes (`role="status"`). Même surface que `.alerte-position`, sans bouton.
+Premier porteur : « Au hasard » sous un filtre qui ne garde aucune notice.
 
 **`Timeline` et `Matrice` sont chargés en `import()` dynamique, pas importés
 statiquement.** Les deux portent Observable Plot (209 Ko minifié, ~65 Ko gzip), et
@@ -289,6 +305,16 @@ aucune, cf. le test ci-dessus. Deux conséquences moins évidentes du même prin
   qui annonce que la recherche vise les historiques. Le bouton « Filtres », qui l'a
   porté, s'en est détaché : posé sur la carte et non sur l'interface, il lui faut une
   surface, pas une inversion.
+
+**Le zoom par double-tap se neutralise à la racine** (`html { touch-action:
+manipulation }`), pas sur `button` et `a` seulement : c'est un geste de la fenêtre, et
+un double-tap sur le texte d'une fiche zoomait la page entière, carte comprise. Le
+pincement reste permis hors de la carte — c'est le seul agrandissement du texte qu'un
+téléphone offre.
+
+**`<meta name="theme-color">` est posée par `theme.svelte.ts`**, depuis `--fond-carte` :
+la barre du navigateur mobile suit le thème **choisi**, pas celui du système, et la
+couleur reste dans `app.css`. La balise d'`app.html` est vide à dessein.
 
 **Trois défauts mobiles n'ont rien à voir avec les requêtes.** Ils se tenaient et se
 corrigent ensemble :
