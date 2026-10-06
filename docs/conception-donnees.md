@@ -188,6 +188,16 @@ depuis le chargement serait revenu. La page écoute `popstate` et décode
 `location.search` (`relireUrl`). `07-permalien.spec.ts` vérifie que la vue liste
 survit au retour, et qu'un retour après fermeture à la croix ne rouvre rien.
 
+**La liste ne part qu'ouverte** (phase 4), comme les facettes et la frise : elle vit
+dans le volet, fermé au démarrage. Le premier écran n'émet plus que deux requêtes, le
+nuage et les totaux.
+
+**Choisir une région ou un département cadre la carte dessus**, une fois les points
+arrivés : `emprise()` (`lib/carte/camera.ts`, pure) calcule les bornes du nuage
+filtré, `cadrer()` les ajuste, plafonné à z12. Aucune table de contours à embarquer :
+la sélection dit elle-même où regarder. Seulement quand on **ajoute** un lieu — en
+retirer ne doit pas faire sauter la vue.
+
 **Un jeton monotone annule les résultats obsolètes** dans `+page.svelte` : une
 requête lente ne doit jamais écraser une plus récente. Il **écarte le résultat, il ne
 retire pas le travail** : le moteur a déjà payé la requête quand on jette sa réponse.

@@ -88,6 +88,27 @@ export function decalage(marges: Marges): [number, number] {
   return [(marges.left - marges.right) / 2, (marges.top - marges.bottom) / 2];
 }
 
+/**
+ * Emprise d'un nuage de points, `null` s'il est vide. Sert a cadrer une
+ * region ou un departement qu'on vient de choisir : la selection elle-meme
+ * dit ou regarder, sans table de contours a embarquer.
+ */
+export function emprise(entites: readonly GeoJSON.Feature[]): Bornes | null {
+  let ouest = Infinity;
+  let sud = Infinity;
+  let est = -Infinity;
+  let nord = -Infinity;
+  for (const entite of entites) {
+    if (entite.geometry?.type !== 'Point') continue;
+    const [lon, lat] = entite.geometry.coordinates;
+    if (lon < ouest) ouest = lon;
+    if (lon > est) est = lon;
+    if (lat < sud) sud = lat;
+    if (lat > nord) nord = lat;
+  }
+  return Number.isFinite(ouest) ? [ouest, sud, est, nord] : null;
+}
+
 /** En deca, la vue couvre plus d'une centaine de kilometres : son centre ne
  *  dit qu'une region. */
 export const ZOOM_DISCRET = 9;

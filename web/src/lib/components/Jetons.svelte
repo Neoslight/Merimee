@@ -33,25 +33,27 @@
 </div>
 
 <style>
+  /* Les filtres poses suivent les puces de facette dans la meme rangee, qui
+     defile : ils ne s'enroulent pas. Poses sur la carte, ils ont un fond
+     plein — une teinte translucide prendrait la couleur du sol. */
   .jetons {
     display: flex;
-    flex-wrap: wrap;
+    flex: 0 0 auto;
     align-items: center;
-    gap: 8px;
-    padding: 10px 24px;
-    border-bottom: 1px solid var(--bord);
-    background: var(--fond-carte);
+    gap: 6px;
   }
 
   button {
     display: inline-flex;
+    flex: 0 0 auto;
     align-items: center;
     gap: 9px;
-    max-width: 300px;
-    padding: 5px 8px 5px 13px;
-    border: 1px solid color-mix(in srgb, var(--inscrit) 32%, transparent);
+    max-width: 260px;
+    height: 32px;
+    padding: 0 9px 0 13px;
+    border: 1px solid color-mix(in srgb, var(--inscrit) 45%, var(--fond-carte));
     border-radius: var(--r-pilule);
-    background: color-mix(in srgb, var(--inscrit) 11%, transparent);
+    background: color-mix(in srgb, var(--inscrit) 11%, var(--fond-carte));
     color: var(--inscrit-texte);
     font-size: 12px;
     font-weight: 600;
@@ -82,7 +84,7 @@
 
   @media (hover: hover) and (pointer: fine) {
     button:hover {
-      background: color-mix(in srgb, var(--inscrit) 20%, transparent);
+      background: color-mix(in srgb, var(--inscrit) 20%, var(--fond-carte));
     }
 
     button:hover i {
@@ -92,9 +94,9 @@
 
   /* La remise a zero n'est pas un critere : elle se distingue des puces. */
   .raz {
-    padding: 5px 13px;
-    border-color: var(--bord);
-    background: transparent;
+    padding: 0 13px;
+    border-color: var(--bord-flottant);
+    background: var(--fond-carte);
     color: var(--texte-tenu);
     font-weight: 500;
   }

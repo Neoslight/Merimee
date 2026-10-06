@@ -22,6 +22,7 @@
     SANS_MARGE,
     ZOOM_EDIFICE,
     ZOOM_PROCHE,
+    type Bornes,
     type Marges
   } from '$lib/carte/camera';
   import type { Etiquette } from '$lib/db/queries';
@@ -762,6 +763,26 @@
       zoom: proche ? map.getZoom() : ZOOM_EDIFICE,
       offset: decalage(marges),
       ...(anime ? {} : { duration: 0 })
+    });
+  }
+
+  /**
+   * Cadre une emprise — celle d'une region ou d'un departement qu'on vient de
+   * choisir —, marges des panneaux comprises. Plafonnee a z12 : une commune
+   * seule ne doit pas plonger a l'echelle d'une rue.
+   */
+  export function cadrer(bornes: Bornes): void {
+    const map = carte;
+    if (!map || !pret) return;
+    const depart = margesDepart(conteneur.clientWidth);
+    map.fitBounds([...bornes] as [number, number, number, number], {
+      maxZoom: 12,
+      padding: {
+        top: depart.top + marges.top,
+        bottom: depart.bottom + marges.bottom,
+        left: depart.left + marges.left,
+        right: depart.right + marges.right
+      }
     });
   }
 

@@ -5,6 +5,7 @@
   import Calques from '$lib/components/Calques.svelte';
   import Legende from '$lib/components/Legende.svelte';
   import ListeResultats from '$lib/components/ListeResultats.svelte';
+  import PucesFiltres from '$lib/components/PucesFiltres.svelte';
   import { SUPERPOSITIONS } from '$lib/carte/fonds';
   import type { Mode } from '$lib/carte/semiologie';
   import MonumentMap from '$lib/components/MonumentMap.svelte';
@@ -56,7 +57,7 @@
   import { base } from '$app/paths';
   import { versCollection } from '$lib/db/points';
   import { MESSAGES_POSITION, position } from '$lib/state/position.svelte';
-  import type { Marges } from '$lib/carte/camera';
+  import { emprise, type Bornes, type Marges } from '$lib/carte/camera';
 
   const FACETTES: FacetKey[] = [
     'statut', 'domaines', 'denominations', 'regions',
@@ -189,6 +190,7 @@
         vueCourante: () => VueCarte | null;
         approcher: (reference: string, anime: boolean) => void;
         survoler: (lon: number, lat: number, reserve: Marges) => Promise<void>;
+        cadrer: (bornes: Bornes) => void;
       }
     | undefined
   >();
@@ -254,6 +256,29 @@
 
   let jeton = 0;
   let jetonFacettes = 0;
+
+  // Choisir une region ou un departement cadre la carte dessus, une fois les
+  // points arrives : la selection dit elle-meme ou regarder. Seulement quand
+  // on en **ajoute** un — en retirer ne doit pas faire sauter la vue.
+  let cadrerLieu = false;
+  let nbLieux = filters.regions.length + filters.departements.length;
+
+  $effect(() => {
+    const n = filters.regions.length + filters.departements.length;
+    untrack(() => {
+      if (n > nbLieux) cadrerLieu = true;
+      nbLieux = n;
+    });
+  });
+
+  /** Facette dont le menu de puce est ouvert. */
+  let puceOuverte = $state<FacetKey | null>(null);
+
+  // Le menu d'une puce et le tiroir des filtres montreraient deux fois les
+  // memes options : l'un ferme l'autre.
+  $effect(() => {
+    if (puceOuverte !== null) untrack(() => (facettesOuvertes = false));
+  });
   let jetonFrise = 0;
 
   /** Un echec n'est signale que s'il concerne encore le cycle en cours. */
@@ -279,6 +304,11 @@
         if (mien !== jeton) return;
         nuageMoteur = true;
         pointsCarte = pts;
+        if (cadrerLieu) {
+          cadrerLieu = false;
+          const bornes = emprise(pts.features);
+          if (bornes) vueCarte?.cadrer(bornes);
+        }
       })
       .catch(echec(() => mien === jeton));
     totaux(filters)
@@ -316,9 +346,13 @@
   const cleProche = $derived(proche ? `${proche.lon.toFixed(3)},${proche.lat.toFixed(3)}` : '');
   let jetonListe = 0;
 
+  // Comme les facettes et la frise, la liste ne part qu'ouverte : elle vit
+  // dans le volet, ferme au demarrage — deux requetes au premier ecran, le
+  // nuage et les totaux, au lieu de trois.
   $effect(() => {
     signature;
     cleProche;
+    if (vue !== 'liste') return;
     const mien = ++jetonListe;
     const ici = untrack(() => proche);
     liste(filters, 200, ici ? { lon: ici.lon, lat: ici.lat } : null)
@@ -343,7 +377,7 @@
   // donc ouvrir le tiroir le rejoue — rien ne s'affiche perime.
   $effect(() => {
     signature;
-    if (!facettesOuvertes) return;
+    if (!facettesOuvertes && puceOuverte === null) return;
     const mien = ++jetonFacettes;
     Promise.all([
       Promise.all(FACETTES.map((cle) => facette(filters, cle))),
@@ -536,6 +570,7 @@
   // de la scene, et le navigateur ferait defiler `.scene` pour l'y amener —
   // `overflow: hidden` masque la barre de defilement, pas le defilement.
   function ouvrirTiroir() {
+    puceOuverte = null;
     // Les filtres prennent la place de la fiche dans le panneau : on ne lit
     // pas une notice en reglant la selection qui la contient peut-etre plus.
     if (selection !== null) selection = null;
@@ -571,7 +606,9 @@
     if (cible instanceof HTMLElement && champTexteNonVide(cible)) return;
     // Le panneau des calques est le plus passager des calques : il part le
     // premier. Focus dedans, il a deja traite la touche lui-meme.
-    if (calquesOuverts) {
+    if (puceOuverte !== null) {
+      puceOuverte = null;
+    } else if (calquesOuverts) {
       calquesOuverts = false;
     } else if (selection !== null) {
       fermerFiche();
@@ -948,17 +985,6 @@
               </svg>
               Filtres{#if actifs > 0} <em>{actifs}</em>{/if}
             </button>
-            <!-- Le nom est le libelle : « Frises », l'etat dit par
-                 `aria-expanded`. La croix du panneau garde « Masquer les
-                 frises » ; deux boutons de meme nom seraient indiscernables. -->
-            <button class="outil frises frappe-44" aria-expanded={friseOuverte}
-                    onclick={() => (friseOuverte = !friseOuverte)}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
-                   stroke-linecap="round" aria-hidden="true">
-                <path d="M4 20h16M7 20v-6M11 20V8M15 20v-9M19 20v-4" />
-              </svg>
-              Frises
-            </button>
             <!-- Le theme, sur telephone : au large il tient le coin haut droit
                  de la carte. Un seul des deux est jamais visible. -->
             <button class="theme theme-etroit frappe-44" onclick={basculer}
@@ -968,9 +994,14 @@
             </button>
           </div>
 
-          {#if puces.length > 0}
-            <Jetons jetons={puces} {actifs} onretirer={retirerJeton} onreset={toutEffacer} />
-          {/if}
+          <!-- Les puces des facettes, puis les filtres poses, dans une meme
+               rangee : ce qu'on peut regler, puis ce qui l'est. -->
+          <PucesFiltres {facettes} {cardinaux} {chargement} bind:ouverte={puceOuverte} bind:suivreVue
+                        bind:frise={friseOuverte}>
+            {#if puces.length > 0}
+              <Jetons jetons={puces} {actifs} onretirer={retirerJeton} onreset={toutEffacer} />
+            {/if}
+          </PucesFiltres>
         </div>
 
         <!-- Le thème est une pastille sans libellé : l'icone dit la destination

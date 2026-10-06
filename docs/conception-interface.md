@@ -46,6 +46,25 @@ conséquences :
 ouvert : `aria-expanded` dit son état, un second appui referme. Il porte le nombre de
 critères posés.
 
+**Sous les outils, une rangée de puces** (`PucesFiltres.svelte`), à la manière des
+cartes en ligne : « Frises », six facettes courantes (Protection, Domaine, Type
+d'édifice, Région, Département, Architecte), « Zone visible », puis les filtres posés
+(`Jetons`, mêmes puces qu'avant, même `.raz`). Cinq points :
+
+- **la rangée défile à l'horizontale**, elle ne s'enroule pas : sa hauteur est fixe, et
+  le volet qui s'ouvre dessous (`--hauteur-haut`) ne saute pas à chaque filtre posé ;
+- **une puce de facette ouvre un menu** qui reprend la section du tiroir
+  (`FacetPanel seules={[cle]}`, remonté par `{#key}` à chaque puce) — même recherche,
+  mêmes pilules, mêmes comptes. Le menu vit hors de la rangée, qui le rognerait, en
+  `position: fixed` placé sous la puce à l'ouverture. `Échap` le referme et rend le
+  focus à la puce ; un toucher à côté aussi ;
+- **le menu et le tiroir des filtres s'excluent** : ils montreraient deux fois les mêmes
+  options, deux boutons de même nom pour un lecteur d'écran ;
+- **les comptes de facette ne partent qu'avec un menu ou le tiroir ouvert** (`puceOuverte`
+  rejoint `facettesOuvertes` dans l'effet) ;
+- **les facettes rares** — propriété, période non datée, seuil de mobilier — restent dans
+  « Filtres » : une puce par critère rarement réglé allongerait la rangée pour rien.
+
 **La frise est un panneau, pas un socle.** Trois décisions tenues ensemble :
 
 - **elle suit le thème.** Le bandeau ardoise dans les deux thèmes a été abandonné : il

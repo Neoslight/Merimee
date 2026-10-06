@@ -62,8 +62,8 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `web/src/lib/format.ts` | `romain`, `nf`, formats de nombres — étaient recopiés dans plusieurs composants |
 | `web/src/service-worker.ts` | cache des actifs hachés uniquement |
 | `web/scripts/precharger.mjs` | injecte le préchargement du wasm dans le shell HTML après build, chaîné à `build` et `build:pages` |
-| `web/src/lib/components/` | `MonumentMap` (rendu seul), `Calques`, `Legende`, `ListeResultats`, `FacetPanel`, `Jetons`, `Timeline`, `DetailPanel` |
-| `web/tests/e2e/` | 334 vérifications en Chromium réel : 15 fichiers `NN-domaine.spec.ts` + `_soutien.ts` (`verifier()` adossé à `expect.soft`), `playwright.config.ts` en `workers: 1` / `retries: 0` |
+| `web/src/lib/components/` | `MonumentMap` (rendu seul), `Calques`, `Legende`, `ListeResultats`, `PucesFiltres`, `FacetPanel` (aussi par section : `seules`), `Jetons`, `Timeline`, `DetailPanel` |
+| `web/tests/e2e/` | 351 vérifications en Chromium réel : 16 fichiers `NN-domaine.spec.ts` + `_soutien.ts` (`verifier()` adossé à `expect.soft`), `playwright.config.ts` en `workers: 1` / `retries: 0` |
 | `web/tests/unit/` | 79 tests Vitest sur la logique pure : `buildWhere`, `permalien`, `shards`, `teinte`, `points`, `acr`, `camera`, distances |
 | `web/tests/apercu-social.mjs` | régénère la vignette Open Graph depuis l'application |
 | `web/tests/audit-visuel.mjs` | 120 captures + relevés WCAG chiffrés, **hors** `npm run test` |
@@ -81,7 +81,7 @@ cd etl  && python -m pytest tests -q    # 103 tests (79 + 24 dans test_annexes.p
 cd web  && npm run dev                  # http://localhost:5173
 cd web  && npm run check                # svelte-check, doit rester à 0/0
 cd web  && npm run test:unit            # Vitest, 79 tests, logique pure
-cd web  && npm run build && npm run test # build statique + 334 vérifications en Chromium (tests/e2e/)
+cd web  && npm run build && npm run test # build statique + 351 vérifications en Chromium (tests/e2e/)
 cd web  && npm run apercu               # régénère static/apercu-social.png
 cd web  && npm run audit                # 120 captures + relevés dans .audit-screenshots/
 cd web  && npm run deploy               # predeploy (check + test:unit) puis build /Merimee + push sur gh-pages
@@ -174,6 +174,7 @@ avant de toucher à ce domaine** : cet index oriente, il ne remplace pas la lect
 - le cycle de requêtes est éclaté en quatre effets, conditionnés à l'ouverture des panneaux
 - le curseur Palissy est débattu à 180 ms, comme la recherche et la recherche de facette
 - la matrice a été supprimée ; `buildWhere` garde sa liste `except`, et `?vue=matrice` retombe sur la carte
+- choisir une région ou un département cadre la carte sur l'emprise du nuage filtré (`emprise()`), seulement à l'ajout
 - le tri par proximité a son propre effet, clé de position arrondie à ~100 m, et n'écarte les notices sans coordonnées que de ce tri ; position et tri hors URL
 - couche ACR : second corpus hors prédicat, 8 fragments FNV-1a modulo 8, rien téléchargé avant activation, `ref=ACR…` rallume `acr=1`
 
@@ -200,7 +201,8 @@ avant de toucher à ce domaine** : cet index oriente, il ne remplace pas la lect
 
 - plus de barre d'en-tête : bloc du haut flottant (recherche, compteur, Carte/Liste, Filtres, Frises), thème au coin haut droit
 - un seul volet (liste ↔ fiche ↔ filtres, par priorité), colonne au large, feuille à trois crans sur téléphone ; ce qu'il ne montre pas porte `hidden`
-- volet et frise fermés au chargement à toutes les largeurs (3 requêtes au démarrage plutôt que 14)
+- volet et frise fermés au chargement à toutes les largeurs ; la liste ne part qu'ouverte (2 requêtes au démarrage plutôt que 14)
+- rangée de puces sous la recherche (Frises, six facettes, Zone visible, filtres posés), défilante ; un menu par facette en `position: fixed`, exclusif avec le tiroir
 - la frise suit le thème, se replie partout, et les deux axes ont désormais un chemin clavier complet
 - `Timeline` est chargée en `import()` dynamique, hors du chunk de page
 - le volet est un calque (`position: absolute`), jamais une colonne de grille qui comprime la carte ; son fond, jamais celui de ce qui défile dedans

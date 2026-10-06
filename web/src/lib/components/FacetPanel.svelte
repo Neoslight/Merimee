@@ -10,9 +10,12 @@
      *  plafond des 40 valeurs cache : « 40 sur 7 040 ». */
     cardinaux: Partial<Record<FacetKey, number>>;
     chargement: boolean;
+    /** Ne montrer que ces sections, depliees : le menu d'une puce de filtre
+     *  reprend la section du tiroir plutot que d'en reecrire une. */
+    seules?: FacetKey[];
   }
 
-  let { facettes, cardinaux, chargement }: Props = $props();
+  let { facettes, cardinaux, chargement, seules }: Props = $props();
 
   type Descripteur = { cle: FacetKey; titre: string; replie?: boolean; filtrable?: boolean };
 
@@ -40,7 +43,10 @@
     periodes: 'periodes'
   };
 
-  let ouvertes = $state(new Set(SECTIONS.filter((s) => !s.replie).map((s) => s.cle)));
+  const sections = $derived(seules ? SECTIONS.filter((s) => seules.includes(s.cle)) : SECTIONS);
+  let ouvertes = $state(
+    new Set(untrack(() => seules) ?? SECTIONS.filter((s) => !s.replie).map((s) => s.cle))
+  );
   let recherches = $state<Record<string, string>>({});
 
   // Resultats de recherche par section, qui remplacent la liste recue en props
@@ -131,7 +137,7 @@
 </script>
 
 <aside class="panneau" class:occupe={chargement}>
-  {#each SECTIONS as section (section.cle)}
+  {#each sections as section (section.cle)}
     {@const actives = selection(section.cle)}
     {@const ouverte = ouvertes.has(section.cle)}
     {@const options = visibles(section.cle)}
@@ -183,6 +189,7 @@
     </section>
   {/each}
 
+  {#if !seules}
   <section class="palissy">
     <label for="palissy">
       Mobilier Palissy associé
@@ -198,6 +205,7 @@
     />
     <p>Isoler les édifices qui abritent un grand nombre d'objets classés.</p>
   </section>
+  {/if}
 </aside>
 
 <style>
