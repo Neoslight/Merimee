@@ -169,8 +169,9 @@ repris :
 - **la position écrite par la carte vit dans `state/position.svelte.ts`**, jamais dans
   l'URL ni dans `localStorage` ; l'erreur (refus, indisponible, délai) s'affiche en
   surface au haut de la scène et s'efface seule ;
-- libellés traduits par l'option `locale` pour la géolocalisation seulement — ceux du
-  zoom restent ceux que l'audit lit déjà.
+- libellés traduits par l'option `locale` — géolocalisation, zoom (« Zoomer »,
+  « Dézoomer ») et mentions : un lecteur d'écran annonçait « Zoom in » au milieu d'une
+  interface en français (ANO-28).
 
 Les clés de lecture portent `.cle` : le test qui vérifie que la légende suit le mode
 de coloration compte ces clés — trois par statut, cinq par époque. La ligne « Non

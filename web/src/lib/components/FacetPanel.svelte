@@ -17,6 +17,10 @@
 
   let { facettes, cardinaux, chargement, seules }: Props = $props();
 
+  /** Le panneau vit deux fois — tiroir et menu de puce — : ses identifiants
+   *  doivent rester uniques dans le document. */
+  const instance = $props.id();
+
   type Descripteur = { cle: FacetKey; titre: string; replie?: boolean; filtrable?: boolean };
 
   const SECTIONS: Descripteur[] = [
@@ -122,8 +126,14 @@
     return (filters[CIBLES[cle]] as string[]) ?? [];
   }
 
+  /** Les options affichees, plus les valeurs cochees que les comptes croises
+   *  ne rendent plus : une valeur dont l'effectif tombe a zero disparaissait,
+   *  l'en-tete annoncait « Domaine 2 » sans qu'on puisse la decocher ailleurs
+   *  que par sa puce (ANO-59). Elle reste, a zero. */
   function visibles(cle: FacetKey): Compte[] {
-    return trouvees[cle] ?? facettes[cle] ?? [];
+    const liste = trouvees[cle] ?? facettes[cle] ?? [];
+    const absentes = selection(cle).filter((v) => !liste.some((c) => c.valeur === v));
+    return absentes.length ? [...absentes.map((valeur) => ({ valeur, n: 0 })), ...liste] : liste;
   }
 
   /** Ce qu'annonce le titre d'une section : le total des valeurs distinctes,
@@ -136,13 +146,14 @@
   }
 </script>
 
-<aside class="panneau" class:occupe={chargement}>
+<aside class="panneau" class:occupe={chargement} aria-label="Facettes">
   {#each sections as section (section.cle)}
     {@const actives = selection(section.cle)}
     {@const ouverte = ouvertes.has(section.cle)}
     {@const options = visibles(section.cle)}
     <section>
-      <button class="titre" onclick={() => basculerSection(section.cle)}>
+      <button class="titre" aria-expanded={ouverte} aria-controls="{instance}-{section.cle}"
+              onclick={() => basculerSection(section.cle)}>
         <span class="chevron" class:ouvert={ouverte}>›</span>
         <span class="nom-section">{section.titre}</span>
         {#if actives.length}<em>{actives.length}</em>{/if}
@@ -160,7 +171,7 @@
             bind:value={recherches[section.cle]}
           />
         {/if}
-        <ul>
+        <ul id="{instance}-{section.cle}">
           {#each options as item (item.valeur)}
             <li>
               <!-- Le statut de protection est la seule facette au code couleur :
@@ -328,8 +339,11 @@
     }
   }
 
+  /* Un contour de 2 px, et non le seul filet de 1 px qui virait a l'ocre :
+     3,21:1, trop peu pour qu'on voie ou est le focus (ANO-26). */
   .filtre:focus {
-    outline: none;
+    outline: 2px solid var(--inscrit);
+    outline-offset: -2px;
     border-color: var(--inscrit);
   }
 

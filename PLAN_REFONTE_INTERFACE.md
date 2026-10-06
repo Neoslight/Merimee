@@ -315,3 +315,40 @@ Après, les phases 3 et 5 peuvent tourner en `worktree` séparés.
 Les phases 0 à 3 livrent chacune un gain visible sans toucher à la structure. La
 légende, qui gêne les visiteurs aujourd'hui, reçoit son texte dès la phase 0 et sa
 forme complète en phase 3.
+
+## 8. Bilan d'exécution (2026-10-06)
+
+Branche `refonte-interface`, un commit par phase, chacun avec `npm run check` à 0/0,
+les tests unitaires, la suite e2e complète et `pytest` verts.
+
+| Phase | Commit | Ce qui a été livré |
+|---|---|---|
+| 0 | `420b416` | défilement mobile (ANO-56), historique (ANO-03, et retour arrière qui lisait `page.url` figé), cadrage de départ, texte de la légende, tiroir inerte, « Au hasard » sans échec muet, lien copié sans la position |
+| 1 | `c265671` | suppression de la matrice |
+| 2 | `281f11b` | caméra (vol « Au hasard », rapprochement depuis la liste, `?ref=` centré), épingle, infobulle, `has_photo`, défaut d'occlusion de la feuille mobile |
+| 3 | `f26dbe9` | vignette des calques, panneau à tuiles, photo aérienne, légende complète (définitions, effectifs, filtre au toucher) |
+| 4a | `f5e987c` | carte plein écran, bloc du haut flottant, volet unique liste ↔ fiche ↔ filtres, feuille à trois crans, plus d'onglets, commandes en bas à droite |
+| 4b | `4580be9` | puces de filtres, cadrage sur un lieu choisi, liste chargée seulement ouverte |
+| 5 | `cffab00` | recherche à suggestions, un geste par famille, raccourcis, ligatures |
+| 6 | `a0113ea` | fiche à actions, voisins, flèches photo ; liste avec siècle, A–Z, pagination, survol |
+| 7 | (ce commit) | ANO-23, 24, 26, 28, 59 ; audit visuel (120 captures, aucun échec) ; vignette sociale |
+
+**Écarts au plan, et pourquoi :**
+
+- *Phase 4 n'a pas eu de « 4c » séparée* : la feuille à trois crans est le volet
+  lui-même sur téléphone, elle est venue avec lui.
+- *« Frises » est une puce*, en tête de la rangée, et non une entrée par « Époque » et
+  « Protection » : un seul panneau porte les deux frises, une seule puce l'ouvre.
+- *Une commune n'est pas un filtre* : la choisir cadre la carte sans rien restreindre,
+  `monuments` n'ayant pas de facette « commune ».
+- *Le partage natif n'apparaît qu'au doigt* et là où le système le fournit ; « Copier
+  le lien » reste partout.
+- *Pas d'agents Sonnet* : chaque phase touchait `+page.svelte` ou `MonumentMap`, et la
+  migration des tests suivait les pièges au fil de l'eau — rien de mécanique à déléguer.
+
+**À vérifier sur un vrai téléphone**, ce que Chromium sans tête ne prouve pas :
+
+- le défaut d'occlusion de la feuille (bande du haut de la carte non dessinée) : relevé
+  et corrigé en sans tête, jamais observé sur appareil ;
+- la fluidité du vol « Au hasard » avec 44 484 points ;
+- la lisibilité du liseré des points sur la photo aérienne.

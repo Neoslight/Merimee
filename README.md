@@ -8,11 +8,9 @@ douzaine de facettes, et double frise temporelle : époque de construction d'un 
 année de l'arrêté de protection de l'autre — de la première liste Mérimée de 1840
 jusqu'aux arrêtés de 2026.
 
-Les filtres posés s'affichent en puces sous la barre : on voit lesquels sont actifs et
-on en retire un seul d'un clic. Les deux panneaux — facettes à gauche, fiche à droite —
-sont des tiroirs qui flottent au-dessus de la carte au lieu de la compresser. Le bouton
-qui ouvre les facettes se pose au coin de la carte, là où le tiroir apparaît, et
-s'efface tant qu'il est ouvert.
+Sous la recherche, une rangée de puces règle les facettes courantes d'un geste —
+protection, domaine, type d'édifice, région, département, architecte — et montre les
+filtres posés, qu'on retire un à un. Choisir une région cadre la carte dessus.
 
 La carte occupe tout l'écran ; recherche, compteur, liste et filtres flottent en haut
 à gauche, et ce qu'on lit — liste, fiche, filtres — s'ouvre dans un seul volet,
@@ -28,8 +26,8 @@ ouvre sa fiche, et le champ vide suggère des pistes — Vauban, Guimard, les m�
 les phares.
 
 Les deux frises répondent aux mêmes gestes : un clic pose une valeur, un glissement une
-plage, un second clic au même endroit l'efface. Elles se replient d'un geste, comme le
-tiroir des facettes, et rendent alors le tiers bas de l'écran à la carte.
+plage, un second clic au même endroit l'efface. Elles s'ouvrent depuis la puce « Frises » et
+rendent, repliées, le tiers bas de l'écran à la carte.
 
 Tout état d'exploration vit dans l'URL : un croisement trouvé se partage par simple
 copie du lien, et le retour arrière referme la fiche ouverte. Sombre ou clair, au
@@ -93,7 +91,7 @@ permaliens, le chemin clavier des deux frises, le gabarit téléphone, les deux
 thèmes — contraste calculé dans chacun, polices réellement servies, aucune couleur en
 dur hors d'`app.css` —, les puces de filtres actifs, le brossage des siècles, et le
 fait qu'ouvrir une fiche ne télécharge qu'un fragment de ~320 Ko. Une mesure en pixels
-vérifie que le tiroir ne prend **aucune** largeur à la carte : c'est la régression que
+vérifie que le volet ne prend **aucune** largeur à la carte : c'est la régression que
 le passage en calques risque le plus. Nécessite `npx playwright install chromium` une
 fois, et le build servi avec ses **vraies données** — la suite appelle aussi CARTO en
 réseau pour vérifier que le fond clair est réellement reteinté, elle ne tourne donc

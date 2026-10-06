@@ -464,6 +464,14 @@ sur 240 fichiers) sont dans `docs/conception-photographies.md`.
 recréé dans chaque composant qui affiche un compte — `+page.svelte` et `FacetPanel`
 le partageaient déjà en double avant cette extraction, comme `romain`.
 
+**Les en-têtes de section de facette portent `aria-expanded` et `aria-controls`**
+(ANO-23), vers un identifiant préfixé par `$props.id()` : le panneau vit deux fois, dans
+le tiroir et dans le menu d'une puce, et ses identifiants doivent rester uniques. Une
+valeur cochée dont l'effectif croisé tombe à zéro reste affichée, à zéro, pour qu'on
+puisse la décocher là où on l'a cochée (ANO-59). La fiche et le panneau des facettes
+sont nommés (`aria-label`, ANO-24) ; le champ de recherche de facette prend un contour
+de 2 px au focus, plus le seul filet de 1 px (ANO-26).
+
 **Le libellé d'une section de facette vit dans `.nom-section`.** Un nœud de plus, pour
 une raison de mise en page : `.titre` est un flex à quatre enfants, et deux
 `margin-left: auto` concurrents (badge de sélection, cardinalité) se partageraient

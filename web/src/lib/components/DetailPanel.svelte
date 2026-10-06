@@ -339,7 +339,7 @@
   }
 </script>
 
-<aside class="fiche" tabindex="-1" bind:this={noeud}
+<aside class="fiche" tabindex="-1" bind:this={noeud} aria-label="Fiche de la notice"
        onscroll={() => { if (noeud && noeud.scrollTop > 0) ondefile?.(); }}>
   {#if !reference}
     <div class="attente">

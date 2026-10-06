@@ -455,11 +455,14 @@
       dragRotate: false,
       pitchWithRotate: false,
       touchPitch: false,
-      // Seuls les libelles de la geolocalisation sont traduits : ceux du zoom
-      // restent ceux de MapLibre, que la suite e2e et l'audit lisent deja.
+      // Toutes les commandes parlent francais (ANO-28) : un lecteur d'ecran
+      // annoncait « Zoom in » au milieu d'une interface en francais.
       locale: {
         'GeolocateControl.FindMyLocation': 'Me localiser',
-        'GeolocateControl.LocationNotAvailable': 'Position non disponible'
+        'GeolocateControl.LocationNotAvailable': 'Position non disponible',
+        'NavigationControl.ZoomIn': 'Zoomer',
+        'NavigationControl.ZoomOut': 'Dézoomer',
+        'AttributionControl.ToggleAttribution': 'Afficher ou masquer les mentions'
       }
     });
 
