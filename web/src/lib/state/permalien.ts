@@ -26,6 +26,7 @@
  */
 import { ANNEE_MAX, ANNEE_MIN, filtresVides, type Filters } from './filters.svelte';
 import { estAcr } from '$lib/acr';
+import { CLES_SUPERPOSITIONS, type Superposition } from '$lib/carte/fonds';
 
 /** Vue occupant la scene centrale. `carte` est le defaut, donc absent de l'URL.
  *
@@ -36,16 +37,15 @@ export type Vue = 'carte' | 'liste';
 const VUES: readonly Vue[] = ['carte', 'liste'];
 
 /**
- * Fond de carte historique superpose, `null` quand il n'y en a pas.
+ * Fond superpose au plan — photo aerienne ou carte ancienne —, `null` quand il
+ * n'y en a pas.
  *
  * **Le fond entre dans l'URL, son opacite non.** Meme partage qu'avec le
- * theme : quelle carte ancienne on regarde est un etat d'exploration, a quel
- * dosage on la lit est un confort de lecture. Un lien partage ouvre donc le
- * bon fond, a l'opacite de celui qui le recoit.
+ * theme : quel fond on regarde est un etat d'exploration, a quel dosage on le
+ * lit est un confort de lecture. Un lien partage ouvre donc le bon fond, a
+ * l'opacite de celui qui le recoit.
  */
-export type FondHistorique = 'cassini' | 'etatmajor';
-
-const FONDS: readonly FondHistorique[] = ['cassini', 'etatmajor'];
+export type FondHistorique = Superposition;
 
 export interface EtatPartage {
   filtres: Filters;
@@ -174,7 +174,7 @@ export function decoder(chaine: string): EtatPartage & { cadrage: VueCarte | nul
     filtres,
     selection,
     vue: vue && VUES.includes(vue) ? vue : 'carte',
-    fond: fond && FONDS.includes(fond) ? fond : null,
+    fond: fond && CLES_SUPERPOSITIONS.includes(fond) ? fond : null,
     // Une fiche ACR ouverte sans sa couche montrerait une notice sans point sur
     // la carte : le lien la rallume. L'encodage emet alors `acr=1`, et la forme
     // normalisee reste stable d'un aller-retour a l'autre.

@@ -165,7 +165,7 @@ classes.
 
 **Un seul écouteur `Échap` global**, posé sur `window` (`surEchap`), ferme le calque le
 plus haut avec les mêmes fonctions que sa croix. Convention partagée avec les
-composants qui gèrent `Échap` localement (le module des cartes anciennes, par
+composants qui gèrent `Échap` localement (le panneau des calques, par
 exemple) : ils appellent `event.preventDefault()`, et l'écouteur global ignore tout
 événement déjà traité. Un champ de texte non vide se vide au premier `Échap` —
 comportement natif des `<input type="search">` du produit — la fermeture d'un calque
@@ -229,7 +229,7 @@ garde sa taille, son fond et son filet ; seule la surface qui répond au doigt s
 Quatre points à ne pas défaire :
 
 - **`-v` étend la hauteur seule, et ce n'est pas un raffinement.** Sur des boutons en
-  rang — le rail « statut / époque », les trois onglets de vue, les puces de filtres,
+  rang — les onglets de vue, les puces de filtres,
   les deux fonds historiques — deux zones de 44 px se recouvriraient latéralement, et le
   dernier dans l'ordre du DOM prendrait le clic de son voisin ;
 - **trois éléments n'ont pas pu la recevoir.** Un `<input>` n'accepte pas de
@@ -237,10 +237,6 @@ Quatre points à ne pas défaire :
   `.hasard` le suivent, sinon le groupe médian se désaligne. Le zoom MapLibre non plus —
   `.maplibregl-ctrl-group` porte `overflow: hidden`, qui rognerait la zone — d'où deux
   boutons de **44 px réels**, et la conséquence ci-dessous ;
-- **`top: 108px` sur `.ouvrir-fonds` / `.fonds` suit la hauteur du zoom.** Les deux
-  boutons passés de 29 à 44 px, le groupe MapLibre mesure 91 px au lieu de 61 : à 78 px
-  le module des cartes anciennes lui rentrait dedans. Changer l'un sans l'autre fait
-  chevaucher les deux blocs, et rien ne le signale sinon à l'œil ;
 - **les pilules d'options des facettes restent à 30 px**, délibérément. Ce sont des
   cibles en grille, elles passent le seuil AA de WCAG 2.2 (24 px), et les porter à 44
   changerait la densité du tiroir. L'attribution MapLibre reste à 11 px pour une autre
@@ -384,9 +380,10 @@ rien — les sélecteurs `.bascule` de la suite e2e restent valables au large.
 recherche de la barre et recherche de facette. Sous 16 px, Safari iOS zoome la page
 entière à la mise au point et ne dézoome pas en sortant. La souris garde la densité.
 
-**La légende se replie sur ses clés sur téléphone.** Une pastille « réglages » déplie le
-rail statut/époque et la densité ; à cette largeur ils prenaient une seconde rangée en
-permanence pour un réglage qu'on touche une fois.
+**Sur téléphone, la légende et la vignette des calques se partagent le pied de la
+carte** : la vignette à gauche (56 px), la légende dans la largeur qui reste. Le panneau
+des calques y devient une feuille basse pleine largeur. Les réglages d'affichage ont
+quitté la légende — plus de pastille « réglages » à déplier.
 
 **Les jetons `--sa-*` (`--sa-haut`, `--sa-bas`, `--sa-gauche`, `--sa-droite`) portent les
 bordures physiques de l'écran sur iOS** — encoche, coins arrondis, barre d'accueil du

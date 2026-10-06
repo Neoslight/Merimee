@@ -6,6 +6,7 @@
 import { test, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import {
+  ouvrirCalques,
   attendre,
   attendreImageChargee,
   demarrer,
@@ -28,7 +29,12 @@ const octetsSous = (prefixe: string) =>
 const rendusAcr = (): Promise<Rendu[]> =>
   page.evaluate(() => (window as unknown as { __carteOutils: { rendusAcr: () => Rendu[] } }).__carteOutils.rendusAcr());
 
-const bouton = () => page.getByRole('button', { name: 'Architecture contemporaine remarquable' });
+/** La bascule vit dans le panneau des calques, qui se referme a chaque toucher
+ *  de la carte et a chaque navigation : on l'ouvre avant chaque usage. */
+async function bouton() {
+  await ouvrirCalques(page);
+  return page.getByRole('button', { name: 'Architecture contemporaine remarquable' });
+}
 
 /** Premiere notice ACR illustree par l'instantane Wikidata, s'il existe. */
 function referenceIllustree(): string | null {
@@ -62,7 +68,7 @@ test('couche architecture contemporaine remarquable', async () => {
 
   await test.step('masquee et gratuite au chargement', async () => {
     await page.waitForTimeout(1500);
-    verifier('la bascule ACR est eteinte par defaut', (await bouton().getAttribute('aria-pressed')) === 'false');
+    verifier('la bascule ACR est eteinte par defaut', (await (await bouton()).getAttribute('aria-pressed')) === 'false');
     verifier('aucun octet de la couche ACR au chargement', octetsSous('/data/acr/') === 0, `${octetsSous('/data/acr/')} octets`);
     verifier('aucun point ACR rendu', (await rendusAcr()).length === 0);
     verifier('pas de parametre acr dans l URL', !page.url().includes('acr='), page.url());
@@ -70,7 +76,7 @@ test('couche architecture contemporaine remarquable', async () => {
   });
 
   await test.step('allumer la couche', async () => {
-    await bouton().click();
+    await (await bouton()).click();
     await page
       .waitForFunction(
         () => (window as unknown as { __carteOutils: { rendusAcr: () => unknown[] } }).__carteOutils.rendusAcr().length > 0,
@@ -121,7 +127,7 @@ test('couche architecture contemporaine remarquable', async () => {
   await test.step('permalien d une fiche ACR', async () => {
     await page.goto(`${infos.url}?ref=ACR0000002`, { waitUntil: 'domcontentloaded' });
     await attendre(page, '.fiche .label-acr', 45_000);
-    verifier('la couche se rallume pour une fiche ACR partagee', (await bouton().getAttribute('aria-pressed')) === 'true');
+    verifier('la couche se rallume pour une fiche ACR partagee', (await (await bouton()).getAttribute('aria-pressed')) === 'true');
     const badge = await page.textContent('.fiche .label-acr');
     verifier('badge du label date', /Label 2003/.test(badge ?? ''), badge ?? '');
     verifier('titre de la notice', (await page.textContent('.fiche h2'))?.includes('Hôtel de ville'));
@@ -154,9 +160,9 @@ test('couche architecture contemporaine remarquable', async () => {
   });
 
   await test.step('eteindre la couche', async () => {
-    await bouton().click();
+    await (await bouton()).click();
     await page.waitForTimeout(600);
-    verifier('bascule eteinte', (await bouton().getAttribute('aria-pressed')) === 'false');
+    verifier('bascule eteinte', (await (await bouton()).getAttribute('aria-pressed')) === 'false');
     verifier('la fiche ACR se referme avec sa couche', (await page.locator('.fiche .label-acr').count()) === 0);
     verifier('acr et ref quittent l URL', !page.url().includes('acr=') && !page.url().includes('ref=ACR'), page.url());
     verifier('aucun point ACR rendu une fois eteinte', (await rendusAcr()).length === 0);

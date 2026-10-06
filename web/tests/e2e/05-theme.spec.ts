@@ -14,6 +14,7 @@ import {
   attendre,
   attendreCarte,
   demarrer,
+  ouvrirCalques,
   fermerServeur,
   luminance,
   contraste,
@@ -103,6 +104,7 @@ test('theme clair et sombre', async () => {
       `terre ${teinture.terre} · mer ${teinture.mer} · trait ${teinture.trait} · libelle ${teinture.libelle} · detail ${teinture.detail} · ignorees ${teinture.ignorees}`
     );
 
+    await ouvrirCalques(page);
     await page.getByRole('button', { name: 'densité' }).click();
     await page.waitForTimeout(500);
     const densiteApresTheme = await page.getByRole('button', { name: 'densité' }).getAttribute('aria-pressed');

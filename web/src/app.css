@@ -178,6 +178,11 @@
   --position-halo: rgba(31, 111, 209, 0.16);
   --position-anneau: #ffffff;
 
+  /* Texte pose sur une photographie (vignette des calques) : c'est l'image
+     qui fait le fond, pas le theme — la paire ne s'inverse donc pas. */
+  --texte-sur-image: #ffffff;
+  --voile-image: rgba(20, 16, 12, 0.72);
+
   /* Loupe des champs de recherche. Un `<input>` n'accepte pas de
      pseudo-element : une image de fond est le seul chemin, et son trait est
      une couleur — elle doit donc vivre ici, comme les autres, sinon elle

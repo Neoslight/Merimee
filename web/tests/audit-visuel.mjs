@@ -42,7 +42,7 @@ for (const nom of readdirSync(SORTIE)) {
 const { serveur, url: BASE } = await demarrer(chemin('../build'), 4181);
 
 // `AUDIT_GABARITS` et `AUDIT_THEMES` restreignent la passe — utiles pour
-// eprouver un geste sans repayer 104 captures.
+// eprouver un geste sans repayer 120 captures.
 const seulement = (nom, tous) => {
   const v = process.env[nom];
   return v ? tous.filter((t) => v.split(',').includes(t.cle ?? t)) : tous;
@@ -70,16 +70,19 @@ const attendre = (page, selecteur, timeout = 45_000) => page.waitForSelector(sel
 // sur telephone ; l'autre est masque. On vise celui qui est visible.
 const SELECTEUR_VUE = '.bascule button:visible, .onglets button:visible';
 
-/** Sur telephone, les commandes de legende attendent la pastille « reglages ». */
-async function deplierReglages(page) {
-  // `exact` n'est pas une precaution : sans lui le nom se compare par
-  // sous-chaine, « Masquer les réglages de la carte » repond aussi, et l'aide
-  // refermait les reglages qu'elle devait ouvrir.
-  const reglages = page.getByRole('button', { name: 'Réglages de la carte', exact: true });
-  if ((await reglages.count()) === 1 && (await reglages.isVisible())) {
-    await reglages.click();
-    await page.waitForTimeout(200);
-  }
+/** Le panneau des calques est replie au chargement et se referme a chaque
+ *  toucher de la carte : on l'ouvre la ou on s'en sert. */
+async function ouvrirCalques(page) {
+  if ((await page.locator('.panneau-calques').count()) === 1) return;
+  await page.locator('button.coin').click();
+  await page.waitForSelector('.panneau-calques', { timeout: 10_000 });
+  await page.waitForTimeout(250);
+}
+
+async function fermerCalques(page) {
+  if ((await page.locator('.panneau-calques').count()) === 0) return;
+  await page.locator('.panneau-calques .fermer').click();
+  await page.waitForTimeout(250);
 }
 
 async function ouvrirFiltres(page) {
@@ -116,7 +119,7 @@ async function effacerFiltres(page) {
  * Ramene l'application a son etat d'arrivee sans rechargement.
  *
  * Un `goto` couterait un reamorcage DuckDB par etat ; le defaire geste par
- * geste est le seul chemin tenable sur 104 captures. L'ordre compte : la fiche
+ * geste est le seul chemin tenable sur 120 captures. L'ordre compte : la fiche
  * d'abord (elle referme le tiroir derriere elle sur gabarit etroit), les
  * filtres ensuite, les calques en dernier.
  */
@@ -143,37 +146,24 @@ async function raz(page) {
     await page.getByRole('button', { name: 'Masquer les frises' }).click();
     await page.waitForTimeout(300);
   }
-  for (const nom of ['Cassini', 'État-major']) {
-    const b = page.locator('.fonds > button', { hasText: nom }).first();
-    if ((await b.count()) === 1 && ((await b.getAttribute('class')) ?? '').includes('actif')) {
-      await b.click();
-      await page.waitForTimeout(400);
-    }
-  }
-  if ((await page.locator('.fonds').count()) === 1) {
-    await page
-      .locator('.fonds .fermer-fonds')
-      .first()
-      .click()
-      .catch(() => {});
-    await page.waitForTimeout(250);
-  }
-  const densite = page.getByRole('button', { name: 'densité' });
-  if ((await densite.count()) === 1 && ((await densite.getAttribute('class')) ?? '').includes('actif')) {
-    await deplierReglages(page);
-    await densite.click();
-    await page.waitForTimeout(500);
-  }
-  const masquer = page.getByRole('button', { name: 'Masquer les réglages de la carte' });
-  if ((await masquer.count()) === 1 && (await masquer.isVisible())) {
-    await masquer.click();
-    await page.waitForTimeout(200);
-  }
   const carte = page.locator(SELECTEUR_VUE, { hasText:'Carte' });
   if ((await carte.count()) === 1) {
     await carte.click();
     await page.waitForTimeout(500);
   }
+  // Calques, une fois revenu a la carte — la liste recouvre la vignette :
+  // retour au plan, aux couleurs de statut, sans densite ni ACR.
+  await ouvrirCalques(page);
+  const plan = page.getByRole('button', { name: 'Plan', exact: true });
+  if ((await plan.getAttribute('aria-pressed')) !== 'true') await plan.click();
+  const statut = page.locator('.panneau-calques button.mode', { hasText: 'Statut' });
+  if ((await statut.getAttribute('aria-pressed')) !== 'true') await statut.click();
+  const acr = page.getByRole('button', { name: 'Architecture contemporaine remarquable' });
+  if ((await acr.getAttribute('aria-pressed')) === 'true') await acr.click();
+  await fermerCalques(page);
+  const reduire = page.getByRole('button', { name: 'Réduire' });
+  if ((await reduire.count()) === 1) await reduire.click();
+  await page.waitForTimeout(400);
 }
 
 const ETATS = [
@@ -233,8 +223,8 @@ const ETATS = [
     cle: 'fonds-anciens',
     vue: 'carte',
     poser: async (page) => {
-      await page.locator('button.ouvrir-fonds').click();
-      await page.waitForTimeout(400);
+      // Le panneau reste ouvert : c'est lui qu'on veut voir, tuiles comprises.
+      await ouvrirCalques(page);
       await page.getByRole('button', { name: 'Cassini' }).click();
       const dosage = page.getByRole('slider', { name: /Opacité du fond/ });
       await dosage.fill('55');
@@ -243,11 +233,33 @@ const ETATS = [
   },
 
   {
+    cle: 'aerien',
+    vue: 'carte',
+    poser: async (page) => {
+      await ouvrirCalques(page);
+      await page.getByRole('button', { name: 'Photo aérienne' }).click();
+      await fermerCalques(page);
+      await page.waitForTimeout(3000);
+    }
+  },
+
+  {
+    cle: 'legende-depliee',
+    vue: 'carte',
+    poser: async (page) => {
+      await page.getByRole('button', { name: 'Comprendre' }).click();
+      await page.waitForSelector('.legende .ligne .compte', { timeout: 15_000 });
+      await page.waitForTimeout(400);
+    }
+  },
+
+  {
     cle: 'densite',
     vue: 'carte',
     poser: async (page) => {
-      await deplierReglages(page);
+      await ouvrirCalques(page);
       await page.getByRole('button', { name: 'densité' }).click();
+      await fermerCalques(page);
       await page.waitForTimeout(1400);
     }
   },
@@ -486,7 +498,7 @@ const RELEVE = () => {
 
   // --- Chevauchements -------------------------------------------------------
   const PANNEAUX =
-    '.legende, .fonds, .fiche, .facettes, .jetons, .frise, .bascule, .chiffres, .marque, .centre-barre, .liste, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-top-right, .scene > button.filtres, .renvoi-photo';
+    '.legende, .coin, .panneau-calques, .fiche, .facettes, .jetons, .frise, .bascule, .chiffres, .marque, .centre-barre, .liste, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-top-right, .scene > button.filtres, .renvoi-photo';
   const candidats = [
     ...new Set([...interactifs, ...[...document.querySelectorAll(PANNEAUX)].filter(visible)])
   ].slice(0, 140);
@@ -545,6 +557,11 @@ try {
       viewport: { width: vp.width, height: vp.height },
       colorScheme: 'dark',
       deviceScaleFactor: 1
+    });
+    await contexte.addInitScript(() => {
+      try {
+        localStorage.setItem('merimee-legende-vue', '1');
+      } catch {}
     });
     const page = await contexte.newPage();
     const erreurs = [];

@@ -53,18 +53,20 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `web/src/lib/state/theme.svelte.ts` | thème sombre/clair, les deux feuilles de fond, et la palette résolue que lisent MapLibre et Plot |
 | `web/src/lib/teinte.ts` | repeint le fond clair par **nature de couche**, jamais par identifiant |
 | `web/src/lib/state/carte.svelte.ts` | ce que la carte a réellement peint — le seul témoin d'un repeint muet |
-| `web/src/lib/carte/fonds.ts` | table des fonds historiques IGN et construction des tuiles — extrait de `MonumentMap.svelte` |
+| `web/src/lib/carte/fonds.ts` | `SUPERPOSITIONS` : photo aérienne et cartes anciennes IGN, dosage, place sous ou sur les libellés, tuiles |
+| `web/src/lib/carte/semiologie.ts` | `Mode` et `TRANCHES` d'époque, partagés par la carte, la légende et les calques |
+| `web/scripts/vignettes-calques.mjs` | produit `static/calques/*.jpg`, aperçus figés des fonds — aucun octet IGN avant choix |
 | `web/src/lib/carte/camera.ts` | cadrage, calculs purs : emprise de départ, part visible sous les panneaux, décalage de visée, et quand taire la vue dans un lien copié |
 | `web/src/lib/statuts.ts` | libellé, glose et définition de chaque niveau de protection — source unique de la légende |
 | `web/src/lib/photo.ts` | cadrage des photographies de fiche, calculs purs — extrait de `DetailPanel.svelte` |
 | `web/src/lib/format.ts` | `romain`, `nf`, formats de nombres — étaient recopiés dans plusieurs composants |
 | `web/src/service-worker.ts` | cache des actifs hachés uniquement |
 | `web/scripts/precharger.mjs` | injecte le préchargement du wasm dans le shell HTML après build, chaîné à `build` et `build:pages` |
-| `web/src/lib/components/` | `MonumentMap`, `FacetPanel`, `Jetons`, `Timeline`, `DetailPanel` |
-| `web/tests/e2e/` | 294 vérifications en Chromium réel : 14 fichiers `NN-domaine.spec.ts` + `_soutien.ts` (`verifier()` adossé à `expect.soft`), `playwright.config.ts` en `workers: 1` / `retries: 0` |
+| `web/src/lib/components/` | `MonumentMap` (rendu seul), `Calques`, `Legende`, `FacetPanel`, `Jetons`, `Timeline`, `DetailPanel` |
+| `web/tests/e2e/` | 332 vérifications en Chromium réel : 15 fichiers `NN-domaine.spec.ts` + `_soutien.ts` (`verifier()` adossé à `expect.soft`), `playwright.config.ts` en `workers: 1` / `retries: 0` |
 | `web/tests/unit/` | 79 tests Vitest sur la logique pure : `buildWhere`, `permalien`, `shards`, `teinte`, `points`, `acr`, `camera`, distances |
 | `web/tests/apercu-social.mjs` | régénère la vignette Open Graph depuis l'application |
-| `web/tests/audit-visuel.mjs` | 104 captures + relevés WCAG chiffrés, **hors** `npm run test` |
+| `web/tests/audit-visuel.mjs` | 120 captures + relevés WCAG chiffrés, **hors** `npm run test` |
 
 ## Commandes
 
@@ -79,9 +81,9 @@ cd etl  && python -m pytest tests -q    # 103 tests (79 + 24 dans test_annexes.p
 cd web  && npm run dev                  # http://localhost:5173
 cd web  && npm run check                # svelte-check, doit rester à 0/0
 cd web  && npm run test:unit            # Vitest, 79 tests, logique pure
-cd web  && npm run build && npm run test # build statique + 294 vérifications en Chromium (tests/e2e/)
+cd web  && npm run build && npm run test # build statique + 332 vérifications en Chromium (tests/e2e/)
 cd web  && npm run apercu               # régénère static/apercu-social.png
-cd web  && npm run audit                # 104 captures + relevés dans .audit-screenshots/
+cd web  && npm run audit                # 120 captures + relevés dans .audit-screenshots/
 cd web  && npm run deploy               # predeploy (check + test:unit) puis build /Merimee + push sur gh-pages
 ```
 
@@ -177,9 +179,10 @@ avant de toucher à ce domaine** : cet index oriente, il ne remplace pas la lect
 
 ### Carte — [docs/conception-carte.md](docs/conception-carte.md)
 
-- les commandes de la carte sont rangées par question : légende, fonds historiques, zoom, zone visible
+- calques : vignette fixe en bas à gauche (aperçu figé), panneau à tuiles ; la légende ne fait que dire et filtrer ; l'état vit dans la page, `MonumentMap` peint
+- photo aérienne sous les libellés du plan, cartes anciennes dessus ; chaque fond arrive à son dosage (100 / 65 %)
 - la vue de départ est une emprise (`METROPOLE`) cadrée avec marges, plus un centre et un zoom fixes
-- la légende porte un titre et une glose par niveau de protection (`lib/statuts.ts`) ; les couleurs ne bougent pas
+- la légende porte un titre et une glose par niveau de protection (`lib/statuts.ts`) ; « Comprendre » ajoute définitions et effectifs (sans le filtre de statut, chargés seulement dépliée) ; toucher une ligne filtre ; les couleurs ne bougent pas
 - caméra : toucher ne bouge rien sauf sous un panneau, la liste rapproche, `?ref=` sans `c=` centre, « Au hasard » vole ; `offset`, jamais `padding`
 - épingle de sélection en `Marker` DOM, infobulle de survol par `setDOMContent`, jamais `setHTML`
 - le fond clair est repeint couche par couche **par nature**, jamais par identifiant CARTO
@@ -189,7 +192,7 @@ avant de toucher à ce domaine** : cet index oriente, il ne remplace pas la lect
 - liseré, opacité et rayon des points sont interpolés par zoom, jamais un littéral fixe
 - pas de fusion « produit » sur une couche `circle` : la heatmap donne la quantité, l'alpha donne le grain
 - un toucher interroge une boîte (±16 px au doigt, ±6 à la souris) et retient le plus proche à l'écran ; sous z9 un amas rapproche la vue
-- géolocalisation : contrôle natif, icône en masque peinte par jeton, `--haut-fonds` suit zoom + géoloc (disjonction vérifiée)
+- géolocalisation : contrôle natif, icône en masque peinte par jeton, sous le zoom (disjonction vérifiée)
 - l'intermittence `AbortError` de la suite s'est réduite avec l'isolation par fichier et le passage au sondage
 - couche ACR posée masquée dans `poserCouches`, au-dessus des monuments, teinte `--acr` ; `couchesTouchables()` ne la nomme que visible
 

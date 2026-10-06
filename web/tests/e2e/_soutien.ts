@@ -71,6 +71,14 @@ export async function ouvrirFiltres(page: Page): Promise<void> {
   await page.waitForTimeout(300);
 }
 
+/** Le panneau des calques est replie au chargement, et se referme a chaque
+ *  navigation comme a chaque toucher de la carte. */
+export async function ouvrirCalques(page: Page): Promise<void> {
+  if ((await page.locator('.panneau-calques').count()) === 1) return;
+  await page.locator('button.coin').click();
+  await page.waitForSelector('.panneau-calques', { timeout: 10_000 });
+}
+
 /** La frise est repliee au chargement : on la rouvre la ou on s'en sert. */
 export async function ouvrirFrises(page: Page): Promise<void> {
   if ((await page.locator('.frise').count()) === 1) return;

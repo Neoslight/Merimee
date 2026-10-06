@@ -125,6 +125,8 @@ describe('validation a la lecture', () => {
   it('retombe sur aucun fond pour une valeur inconnue', () => {
     expect(decoder('?fond=n-importe-quoi').fond).toBeNull();
     expect(decoder('?fond=etatmajor').fond).toBe('etatmajor');
+    // La photo aerienne a rejoint les fonds : `fond=` la porte comme les autres.
+    expect(decoder('?fond=aerien').fond).toBe('aerien');
   });
 
   it('ignore un objets negatif ou nul', () => {

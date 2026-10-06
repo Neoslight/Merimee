@@ -7,7 +7,7 @@
  * ne seraient jamais eprouves.
  */
 import { test, type Browser, type BrowserContext, type Page } from '@playwright/test';
-import { attendre, demarrer, fermerServeur, verifier, type InfosServeur } from './_soutien';
+import { attendre, demarrer, disjointes, fermerServeur, verifier, type InfosServeur } from './_soutien';
 
 let infos: InfosServeur;
 let contexte: BrowserContext;
@@ -86,21 +86,41 @@ test('gabarit téléphone', async () => {
     verifier('onglet Frises la referme', (await page.locator('.frise').count()) === 0);
   });
 
-  await test.step('legende repliee sur ses cles', async () => {
-    verifier('commandes de legende masquees par defaut', !(await page.locator('.legende .commandes').isVisible()));
-    await page.getByRole('button', { name: 'Réglages de la carte', exact: true }).click();
-    verifier('la pastille deplie les commandes', await page.locator('.legende .commandes').isVisible());
-    await page.getByRole('button', { name: 'Masquer les réglages de la carte' }).click();
+  await test.step('legende et vignette des calques au pied de la carte', async () => {
+    const coin = (await page.locator('button.coin').boundingBox())!;
+    const legende = (await page.locator('.legende').boundingBox())!;
+    verifier('la vignette tient le coin bas gauche', coin.x < 20 && coin.width >= 44, JSON.stringify(coin));
+    verifier('la legende se range a cote, sans la recouvrir', disjointes(coin, legende) && legende.x > coin.x, JSON.stringify({ coin, legende }));
+    verifier('la legende titre ce qu’elle montre', /niveau de protection/i.test(await page.locator('.legende .titre-legende').innerText()));
+    // Sur telephone elle ne s'impose pas depliee, meme a la premiere visite.
+    verifier('repliee au depart sur telephone', (await page.locator('.legende .definition').count()) === 0);
+    await page.getByRole('button', { name: 'Comprendre' }).click();
+    await page.waitForTimeout(300);
+    verifier('Comprendre deplie les definitions', (await page.locator('.legende .definition').count()) === 3);
+    await page.getByRole('button', { name: 'Réduire' }).click();
   });
 
-  await test.step('zoom, geolocalisation et cartes anciennes ne se chevauchent pas', async () => {
+  await test.step('le panneau des calques est une feuille basse', async () => {
+    await page.locator('button.coin').click();
+    await attendre(page, '.panneau-calques');
+    const panneau = (await page.locator('.panneau-calques').boundingBox())!;
+    const scene = (await page.locator('.scene').boundingBox())!;
+    verifier(
+      'pleine largeur, collee au pied de la scene',
+      Math.abs(panneau.width - scene.width) <= 1 && Math.abs(panneau.y + panneau.height - (scene.y + scene.height)) <= 1,
+      JSON.stringify({ panneau, scene })
+    );
+    await page.locator('.panneau-calques .fermer').click();
+    await page.waitForTimeout(300);
+    verifier('la croix la referme', (await page.locator('.panneau-calques').count()) === 0);
+  });
+
+  await test.step('zoom et geolocalisation ne se chevauchent pas', async () => {
     const groupes = await page.locator('.maplibregl-ctrl-top-right .maplibregl-ctrl-group').evaluateAll((els) =>
       els.map((el) => el.getBoundingClientRect().toJSON())
     );
-    const fonds = (await page.locator('button.ouvrir-fonds').boundingBox())!;
     verifier('deux groupes en haut a droite (zoom, geolocalisation)', groupes.length === 2, String(groupes.length));
-    const disjoints = groupes.every((g) => g.bottom <= fonds.y);
-    verifier('cartes anciennes sous la geolocalisation', disjoints, JSON.stringify({ groupes, fonds }));
+    verifier('disjoints', groupes.length === 2 && groupes[0].bottom <= groupes[1].top, JSON.stringify(groupes));
   });
 
   await test.step('le tiroir des filtres ne s’ouvre qu’au geste', async () => {

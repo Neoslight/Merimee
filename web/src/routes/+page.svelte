@@ -2,6 +2,10 @@
   import DetailPanel from '$lib/components/DetailPanel.svelte';
   import FacetPanel from '$lib/components/FacetPanel.svelte';
   import Jetons from '$lib/components/Jetons.svelte';
+  import Calques from '$lib/components/Calques.svelte';
+  import Legende from '$lib/components/Legende.svelte';
+  import { SUPERPOSITIONS } from '$lib/carte/fonds';
+  import type { Mode } from '$lib/carte/semiologie';
   import MonumentMap from '$lib/components/MonumentMap.svelte';
   import { pointsAcr } from '$lib/db/acr';
   import { estAcr } from '$lib/acr';
@@ -29,6 +33,7 @@
     poserSaisie,
     reset,
     retirer,
+    toggle,
     toggleSiecle,
     type FacetKey,
     type Jeton
@@ -135,6 +140,18 @@
   // ecrit l'URL, et le fond en fait partie. Son opacite, elle, reste dans le
   // composant — dosage de lecture, pas etat d'exploration.
   let fond = $state<FondHistorique | null>(initial.fond);
+
+  // --- Calques et legende -----------------------------------------------------
+  // Ce que la carte peint et comment : choisi dans le panneau des calques,
+  // nomme par la legende, peint par `MonumentMap`. La page possede l'etat
+  // parce qu'aucun des trois ne possede les deux autres. Seul le fond entre
+  // dans l'URL ; couleur, densite et opacite sont des reglages de lecture.
+  let mode = $state<Mode>('statut');
+  let densite = $state(false);
+  let opaciteFond = $state(SUPERPOSITIONS.find((s) => s.cle === initial.fond)?.opacite ?? 65);
+  let calquesOuverts = $state(false);
+  let legendeDepliee = $state(false);
+  let comptesStatut = $state.raw<Compte[] | null>(null);
 
   // Timeline importe Observable Plot (209 Ko minifie, ~65 Ko gzip) et partait
   // jusqu'ici dans le chunk de page, charge avant meme que `boot()` de
@@ -339,6 +356,23 @@
       .catch(echec(() => mien === jetonFacettes));
   });
 
+  // Les effectifs de la legende ne partent que depliee : repliee, elle ne les
+  // affiche pas, et le demarrage reste a ses trois requetes. Comptes sans le
+  // filtre de statut, comme une facette — cocher un niveau depuis la legende
+  // ne doit pas faire tomber les deux autres a zero.
+  let jetonLegende = 0;
+
+  $effect(() => {
+    signature;
+    if (!legendeDepliee) return;
+    const mien = ++jetonLegende;
+    facette(filters, 'statut', 10)
+      .then((c) => {
+        if (mien === jetonLegende) comptesStatut = c;
+      })
+      .catch(echec(() => mien === jetonLegende));
+  });
+
   // Meme regle pour la frise, repliable a toutes les largeurs et fermee au
   // premier ecran sur telephone.
   $effect(() => {
@@ -523,7 +557,11 @@
     // natif des `<input type="search">` de ce produit — la fermeture d'un
     // calque attend le passage suivant.
     if (cible instanceof HTMLElement && champTexteNonVide(cible)) return;
-    if (selection !== null) {
+    // Le panneau des calques est le plus passager des calques : il part le
+    // premier. Focus dedans, il a deja traite la touche lui-meme.
+    if (calquesOuverts) {
+      calquesOuverts = false;
+    } else if (selection !== null) {
       fermerFiche();
     } else if (facettesOuvertes) {
       fermerTiroir();
@@ -571,8 +609,11 @@
 
   // Ouvrir une fiche sur un ecran etroit doit refermer le tiroir des filtres,
   // sinon la fiche s'ouvre derriere lui. Au large les deux calques cohabitent.
+  // Sur telephone, le panneau des calques part aussi : la feuille le
+  // recouvrirait.
   $effect(() => {
     if (selection && etroit) facettesOuvertes = false;
+    if (selection && telephone) calquesOuverts = false;
   });
 
   // Calque actuellement modal : seulement sur gabarit etroit, et seulement
@@ -906,16 +947,27 @@
           points={pointsCarte}
           {selection}
           vueInitiale={cadrageInitial}
-          bind:fond
-          bind:acr={acrVisible}
+          {fond}
+          {opaciteFond}
+          {mode}
+          {densite}
+          acr={acrVisible}
           pointsAcr={pointsAcrCarte}
           bind:suivreVue
-          friseOuverte={friseOuverte}
           {marges}
           {etiquette}
           onselect={(ref) => ouvrirFiche(ref)}
           onbbox={(bbox) => (filters.bbox = bbox)}
         />
+
+        <!-- Avant la liste dans le document : elle les recouvre, a meme
+             z-index, quand elle occupe la scene. -->
+        <Calques bind:ouvert={calquesOuverts} bind:fond bind:opacite={opaciteFond}
+                 bind:mode bind:densite bind:acr={acrVisible}
+                 nbAcr={pointsAcrCarte?.features.length ?? null} />
+        <Legende {mode} {densite} acr={acrVisible} compacte={friseOuverte}
+                 bind:depliee={legendeDepliee} comptes={comptesStatut}
+                 statutsActifs={filters.statut} onstatut={(valeur) => toggle('statut', valeur)} />
 
         {#if vue === 'liste'}
           <div class="liste">

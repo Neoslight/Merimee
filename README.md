@@ -14,12 +14,13 @@ sont des tiroirs qui flottent au-dessus de la carte au lieu de la compresser. Le
 qui ouvre les facettes se pose au coin de la carte, là où le tiroir apparaît, et
 s'efface tant qu'il est ouvert.
 
-Les commandes de la carte sont rangées par question : la légende, en bas à gauche, dit
-ce que les couleurs signifient puis propose de les changer ; les cartes anciennes —
-Cassini, l'état-major — prolongent la colonne d'outils du zoom et s'y replient en une
-pastille, parce qu'un calque posé sous les points n'est pas une clé de lecture et qu'on
-ne s'en sert pas en continu ; et « limiter à la zone visible », qui restreint le corpus,
-est passé parmi les filtres, avec les autres critères.
+Les commandes de la carte sont rangées par question, à la manière des cartes en
+ligne : une vignette en bas à gauche ouvre les calques — plan, photo aérienne IGN,
+cartes de Cassini et de l'état-major, couleur des points, densité, architecture
+contemporaine ; à côté, la légende dit ce que les couleurs signifient — niveau de
+protection, glose, définition et effectif sur demande — et filtre d'un toucher ; et
+« limiter à la zone visible », qui restreint le corpus, est passé parmi les filtres.
+« Au hasard » vole jusqu'à un édifice, à la manière d'Earth.
 
 Les deux frises répondent aux mêmes gestes : un clic pose une valeur, un glissement une
 plage, un second clic au même endroit l'efface. Elles se replient d'un geste, comme le
@@ -80,7 +81,7 @@ npm run test:unit              # Vitest, 52 tests sur la logique pure
 npm run build && npm run test  # build statique + 181 vérifications en Chromium
 ```
 
-`npm run test` lance Chromium sur le build, réparti en 14 fichiers
+`npm run test` lance Chromium sur le build, réparti en 15 fichiers
 (`tests/e2e/*.spec.ts`) qui couvrent le démarrage de DuckDB-Wasm, le filtrage croisé,
 la recherche dans une facette au-delà des 40 valeurs affichées, les
 permaliens, le chemin clavier des deux frises, le gabarit téléphone, les deux

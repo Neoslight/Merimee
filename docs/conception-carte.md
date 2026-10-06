@@ -4,30 +4,43 @@ Déplacé de `CLAUDE.md`. Couvre `MonumentMap.svelte`, `lib/carte/fonds.ts`,
 `lib/teinte.ts` et `lib/state/carte.svelte.ts`. Lire cette page avant de toucher
 au rendu de la carte, à la teinte du fond clair ou aux fonds historiques.
 
-**Les commandes de la carte sont rangées par question.** La légende avait fini en tiroir
-fourre-tout : clés de couleur, choix de sémiologie, densité, cartes anciennes, dosage
-d'opacité et contrainte de zone dans une seule bande de pilules indifférenciées. Elles
-sont désormais séparées par ce qu'elles font :
+**Les commandes de la carte sont rangées par question, à la manière des cartes en
+ligne.** La légende avait fini en tiroir fourre-tout ; une première passe l'avait
+scindée (légende en bas à gauche, cartes anciennes repliées sous le zoom). La phase 3
+de la refonte (`PLAN_REFONTE_INTERFACE.md`) a fini le travail :
 
-- **la légende, en bas à gauche**, dit d'abord ce qu'on voit — les clés de couleur, ou
-  la rampe quand la densité est active — puis, sous un filet, propose de le changer :
-  un rail à deux options (`statut` / `époque`) précédé de son libellé, et la bascule de
-  densité. Le rail remplace un bouton unique dont le libellé alternait, et dont on ne
-  savait pas s'il annonçait l'état courant ou sa destination ;
-- **les cartes anciennes prolongent la colonne d'outils du zoom**, et s'y **replient**
-  en une pastille de 31 px, au même bord droit et au même langage graphique que lui.
-  C'est un calque posé sous les points, pas une clé de lecture, et on ne s'en sert pas
-  en continu. Trois points à ne pas défaire : la pastille **dit qu'un fond est actif**
-  (filet ocre), sinon une carte ancienne resterait à l'écran sans commande visible pour
-  l'éteindre ; le module **se déplie de lui-même si `fond=` est dans l'URL**, lu une
-  seule fois au montage (`untrack`) — le suivre rouvrirait le panneau sous le doigt de
-  qui vient de le fermer ; le nom du fond porte sa période en seconde ligne, un `title`
-  ne se lisant pas au tactile. Le style commun aux deux fonds passe par `.fonds >
-  button` et non `.fonds button`, qui coiffait aussi la croix de l'en-tête. La table
-  `HISTORIQUES` et la fonction `tuiles()` vivent dans `lib/carte/fonds.ts`, extrait de
-  `MonumentMap.svelte` : le composant reste le seul à poser ces couches, mais leur
-  description (identifiants IGN, bornes de zoom, poids par tuile — cf.
-  `docs/contraintes.md`) n'a pas besoin de connaître MapLibre ;
+- **la vignette des calques tient le coin bas gauche** (`Calques.svelte`, 72 px, 56
+  sous 900 px) : un **aperçu**, pas une icône — Cassini tant qu'on est sur le plan, le
+  plan dès qu'un fond est posé, pour dire par où l'on revient. Les cartes anciennes,
+  fonction la plus singulière du site, restaient cachées derrière une pastille de 31 px
+  sous la géolocalisation. Elle **dit qu'un fond est posé** par un filet ocre, sinon une
+  carte ancienne resterait à l'écran sans rien qui dise d'où elle vient ;
+- **elle ouvre un panneau** — feuille basse pleine largeur sur téléphone — en trois
+  rangées de tuiles illustrées : *Fond de carte* (Plan, Photo aérienne, Cassini,
+  État-major, et le curseur d'opacité quand un fond est posé), *Colorer les points*
+  (Statut, Époque, Densité), *En plus* (Architecture contemporaine, avec son compte une
+  fois le nuage chargé). Un toucher à côté le referme, comme un menu ; `Échap` aussi, en
+  rendant le focus à la vignette (`preventDefault`, cf. `docs/conception-interface.md`) ;
+- **les vignettes des fonds sont des images figées** (`static/calques/`, 2 à 6 Ko
+  chacune), produites par `web/scripts/vignettes-calques.mjs` : tuiles WMTS assemblées
+  pour l'IGN, capture de l'application elle-même pour le plan, dans chaque thème. Toutes
+  cadrent le même lieu (les Tuileries, z13) pour qu'on compare des fonds et non des
+  endroits. Un aperçu vivant enverrait une tuile Cassini (~160 Ko) à chaque ouverture :
+  la règle reste qu'**aucun octet IGN ne part avant qu'un fond soit choisi**. Les aperçus
+  de couleur, eux, sont dessinés en CSS avec la palette — ils suivent le thème seuls ;
+- **chaque fond arrive à son dosage** : photo aérienne à 100 %, cartes anciennes à 65 %
+  (`opacite` dans `SUPERPOSITIONS`, `lib/carte/fonds.ts`). Densité et fond s'excluent
+  toujours, la règle vit désormais dans le panneau ;
+- **la photo aérienne passe sous les libellés du plan** (`beforeId` sur le premier
+  `symbol`) : c'est la vue « hybride ». Les cartes anciennes restent au-dessus — elles
+  portent leur propre toponymie, deux écritures se brouilleraient. Tuiles mesurées : 12
+  à 22 Ko de z8 à z18 (Paris, Lozère), `zoomMax` 19 ;
+- **la légende ne fait plus que dire** (`Legende.svelte`, à droite de la vignette), cf.
+  plus bas « La légende dit de quoi parlent les couleurs ». Le rail statut/époque et la
+  bascule de densité l'ont quittée pour le panneau ;
+- **l'état vit dans la page** : `fond`, `mode`, `densite`, `opaciteFond`, `acrVisible`.
+  `MonumentMap` les reçoit en props et ne fait que peindre ; aucun des trois composants
+  ne possède les deux autres.
 - **le zoom de MapLibre suit désormais le thème.** Il restait blanc dans les deux, ce
   qui était sa valeur par défaut ; une pastille blanche au-dessus d'une pastille ardoise
   ne tenait pas. Ses icônes sont des SVG noirs posés en **image de fond** — on ne peut
@@ -53,7 +66,21 @@ statut, **une ligne par niveau, du plus fort au plus faible**, chacune avec sa g
 Le texte vit dans `lib/statuts.ts`, source unique pour la légende, et à terme le
 filtre et la fiche. **Les couleurs n'ont pas bougé** : la teinte la plus dense portait
 déjà le niveau le plus fort. Frise ouverte sur gabarit étroit (`.compacte`), titre et
-gloses cèdent et les clés reviennent à plat.
+gloses cèdent et les clés reviennent à plat. Quatre comportements :
+
+- **« Comprendre » déplie** une définition par niveau (termes du code du patrimoine,
+  art. L621-1 et L621-25) et l'**effectif** de chacun, plus une ligne « Non précisé »
+  quand la sélection en contient. Les effectifs viennent de `facette(filters, 'statut')`,
+  **sans le filtre de statut** comme toute facette, et ne partent que légende dépliée :
+  le démarrage reste à trois requêtes ;
+- **toucher une ligne filtre** sur ce niveau (`toggle('statut', …)`) ; les autres
+  reculent. La légende sert à lire et à trier ;
+- **première visite sur écran large** (≥ 901 px) : elle s'ouvre dépliée une fois, puis
+  repliée aux visites suivantes (`merimee-legende-vue` dans `localStorage`, préférence de
+  lecture, jamais l'URL). Sur téléphone elle ne s'impose pas ;
+- elle dit « les trois ensembles sont disjoints » : les effectifs affichés sont ceux de
+  chaque valeur de `statut`, qui s'additionnent — ce sont les **colonnes** classés et
+  inscrits de `totaux()` qui ne s'additionnent jamais.
 
 **Caméra.** Tout ce qui déplace la vue vers une notice passe par `MonumentMap` ; les
 calculs — ce qui est visible, où viser — sont dans `lib/carte/camera.ts`, pur et testé
@@ -124,18 +151,15 @@ repris :
   produit : c'est la convention des cartes de téléphone, et aucune teinte patrimoniale ne
   doit pouvoir passer pour « vous êtes ici ». Sélecteurs préfixés `.maplibregl-map` : la
   feuille de MapLibre et `app.css` n'ont pas d'ordre garanti dans le bundle ;
-- **`--haut-fonds` (164 px, 160 sous 900 px) suit les deux groupes** qui précèdent les
-  cartes anciennes — zoom 91 px, géolocalisation 46 px, marges. `09-mobile.spec.ts` en
-  vérifie la **disjonction géométrique** ;
 - **la position écrite par la carte vit dans `state/position.svelte.ts`**, jamais dans
   l'URL ni dans `localStorage` ; l'erreur (refus, indisponible, délai) s'affiche en
   surface au haut de la scène et s'efface seule ;
 - libellés traduits par l'option `locale` pour la géolocalisation seulement — ceux du
   zoom restent ceux que l'audit lit déjà.
 
-Les clés de lecture portent `.cle` et non un `span` nu : la légende contient d'autres
-`span` depuis qu'elle nomme ses commandes, et le test qui vérifie qu'elle suit le mode
-de coloration compte ces clés — trois par statut, cinq par époque.
+Les clés de lecture portent `.cle` : le test qui vérifie que la légende suit le mode
+de coloration compte ces clés — trois par statut, cinq par époque. La ligne « Non
+précisé » n'en porte pas.
 
 **La suite e2e a longtemps échoué par intermittence sur `AbortError`, et ce n'était pas
 neuf.** Trois vérifications tombaient ensemble dans l'ancien `smoke.mjs` —
@@ -276,7 +300,7 @@ lisent `pret` en premier, comme les autres.
 - **Toucher** : `couchesTouchables()` n'ajoute `acr-points` à `queryRenderedFeatures` que
   couche visible et posée — nommer une couche absente lève. Même règle du plus proche à
   l'écran, même zoom d'amas.
-- **Bascule** dans `.commandes`, après la densité et sous son propre filet : c'est un
-  corpus en plus, pas un réglage de lecture. Allumée, elle prend la teinte de ses points
-  et une clé « archi. contemporaine » s'ajoute à la légende.
+- **Bascule** dans le panneau des calques, rangée « En plus » : c'est un corpus en plus,
+  pas un réglage de lecture. Allumée, une clé « archi. contemporaine » s'ajoute à la
+  légende ; la tuile dit le nombre d'édifices une fois le nuage chargé.
 - `__carteOutils.rendusAcr()` expose les points ACR rendus à Playwright, comme `rendus()`.
