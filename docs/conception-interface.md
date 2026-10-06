@@ -50,18 +50,17 @@ filtre.
 **Sous les outils, une rangée de puces** (`PucesFiltres.svelte`), à la manière des
 cartes en ligne : « Frises », six facettes courantes (Protection, Domaine, Type
 d'édifice, Région, Département, Architecte), « Zone visible », puis les filtres posés
-(`Jetons`, mêmes puces qu'avant). Six points :
+(`Jetons`, mêmes puces qu'avant). Cinq points :
 
-- **la rangée défile à l'horizontale**, elle ne s'enroule pas : sa hauteur est fixe, et
-  le volet qui s'ouvre dessous (`--hauteur-haut`) ne saute pas à chaque filtre posé ;
-- **au large, elle court sur toute la carte** et non dans les 440 px du bloc : la
-  moitié des puces y étaient hors champ, sans rien qui le dise ni geste pour y aller à
-  la souris. Ses vides laissent passer le pointeur jusqu'à la carte. Quand elle déborde
-  encore, **le bord coupé se fond** (`mask-image`), **une flèche y mène** (pointeur fin
-  seulement, hors de l'ordre de tabulation : le clavier parcourt les puces, le
-  navigateur suit le focus) et **la molette verticale défile à l'horizontale**
-  (écouteur non passif, sinon la carte dessous zoomerait). Le débord se remesure au
-  redimensionnement et à chaque filtre posé (`ResizeObserver` + `MutationObserver`) ;
+- **au large, les puces se répartissent sur plusieurs lignes** dans la largeur du bloc,
+  les filtres posés à la suite, un par un (`.jetons` en `display: contents`). Sur une
+  seule ligne, la moitié des puces étaient hors champ ; étendue à toute la carte, la
+  ligne devenait longue à parcourir des yeux. Le volet, dessous, suit la hauteur du
+  bloc (`--hauteur-haut`) ;
+- **sur téléphone, la rangée défile** à l'horizontale — trois lignes de puces y
+  mangeraient la carte — et **le bord coupé se fond** (`mask-image`) : une puce
+  tranchée net passait pour la dernière. Le débord se remesure au redimensionnement et
+  à chaque filtre posé (`ResizeObserver` + `MutationObserver`) ;
 - **une puce de facette ouvre un menu** qui reprend la section du tiroir
   (`FacetPanel seules={[cle]}`, remonté par `{#key}` à chaque puce) — même recherche,
   mêmes pilules, mêmes comptes. Le menu vit hors de la rangée, qui le rognerait, en
@@ -179,6 +178,16 @@ carte sortait du champ, alors que ses classes disaient « aperçu ». Par permal
 focus, tout était juste. `09-mobile.spec.ts` vérifie désormais la **position**
 (`scrollTop` de la scène, part laissée au-dessus de la feuille), plus seulement les
 classes.
+
+**La fiche cède la place à ce qu'on est en train de faire.** Une frappe dans la
+recherche (`onfrappe`) ou un critère qui change — puce, légende, frise, pastille
+d'auteur de la fiche elle-même — la referme : on regarde alors ce que la recherche ou le
+filtre retient, et la notice qu'il écarte peut-être n'a plus rien à faire à l'écran.
+Sans reprendre le focus (`fermerFiche(false)`) : il est dans le champ ou le menu, le
+lui ôter couperait la frappe. Deux exceptions de fait : un changement qui arrive
+**avec** la notice — retour arrière, permalien — ne ferme rien, l'effet comparant la
+notice et les critères ensemble ; et la zone visible ne compte qu'à la pose ou au
+retrait, pas à chaque déplacement de la carte qu'elle suit.
 
 **Un seul écouteur `Échap` global**, posé sur `window` (`surEchap`), ferme le calque le
 plus haut avec les mêmes fonctions que sa croix — le panneau des calques, puis la fiche,
@@ -407,8 +416,8 @@ recherche de la barre et recherche de facette. Sous 16 px, Safari iOS zoome la p
 entière à la mise au point et ne dézoome pas en sortant. La souris garde la densité.
 
 **Sur téléphone, la légende et la vignette des calques se partagent le pied de la
-carte** : la légende au coin, la vignette à sa droite (56 px), le « i » des mentions
-au bout. Le panneau des calques y devient une feuille basse pleine largeur
+carte** : la légende au coin, la vignette au-dessus (56 px), le « i » des mentions à
+droite. Le panneau des calques y devient une feuille basse pleine largeur
 (`position: fixed` : la rangée du pied n'a pas la largeur de l'écran). Les réglages d'affichage ont
 quitté la légende — plus de pastille « réglages » à déplier.
 

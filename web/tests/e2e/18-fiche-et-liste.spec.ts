@@ -131,6 +131,34 @@ test('fiche et liste', async () => {
     verifier('et elle ferme', (await page.locator('.fiche-hote:not([hidden])').count()) === 0);
   });
 
+  await test.step('taper une recherche ou poser un filtre libere l’ecran', async () => {
+    await page.goto(`${infos.url}?ref=${NEVERS}`, { waitUntil: 'domcontentloaded' });
+    await attendre(page, '.fiche h2');
+    await page.locator('.recherche').click();
+    await page.keyboard.type('abb');
+    await page.waitForTimeout(300);
+    verifier('la frappe ferme la fiche', (await page.locator('.fiche-hote:not([hidden])').count()) === 0);
+    verifier('sans voler le focus du champ', await page.evaluate(() => document.activeElement?.classList.contains('recherche') ?? false));
+    verifier('et la frappe continue', (await page.inputValue('.recherche')) === 'abb');
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+
+    await page.goto(`${infos.url}?ref=${NEVERS}`, { waitUntil: 'domcontentloaded' });
+    await attendre(page, '.fiche h2');
+    await page.waitForTimeout(500);
+    await page.locator('.legende .ligne', { hasText: 'Inscrit' }).first().click();
+    await page.waitForTimeout(500);
+    verifier('poser un filtre ferme la fiche', (await page.locator('.fiche-hote:not([hidden])').count()) === 0);
+    verifier('le filtre, lui, est pose', page.url().includes('statut='), page.url().slice(-40));
+
+    // Un lien qui porte une notice et des filtres arrive ouvert : le
+    // changement vient avec la notice, il ne la referme pas.
+    await page.goto(`${infos.url}?ref=${NEVERS}&domaine=${encodeURIComponent('architecture religieuse')}`, { waitUntil: 'domcontentloaded' });
+    await attendre(page, '.fiche h2');
+    await page.waitForTimeout(800);
+    verifier('un permalien avec fiche et filtre reste ouvert', (await page.locator('.fiche-hote:not([hidden])').count()) === 1);
+  });
+
   verifier('aucune erreur console (fiche et liste)', erreursConsole.length === 0, erreursConsole.slice(0, 3).join(' | '));
 });
 

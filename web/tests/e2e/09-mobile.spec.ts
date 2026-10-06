@@ -98,7 +98,7 @@ test('gabarit téléphone', async () => {
     verifier('la vignette garde sa taille', coin.width >= 44, JSON.stringify(coin));
     const attribution = (await page.locator('.maplibregl-ctrl-attrib').boundingBox())!;
     verifier('l’attribution est repliee en « i », a cote de la vignette', attribution.width < 40 && disjointes(attribution, coin), JSON.stringify(attribution));
-    verifier('la legende tient le coin, la vignette a sa droite', disjointes(coin, legende) && legende.x < coin.x, JSON.stringify({ coin, legende }));
+    verifier('la legende tient le coin, la vignette au-dessus', disjointes(coin, legende) && coin.y + coin.height <= legende.y, JSON.stringify({ coin, legende }));
     verifier('la legende titre ce qu’elle montre', (await page.getByRole('group', { name: 'Niveau de protection' }).count()) === 1);
     verifier('repliee au depart sur telephone', (await page.locator('.legende .definition').count()) === 0);
     await page.getByRole('button', { name: 'Comprendre' }).click();

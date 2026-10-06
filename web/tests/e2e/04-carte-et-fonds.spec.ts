@@ -35,6 +35,14 @@ test.afterAll(async () => {
 });
 
 test('carte et fonds historiques', async () => {
+  await test.step('les libelles du fond sont en francais', async () => {
+    const champs = await page.evaluate(() =>
+      (window as unknown as { __carteOutils: { libelles: () => string[] } }).__carteOutils.libelles()
+    );
+    verifier('aucun libelle ne lit plus name_en', champs.length > 10 && champs.every((c) => !c.includes('name_en')), champs.slice(0, 3).join(' | '));
+    verifier('les noms preferent name:fr', champs.filter((c) => c.includes('name:fr')).length >= 20, String(champs.filter((c) => c.includes('name:fr')).length));
+  });
+
   await test.step('attribution et legende ne se recouvrent pas', async () => {
     const boiteAttrib = (await page.locator('.maplibregl-ctrl-bottom-right').boundingBox())!;
     const boiteLegende = (await page.locator('.legende').boundingBox())!;
@@ -45,7 +53,7 @@ test('carte et fonds historiques', async () => {
     );
   });
 
-  await test.step('la legende tient le coin, la vignette a sa droite, le panneau est replie', async () => {
+  await test.step('la legende tient le coin, la vignette au-dessus, le panneau est replie', async () => {
     verifier('aucune tuile IGN avant activation', tuilesIgn.length === 0, `${tuilesIgn.length} requetes`);
     const coin = (await page.locator('button.coin').boundingBox())!;
     const scene = (await page.locator('.scene').boundingBox())!;
@@ -55,7 +63,8 @@ test('carte et fonds historiques', async () => {
       legende.x - scene.x < 30 && scene.y + scene.height - (legende.y + legende.height) < 30,
       `x ${Math.round(legende.x - scene.x)}, bas ${Math.round(scene.y + scene.height - legende.y - legende.height)}`
     );
-    verifier('la vignette au pied, a droite de la legende', coin.x > legende.x + legende.width && scene.y + scene.height - (coin.y + coin.height) < 30);
+    verifier('la vignette au-dessus de la legende, alignee a gauche', coin.y + coin.height <= legende.y && Math.abs(coin.x - legende.x) < 2,
+      JSON.stringify({ coin, legende }));
     verifier('le panneau est replie au depart', (await page.locator('.panneau-calques').count()) === 0);
     verifier('vignette et legende ne se recouvrent pas', disjointes(coin, legende));
     const geoloc = (await page.locator('.maplibregl-ctrl-geolocate').boundingBox())!;

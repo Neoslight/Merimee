@@ -11,13 +11,16 @@
   import { erreurDepuisCode, position } from '$lib/state/position.svelte';
   import { teinter } from '$lib/teinte';
   import { SUPERPOSITIONS, tuiles } from '$lib/carte/fonds';
+  import { franciser } from '$lib/carte/libelles';
   import { TRANCHES, type Mode } from '$lib/carte/semiologie';
   import {
     adoucir,
     decalage,
     devoilePosition,
-    dureeApproche,
-    DUREE_VOL,
+    dureeDescente,
+    dureeTraversee,
+    DUREE_TRAVERSEE,
+    DUREE_TRAVERSEE_COURTE,
     estVisible,
     margesDepart,
     METROPOLE,
@@ -299,6 +302,9 @@
     // rien — c'est une dissymetrie voulue, pas un oubli.
     if (theme.courant === 'clair') etatCarte.teinture = teinter(map, palette);
     else oublierTeinture();
+    // Libelles en francais, dans les deux themes : la feuille CARTO ecrit
+    // l'anglais aux petites echelles. Avant nos couches, qui n'ont pas de nom.
+    franciser(map);
 
     // Les fonds superposes se posent **avant** les couches de monuments :
     // MapLibre empile dans l'ordre d'ajout, le raster se retrouve donc entre le
@@ -473,6 +479,12 @@
     // precis sans connaitre la projection. Rien n'y ecrit, rien ne le lit en
     // production.
     (window as unknown as { __carteOutils: unknown }).__carteOutils = {
+      // Champs de texte des couches de libelles du fond, pour verifier qu'aucun
+      // ne lit plus l'anglais.
+      libelles: () =>
+        (map.getStyle().layers ?? []).flatMap((c) =>
+          c.type === 'symbol' && c.layout?.['text-field'] !== undefined ? [JSON.stringify(c.layout['text-field'])] : []
+        ),
       rendus: () => {
         if (!map.getLayer('monuments-points')) return [];
         const boite = conteneur.getBoundingClientRect();
@@ -780,6 +792,59 @@
   });
 
   /**
+   * Un mouvement de camera, et sa fin.
+   *
+   * L'ecouteur se pose **apres** l'appel : un mouvement commence par arreter
+   * celui en cours, ce qui emet un `moveend` qui n'est pas le sien. Et sous
+   * mouvement reduit le saut est deja fini a ce point — il n'y a plus de
+   * `moveend` a attendre.
+   */
+  function mouvement(map: MapLibreMap, lancer: () => void): Promise<void> {
+    lancer();
+    return new Promise((resoudre) => {
+      if (map.isMoving()) map.once('moveend', () => resoudre());
+      else resoudre();
+    });
+  }
+
+  /** Jeton du vol en cours : un vol plus recent, ou une approche, l'emporte
+   *  sur la suite d'un vol plus ancien. */
+  let volCourant = 0;
+
+  /**
+   * Plongee en deux temps sur un point (cf. `camera.ts`) : traversee jusqu'a
+   * l'avoir au centre de la part visible, a `altitude` au plus, puis descente
+   * verticale jusqu'a `arrivee`. Rend `false` si un geste ou un autre vol l'a
+   * interrompue — la suite n'a alors plus lieu d'etre.
+   *
+   * **Jamais `essential: true`** : sous `prefers-reduced-motion`, MapLibre
+   * remplace les deux temps par des sauts, et c'est le comportement voulu.
+   */
+  async function plonger(
+    map: MapLibreMap,
+    ou: [number, number],
+    arrivee: number,
+    altitude: number,
+    reserve: Marges,
+    traversee: number
+  ): Promise<boolean> {
+    const mien = ++volCourant;
+    const offset = decalage(reserve);
+    const haut = Math.min(map.getZoom(), altitude);
+    const duree = traversee === 0 ? 0 : dureeTraversee(map.getZoom(), haut, traversee);
+    await mouvement(map, () =>
+      map.flyTo({ center: ou, zoom: haut, offset, duration: duree, easing: adoucir })
+    );
+    // Un glissement de l'utilisateur arrete la traversee ailleurs qu'a son
+    // altitude : on ne replonge pas sous ses doigts.
+    if (mien !== volCourant || Math.abs(map.getZoom() - haut) > 0.05) return false;
+    await mouvement(map, () =>
+      map.easeTo({ center: ou, zoom: arrivee, offset, duration: dureeDescente(haut, arrivee), easing: adoucir })
+    );
+    return mien === volCourant && Math.abs(map.getZoom() - arrivee) < 0.05;
+  }
+
+  /**
    * Rapproche la vue d'une notice choisie **ailleurs que sur la carte** — une
    * ligne de liste. A l'echelle nationale, ouvrir sa fiche laissait la carte
    * ou elle etait : rien ne disait ou se trouve l'edifice. Toucher un point de
@@ -797,36 +862,27 @@
     const ou = coordonnees(reference);
     if (!ou) return;
     // Deja a l'echelle d'une ville : on garde ce zoom, et on ne bouge que si
-    // l'edifice est hors champ. `flyTo` plutot qu'`easeTo` — la notice
-    // suivante d'une liste peut etre a l'autre bout du pays, et un glissement
-    // en ligne droite a z12 chargerait toutes les tuiles du trajet.
+    // l'edifice est hors champ — une traversee seule, sans descente.
     const depart = map.getZoom();
     const proche = !jusquAuBatiment && depart >= ZOOM_PROCHE;
     if (proche && estVisible(map.project(ou), conteneur.clientWidth, conteneur.clientHeight, marges)) return;
     const arrivee = proche ? depart : Math.max(depart, ZOOM_EDIFICE);
-    map.flyTo({
-      center: ou,
-      zoom: arrivee,
-      offset: decalage(marges),
-      ...(anime ? { duration: dureeApproche(depart, arrivee), easing: adoucir } : { duration: 0 })
-    });
+    if (!anime) {
+      volCourant += 1;
+      map.easeTo({ center: ou, zoom: arrivee, offset: decalage(marges), duration: 0 });
+      return;
+    }
+    void plonger(map, ou, arrivee, depart, marges, DUREE_TRAVERSEE_COURTE);
   }
 
-  /** « Voir sur la carte » : vol jusqu'a l'edifice, au zoom d'un edifice,
+  /** « Voir sur la carte » : plongee jusqu'a l'edifice, au zoom d'un edifice,
    *  qu'il soit deja a l'ecran ou non. */
   export function centrer(reference: string): void {
     const map = carte;
     if (!map || !pret) return;
     const ou = coordonnees(reference);
     if (!ou) return;
-    const arrivee = Math.max(map.getZoom(), ZOOM_EDIFICE);
-    map.flyTo({
-      center: ou,
-      zoom: arrivee,
-      offset: decalage(marges),
-      duration: dureeApproche(map.getZoom(), arrivee),
-      easing: adoucir
-    });
+    void plonger(map, ou, Math.max(map.getZoom(), ZOOM_EDIFICE), map.getZoom(), marges, DUREE_TRAVERSEE_COURTE);
   }
 
   /**
@@ -850,13 +906,10 @@
   }
 
   /**
-   * Le vol de « Au hasard » : recul jusqu'a la France entiere, puis descente
-   * vers l'edifice. `minZoom` donne le sommet de la trajectoire, MapLibre
-   * calcule l'arc. La promesse se resout a l'arrivee — ou tout de suite si le
-   * vol n'a pas lieu.
-   *
-   * **Jamais `essential: true`** : sous `prefers-reduced-motion`, MapLibre
-   * remplace alors le vol par un saut, et c'est le comportement voulu.
+   * Le vol de « Au hasard », a la maniere d'Earth : recul jusqu'a la France
+   * entiere en traversant vers l'edifice, puis longue descente verticale sur
+   * lui. La promesse se resout a l'arrivee — ou des que le vol est
+   * interrompu, ou tout de suite s'il n'a pas lieu.
    *
    * `reserve` est ce que la fiche masquera **a l'arrivee** : elle n'est pas
    * encore ouverte quand le vol part.
@@ -864,37 +917,34 @@
    * Un fond historique est suspendu le temps du vol : la trajectoire traverse
    * une dizaine de niveaux de zoom, et Cassini pese ~170 Ko la tuile.
    */
-  export function survoler(lon: number, lat: number, reserve: Marges): Promise<void> {
+  export async function survoler(lon: number, lat: number, reserve: Marges): Promise<void> {
     const map = carte;
-    if (!map || !pret) return Promise.resolve();
+    if (!map || !pret) return;
     const recul =
       map.cameraForBounds([...METROPOLE] as [number, number, number, number], {
         padding: margesDepart(conteneur.clientWidth)
       })?.zoom ?? 5;
     const suspendu = fond;
     if (suspendu) map.setLayoutProperty(`fond-${suspendu}`, 'visibility', 'none');
-    map.flyTo({
-      center: [lon, lat],
-      zoom: ZOOM_EDIFICE,
-      minZoom: recul,
-      offset: decalage(reserve),
-      duration: DUREE_VOL,
-      easing: adoucir
+    // Le recul est force : meme proche de la cible, on remonte a la France
+    // entiere — c'est ce qui dit « ailleurs, au hasard ».
+    const mien = volCourant + 1;
+    await mouvement(map, () => {
+      volCourant = mien;
+      map.flyTo({
+        center: [lon, lat],
+        zoom: recul,
+        offset: decalage(reserve),
+        duration: dureeTraversee(map.getZoom(), recul, DUREE_TRAVERSEE),
+        easing: adoucir
+      });
     });
-    return new Promise((resoudre) => {
-      const arrivee = () => {
-        if (suspendu && fond === suspendu && map.getLayer(`fond-${suspendu}`)) {
-          map.setLayoutProperty(`fond-${suspendu}`, 'visibility', 'visible');
-        }
-        resoudre();
-      };
-      // L'ecouteur se pose **apres** `flyTo` : celui-ci commence par arreter le
-      // mouvement en cours, ce qui emet un `moveend` qui n'est pas le sien. Et
-      // sous mouvement reduit le saut est deja fini a ce point : il n'y aura
-      // pas d'autre `moveend` a attendre.
-      if (map.isMoving()) map.once('moveend', arrivee);
-      else arrivee();
-    });
+    if (mien === volCourant && Math.abs(map.getZoom() - recul) < 0.05) {
+      await plonger(map, [lon, lat], ZOOM_EDIFICE, recul, reserve, 0);
+    }
+    if (suspendu && fond === suspendu && map.getLayer(`fond-${suspendu}`)) {
+      map.setLayoutProperty(`fond-${suspendu}`, 'visibility', 'visible');
+    }
   }
 
   // Epingle de la notice choisie. L'anneau de 11 px disait quel point, pas ou

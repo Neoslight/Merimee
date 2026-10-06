@@ -3,8 +3,8 @@ import {
   adoucir,
   decalage,
   devoilePosition,
-  DUREE_APPROCHE,
-  dureeApproche,
+  dureeDescente,
+  dureeTraversee,
   estVisible,
   margesDepart,
   METROPOLE,
@@ -114,23 +114,36 @@ describe('adoucir', () => {
     }
   });
 
-  it('se raccorde sans a-coup : pente continue au changement de regime', () => {
-    const pente = (t: number) => (adoucir(t + 1e-6) - adoucir(t - 1e-6)) / 2e-6;
-    expect(pente(0.3 - 1e-3)).toBeCloseTo(pente(0.3 + 1e-3), 1);
+  it('ne depasse jamais pi/2 fois la vitesse moyenne', () => {
+    let pic = 0;
+    for (let i = 0; i < 1000; i++) pic = Math.max(pic, (adoucir((i + 1) / 1000) - adoucir(i / 1000)) * 1000);
+    expect(pic).toBeLessThan(Math.PI / 2 + 0.01);
   });
 
-  it('passe plus de temps a se poser qu’a partir', () => {
-    // A mi-course du temps, plus de la moitie du trajet est faite : la fin
-    // est lente.
-    expect(adoucir(0.5)).toBeGreaterThan(0.6);
-    // Et l'arrivee se pose : derniere pente quasi nulle.
-    expect((1 - adoucir(0.98)) / 0.02).toBeLessThan(0.01);
+  it('part et se pose a vitesse nulle', () => {
+    expect(adoucir(0.01) / 0.01).toBeLessThan(0.03);
+    expect((1 - adoucir(0.99)) / 0.01).toBeLessThan(0.03);
   });
 });
 
-describe('dureeApproche', () => {
-  it('croit avec le saut d’echelle, plafonnee', () => {
-    expect(dureeApproche(15, 17)).toBeLessThan(dureeApproche(9, 17));
-    expect(dureeApproche(5, 17)).toBe(DUREE_APPROCHE);
+describe('dureeDescente', () => {
+  it('donne le meme temps a chaque niveau de zoom', () => {
+    expect(dureeDescente(9, 13)).toBe(2 * dureeDescente(11, 13));
+  });
+
+  it('borne les sauts minuscules et les plongees depuis l’outre-mer', () => {
+    expect(dureeDescente(16.9, 17)).toBeGreaterThanOrEqual(900);
+    expect(dureeDescente(2, 17)).toBeLessThanOrEqual(7600);
+  });
+});
+
+describe('dureeTraversee', () => {
+  it('garde son minimum quand on ne remonte pas', () => {
+    expect(dureeTraversee(5, 5.3, 2800)).toBe(2800);
+  });
+
+  it('s’allonge avec les niveaux remontes, sans depasser six secondes', () => {
+    expect(dureeTraversee(15, 5, 2800)).toBe(4500);
+    expect(dureeTraversee(20, 2, 2800)).toBe(6000);
   });
 });

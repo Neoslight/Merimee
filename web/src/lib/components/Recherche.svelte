@@ -20,6 +20,8 @@
     ontitres: () => void;
     onvider: () => void;
     onhasard: () => void;
+    /** Une frappe dans le champ : la page y libere l'ecran. */
+    onfrappe?: () => void;
   }
 
   let {
@@ -33,7 +35,8 @@
     ontexte,
     ontitres,
     onvider,
-    onhasard
+    onhasard,
+    onfrappe
   }: Props = $props();
 
   /** Une ligne de la liste deroulante, quelle que soit sa famille. */
@@ -108,6 +111,7 @@
   function frappe() {
     ferme = false;
     active = -1;
+    onfrappe?.();
   }
 
   function choisir(c: Choix) {

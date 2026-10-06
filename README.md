@@ -39,7 +39,7 @@ Newsreader pour les titres d'édifices et le texte d'archive, Plus Jakarta Sans 
 l'interface. Le thème pilote l'interface **et la carte** : en clair, terres grège et mers
 gris-bleu, volontairement un cran plus sombres que les panneaux, qui flottent au-dessus ;
 en sombre, l'ardoise. La feuille CARTO n'est pas prise telle quelle, elle est repeinte
-couche par couche à la palette du projet.
+couche par couche à la palette du projet, et ses libellés passent en français.
 
 À l'échelle nationale les points tombent à 1,2 px et sous la moitié de l'opacité : ce
 sont leurs **superpositions** qui dessinent les régions denses, et le point retrouve sa
@@ -81,8 +81,8 @@ rencontrés sont listés dans `etl/out/rejets.csv`.
 cd web
 npm install
 npm run dev                    # http://localhost:5173
-npm run test:unit              # Vitest, 94 tests sur la logique pure
-npm run build && npm run test  # build statique + 410 vérifications en Chromium
+npm run test:unit              # Vitest, 100 tests sur la logique pure
+npm run build && npm run test  # build statique + 417 vérifications en Chromium
 ```
 
 `npm run test` lance Chromium sur le build, réparti en 18 fichiers

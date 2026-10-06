@@ -54,6 +54,7 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `web/src/lib/teinte.ts` | repeint le fond clair par **nature de couche**, jamais par identifiant |
 | `web/src/lib/state/carte.svelte.ts` | ce que la carte a réellement peint — le seul témoin d'un repeint muet |
 | `web/src/lib/carte/fonds.ts` | `SUPERPOSITIONS` : photo aérienne et cartes anciennes IGN, dosage, place sous ou sur les libellés, tuiles |
+| `web/src/lib/carte/libelles.ts` | libellés du fond CARTO en français (`name:fr`, repli sur le nom local) |
 | `web/src/lib/carte/semiologie.ts` | `Mode` et `TRANCHES` d'époque, partagés par la carte, la légende et les calques |
 | `web/scripts/vignettes-calques.mjs` | produit `static/calques/*.jpg`, aperçus figés des fonds — aucun octet IGN avant choix |
 | `web/src/lib/carte/camera.ts` | cadrage, calculs purs : emprise de départ, part visible sous les panneaux, décalage de visée, et quand taire la vue dans un lien copié |
@@ -64,8 +65,8 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `web/src/service-worker.ts` | cache des actifs hachés uniquement |
 | `web/scripts/precharger.mjs` | injecte le préchargement du wasm dans le shell HTML après build, chaîné à `build` et `build:pages` |
 | `web/src/lib/components/` | `MonumentMap` (rendu seul), `Recherche`, `Calques`, `Legende`, `ListeResultats`, `PucesFiltres`, `FacetPanel` (aussi par section : `seules`), `Jetons`, `Timeline`, `DetailPanel` |
-| `web/tests/e2e/` | 410 vérifications en Chromium réel : 18 fichiers `NN-domaine.spec.ts` + `_soutien.ts` (`verifier()` adossé à `expect.soft`), `playwright.config.ts` en `workers: 1` / `retries: 0` |
-| `web/tests/unit/` | 94 tests Vitest sur la logique pure : `buildWhere`, `permalien`, `shards`, `teinte`, `points`, `acr`, `camera`, `recherche`, distances |
+| `web/tests/e2e/` | 417 vérifications en Chromium réel : 18 fichiers `NN-domaine.spec.ts` + `_soutien.ts` (`verifier()` adossé à `expect.soft`), `playwright.config.ts` en `workers: 1` / `retries: 0` |
+| `web/tests/unit/` | 100 tests Vitest sur la logique pure : `buildWhere`, `permalien`, `shards`, `teinte`, `points`, `acr`, `camera`, `recherche`, `libelles`, distances |
 | `web/tests/apercu-social.mjs` | régénère la vignette Open Graph depuis l'application |
 | `web/tests/audit-visuel.mjs` | 120 captures + relevés WCAG chiffrés, **hors** `npm run test` |
 
@@ -81,8 +82,8 @@ cd etl  && python -m merimee_etl.memoire   # compte les illustrations POP, 1,36 
 cd etl  && python -m pytest tests -q    # 103 tests (79 + 24 dans test_annexes.py)
 cd web  && npm run dev                  # http://localhost:5173
 cd web  && npm run check                # svelte-check, doit rester à 0/0
-cd web  && npm run test:unit            # Vitest, 94 tests, logique pure
-cd web  && npm run build && npm run test # build statique + 410 vérifications en Chromium (tests/e2e/)
+cd web  && npm run test:unit            # Vitest, 100 tests, logique pure
+cd web  && npm run build && npm run test # build statique + 417 vérifications en Chromium (tests/e2e/)
 cd web  && npm run apercu               # régénère static/apercu-social.png
 cd web  && npm run audit                # 120 captures + relevés dans .audit-screenshots/
 cd web  && npm run deploy               # predeploy (check + test:unit) puis build /Merimee + push sur gh-pages
@@ -182,11 +183,12 @@ avant de toucher à ce domaine** : cet index oriente, il ne remplace pas la lect
 
 ### Carte — [docs/conception-carte.md](docs/conception-carte.md)
 
-- pied gauche en rangée (`.pied`) : légende au coin, vignette des calques à droite (aperçu figé, panneau à tuiles) ; l'état vit dans la page, `MonumentMap` peint ; attribution repliée en « i » dès le départ
+- pied gauche en colonne (`.pied`) : vignette des calques au-dessus de la légende, qui tient le coin (aperçu figé, panneau à tuiles) ; l'état vit dans la page, `MonumentMap` peint ; attribution repliée en « i » dès le départ
 - photo aérienne sous les libellés du plan, cartes anciennes dessus ; chaque fond arrive à son dosage (100 / 65 %)
 - la vue de départ est une emprise (`METROPOLE`) cadrée avec marges, plus un centre et un zoom fixes
 - la légende est repliée au départ (trois clés et un « ? », titre pour les lecteurs d'écran) ; dépliée : glose, définition et effectif par niveau (`lib/statuts.ts`, effectifs sans le filtre de statut, chargés seulement dépliée) ; toucher une clé filtre ; les couleurs ne bougent pas
-- caméra : toucher ne bouge rien sauf sous un panneau, la liste rapproche, `?ref=` sans `c=` centre, « Au hasard » vole ; `offset`, jamais `padding`
+- caméra : toucher ne bouge rien sauf sous un panneau, la liste rapproche, `?ref=` sans `c=` centre, « Au hasard » vole ; vols en deux temps (traversée puis descente pure), durées par niveau de zoom, courbe sinusoïdale ; `offset`, jamais `padding`
+- libellés du fond en français : `franciser` réécrit chaque `text-field` de nom en `coalesce(name:fr, name)`, à chaque `setStyle`
 - épingle de sélection en `Marker` DOM, infobulle de survol par `setDOMContent`, jamais `setHTML`
 - le fond clair est repeint couche par couche **par nature**, jamais par identifiant CARTO
 - le thème sombre n'est pas repeint : `teinter()` sort immédiatement
@@ -204,13 +206,14 @@ avant de toucher à ce domaine** : cet index oriente, il ne remplace pas la lect
 - plus de barre d'en-tête : bloc du haut flottant (recherche, compteur, Carte/Liste, Filtres, Frises), thème au coin haut droit
 - un seul volet (liste ↔ fiche ↔ filtres, par priorité), colonne au large, feuille à trois crans sur téléphone ; ce qu'il ne montre pas porte `hidden`
 - volet et frise fermés au chargement à toutes les largeurs ; la liste ne part qu'ouverte (2 requêtes au démarrage plutôt que 14)
-- rangée de puces sous la recherche (Frises, six facettes, Zone visible, filtres posés), pleine largeur au large, défilante avec fondu, flèches et molette ; un menu par facette en `position: fixed`, exclusif avec le tiroir ; « effacer » collé au bouton Filtres
+- rangée de puces sous la recherche (Frises, six facettes, Zone visible, filtres posés), sur plusieurs lignes au large, défilante avec fondu au doigt ; un menu par facette en `position: fixed`, exclusif avec le tiroir ; « effacer » collé au bouton Filtres
 - la frise suit le thème, se replie partout, et les deux axes ont désormais un chemin clavier complet
 - `Timeline` est chargée en `import()` dynamique, hors du chunk de page
 - le volet est un calque (`position: absolute`), jamais une colonne de grille qui comprime la carte ; son fond, jamais celui de ce qui défile dedans
 - le focus suit les calques ouverts par un geste, jamais ceux posés par un permalien, toujours en `preventScroll` ; `inert` est posé depuis la page, tiroir fermé compris
 - `Échap` global ferme le calque le plus haut ; les composants qui le gèrent localement appellent `preventDefault`
 - deux états vides (`.vide-liste`, `.vide-carte`) évitent qu'un filtre trop serré laisse un écran blanc
+- la fiche se ferme à la frappe dans la recherche et à tout changement de critère, sans reprendre le focus ; pas quand le changement arrive avec la notice (permalien, retour)
 - fiche : rangée d'actions (voir sur la carte, itinéraire OSM, partager au doigt, copier le lien), statut glosé, flèches entre photos, « À proximité » sans les filtres, fermer = retour à la liste quand elle est dessous
 - liste : siècle et pastille de statut, ordres mobilier/pertinence, A–Z, proximité ; pagination par 200 ; survol d'une ligne = anneau sur la carte
 - les cibles touchent 44 px par un `::after` transparent, jamais par un agrandissement de la pilule

@@ -49,45 +49,61 @@ export const ZOOM_EDIFICE = 17;
  *  sur la carte rapproche alors la vue au lieu de la laisser nationale. */
 export const ZOOM_PROCHE = 11;
 
-/** Duree du vol de « Au hasard », en millisecondes. Fixe, et non laissee au
- *  calcul de MapLibre : son `maxDuration` ne plafonne pas un vol trop long, il
- *  le remplace par un saut — exactement ce qu'on ne veut pas vers l'outre-mer.
- *  Huit secondes : le recul sur la France, la traversee, puis une longue
- *  descente — a 3,8 s, douze niveaux de zoom passaient d'un trait. */
-export const DUREE_VOL = 8000;
+/**
+ * Les vols se font en deux temps, a la maniere d'Earth : une **traversee**
+ * qui amene la cible au centre de la vue, a haute altitude, puis une
+ * **descente** verticale sur elle, sans plus aucun deplacement lateral.
+ *
+ * Un `flyTo` unique faisait les deux a la fois : MapLibre y lie le zoom et le
+ * trajet, et la fin du vol enchainait une dizaine de niveaux en deux secondes
+ * pendant que la cible glissait encore — c'est ce qui paraissait brutal, plus
+ * que la duree. Une descente pure se lit comme une approche reguliere.
+ *
+ * Duree de la traversee de « Au hasard », en millisecondes. Fixe, et non
+ * laissee au calcul de MapLibre : son `maxDuration` ne plafonne pas un vol
+ * trop long, il le remplace par un saut — ce qu'on ne veut pas vers
+ * l'outre-mer.
+ */
+export const DUREE_TRAVERSEE = 2800;
 
-/** Duree d'une approche depuis la liste ou la recherche, quand l'edifice est
- *  loin : meme courbe que le vol, sans le recul force sur la France. */
-export const DUREE_APPROCHE = 5000;
+/** Traversee d'une approche depuis la liste ou la recherche : la cible est
+ *  souvent deja dans la region regardee. */
+export const DUREE_TRAVERSEE_COURTE = 1800;
 
-/** Duree d'un rapprochement : d'autant plus longue que le saut d'echelle est
- *  grand, plafonnee a `DUREE_APPROCHE`. Passer de la France entiere au
- *  batiment demande le temps de lire le trajet ; glisser d'une rue a l'autre,
- *  non. */
-export function dureeApproche(zoomDepart: number, zoomArrivee: number): number {
-  return Math.min(DUREE_APPROCHE, 1600 + 300 * Math.abs(zoomArrivee - zoomDepart));
+/** Temps passe par niveau de zoom pendant la descente. Un niveau double
+ *  l'echelle : a temps egal par niveau, la descente parait de vitesse
+ *  constante. 650 ms : de la France entiere (z5,3) au batiment (z17), un peu
+ *  moins de huit secondes. */
+const PAR_NIVEAU = 650;
+
+/** Temps par niveau remonte pendant la traversee : moins que la descente —
+ *  le recul prepare, c'est l'arrivee qu'on regarde —, mais assez pour qu'un
+ *  depart a l'echelle d'une rue ne bascule pas d'un coup sur la France. */
+const PAR_NIVEAU_MONTEE = 450;
+
+/** Duree d'une traversee qui remonte de `depart` a `altitude` : au moins
+ *  `minimum`, le temps du deplacement lui-meme. */
+export function dureeTraversee(depart: number, altitude: number, minimum: number): number {
+  return Math.round(Math.min(6000, Math.max(minimum, PAR_NIVEAU_MONTEE * Math.max(0, depart - altitude))));
 }
 
-/** Part du mouvement passee a accelerer ; le reste decelere. */
-const ELAN = 0.3;
-/** Ordre de la deceleration : 3 donne une arrivee qui se pose, sans freinage
- *  sec. */
-const FREIN = 3;
-const K_ELAN = 1 / (ELAN * ELAN + (2 * ELAN * (1 - ELAN)) / FREIN);
-const K_FREIN = (2 * K_ELAN * ELAN) / (FREIN * (1 - ELAN) ** (FREIN - 1));
+/** Duree d'une descente du zoom `depart` au zoom `arrivee`. */
+export function dureeDescente(depart: number, arrivee: number): number {
+  return Math.round(Math.min(7600, Math.max(900, PAR_NIVEAU * Math.abs(arrivee - depart))));
+}
 
 /**
- * Courbe de temps des vols : un depart bref, puis une longue deceleration.
+ * Courbe de temps des vols : sinusoidale, symetrique.
  *
- * L'acceleration douce par defaut de MapLibre est symetrique : la descente
- * finale, la plus belle part du vol, passait aussi vite que le decollage. Ici
- * 30 % du temps accelerent (quadratique), 70 % freinent (cubique), raccordes
- * en valeur **et** en pente — aucun a-coup au raccord.
+ * Depart et arrivee a vitesse nulle, et une pointe a pi/2 fois la vitesse
+ * moyenne seulement — la courbe par defaut de MapLibre, ou une courbe qui
+ * accelere vite pour freiner longtemps, culminent bien plus haut, et c'est ce
+ * pic que l'oeil lit comme un a-coup.
  */
 export function adoucir(t: number): number {
   if (t <= 0) return 0;
   if (t >= 1) return 1;
-  return t <= ELAN ? K_ELAN * t * t : 1 - K_FREIN * (1 - t) ** FREIN;
+  return (1 - Math.cos(Math.PI * t)) / 2;
 }
 
 /** Jeu laisse entre un point et le bord de la part visible. */

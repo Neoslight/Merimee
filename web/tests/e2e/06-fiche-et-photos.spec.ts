@@ -83,8 +83,8 @@ test('fiche et photographies', async () => {
   });
 
   await test.step('pastille auteur : filtrer depuis la fiche', async () => {
-    // PA00097411 porte des auteurs identifies : un clic sur sa pastille doit
-    // ajouter une puce de filtre sans refermer la fiche.
+    // PA00097411 porte des auteurs identifies : un clic sur sa pastille ajoute
+    // une puce de filtre, et la fiche cede la place a ce que le filtre montre.
     await page.goto(`${infos.url}?ref=PA00097411`, { waitUntil: 'domcontentloaded' });
     await attendre(page, '.fiche .fermer');
     const pastille = page.locator('.pastille-auteur').first();
@@ -97,7 +97,7 @@ test('fiche et photographies', async () => {
       await page.waitForSelector('.jetons button:not(.raz)', { timeout: 20_000 });
       const puceAuteur = await page.locator('.jetons button:not(.raz)').count();
       verifier('cliquer une pastille auteur pose une puce de filtre', puceAuteur >= 1, `${puceAuteur} puce(s)`);
-      verifier('la fiche reste ouverte apres le filtrage par auteur', (await page.locator('.fiche .fermer').count()) === 1);
+      verifier('la fiche se ferme pour montrer ce que le filtre retient', (await page.locator('.fiche-hote:not([hidden])').count()) === 0);
       // Retour a l'etat neutre.
       await page.getByRole('button', { name: /effacer \d+ filtres?/i }).click();
     }

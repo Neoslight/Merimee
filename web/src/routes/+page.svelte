@@ -352,6 +352,28 @@
     });
   });
 
+  // La fiche cede la place des qu'un filtre change : on regarde alors ce que
+  // le filtre retient, et la fiche d'une notice qu'il ecarte peut-etre n'a plus
+  // rien a faire a l'ecran. Une seule exception de fait : un changement qui
+  // arrive **avec** la notice — retour arriere, permalien — ne ferme rien.
+  // La zone visible compte comme un filtre quand on la pose ou la retire, pas
+  // a chaque deplacement de la carte qu'elle suit.
+  const signatureCriteres = $derived(JSON.stringify({ ...filters, bbox: filters.bbox !== null }));
+  let ficheSuivie: string | null = untrack(() => selection);
+  let criteresSuivis = untrack(() => signatureCriteres);
+
+  $effect(() => {
+    const ref = selection;
+    const criteres = signatureCriteres;
+    untrack(() => {
+      const memeFiche = ref === ficheSuivie;
+      const changement = criteres !== criteresSuivis;
+      ficheSuivie = ref;
+      criteresSuivis = criteres;
+      if (memeFiche && changement && ref !== null) fermerFiche(false);
+    });
+  });
+
   /** Facette dont le menu de puce est ouvert. */
   let puceOuverte = $state<FacetKey | null>(null);
 
@@ -680,8 +702,15 @@
     });
   }
 
-  function fermerFiche() {
+  /** `rendreFocus` est faux quand la fiche cede la place a ce qu'on est en
+   *  train de faire — taper une recherche, regler un filtre : le focus y est
+   *  deja, le lui reprendre couperait la frappe. */
+  function fermerFiche(rendreFocus = true) {
     selection = null;
+    if (!rendreFocus) {
+      foyerFiche = null;
+      return;
+    }
     // Le foyer peut avoir disparu (filtre qui retire la ligne de liste) : un
     // clic sur la carte replie alors sur le canevas, le repli le plus sense.
     // Apres `tick` : la ligne de liste etait masquee (`hidden`) sous la fiche,
@@ -1128,16 +1157,16 @@
           onbbox={(bbox) => (filters.bbox = bbox)}
         />
 
-        <!-- Le pied gauche : la legende au coin, la vignette des calques a sa
-             droite. Une rangee, pour que la vignette suive la legende quand
-             elle se deplie au lieu de la chevaucher. -->
+        <!-- Le pied gauche : la vignette des calques au-dessus de la legende,
+             qui tient le coin. Une colonne, pour que la vignette monte avec la
+             legende quand elle se deplie au lieu de la chevaucher. -->
         <div class="pied">
-          <Legende {mode} {densite} acr={acrVisible} compacte={friseOuverte}
-                   bind:depliee={legendeDepliee} comptes={comptesStatut}
-                   statutsActifs={filters.statut} onstatut={(valeur) => toggle('statut', valeur)} />
           <Calques bind:ouvert={calquesOuverts} bind:fond bind:opacite={opaciteFond}
                    bind:mode bind:densite bind:acr={acrVisible}
                    nbAcr={pointsAcrCarte?.features.length ?? null} />
+          <Legende {mode} {densite} acr={acrVisible} compacte={friseOuverte}
+                   bind:depliee={legendeDepliee} comptes={comptesStatut}
+                   statutsActifs={filters.statut} onstatut={(valeur) => toggle('statut', valeur)} />
         </div>
 
         <!-- Le bloc du haut : la recherche, puis ce qui la prolonge — le compte,
@@ -1156,7 +1185,10 @@
                        indexDisponible={indexTexte.etat !== 'indisponible'}
                        onlieu={surLieu} onedifice={surEdifice} oncategorie={surCategorie}
                        onraccourci={surRaccourci} ontexte={surTexte} ontitres={surTitres} onvider={surVider}
-                       onhasard={hasard} />
+                       onhasard={hasard}
+                       onfrappe={() => {
+                         if (selection !== null) fermerFiche(false);
+                       }} />
           </div>
 
           <div class="outils">
@@ -1432,18 +1464,19 @@
   }
 
   /* --- Pied gauche ------------------------------------------------------
-     Legende et vignette des calques en rangee, alignees par le bas. La rangee
-     ne capte pas le pointeur — seuls ses elements le font — et ne fixe pas de
-     `z-index` : le panneau des calques, qu'elle contient, doit pouvoir passer
-     au-dessus de la feuille du telephone. A droite, la place des commandes de
-     zoom au large, de l'attribution sur telephone. */
+     Vignette des calques au-dessus de la legende, alignees a gauche. La
+     colonne ne capte pas le pointeur — seuls ses elements le font — et ne
+     fixe pas de `z-index` : le panneau des calques, qu'elle contient, doit
+     pouvoir passer au-dessus de la feuille du telephone. A droite, la place
+     des commandes de zoom au large, de l'attribution sur telephone. */
   .pied {
     position: absolute;
     left: calc(var(--marge-gauche, 0px) + 12px + var(--sa-gauche));
     bottom: calc(12px + var(--sa-bas));
     display: flex;
-    align-items: flex-end;
-    gap: 10px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
     max-width: calc(100% - 96px);
     pointer-events: none;
     transition: left var(--t-tiroir);
@@ -1466,24 +1499,20 @@
     max-width: calc(100% - 24px);
   }
 
-  /* Au large, la rangee de puces deborde du bloc et court sur toute la
-     largeur de la carte, a la maniere des cartes en ligne : dans les 440 px du
-     bloc, la moitie des puces etaient hors champ. Ses vides laissent passer le
-     pointeur jusqu'a la carte ; seules les puces le prennent. */
+  /* Au large, les puces se repartissent sur plusieurs lignes dans la largeur
+     du bloc : sur une seule, la moitie etaient hors champ, et l'etendre a
+     toute la carte faisait une longue ligne a parcourir des yeux. Les filtres
+     poses s'enroulent a la suite, un par un. Le volet, dessous, suit la
+     hauteur du bloc (`--hauteur-haut`). Sur telephone la rangee defile : trois
+     lignes de puces y mangeraient la carte. */
   @media (min-width: 769px) {
-    .haut :global(.rail) {
-      width: calc(100vw - 24px - var(--sa-gauche) - var(--sa-droite));
-      pointer-events: none;
+    .haut :global(.rangee) {
+      flex-wrap: wrap;
+      overflow: visible;
     }
 
-    .haut :global(.rail .rangee) {
-      pointer-events: none;
-    }
-
-    .haut :global(.rail .rangee > *),
-    .haut :global(.rail .rangee .jetons > *),
-    .haut :global(.rail .fleche) {
-      pointer-events: auto;
+    .haut :global(.rangee .jetons) {
+      display: contents;
     }
   }
 
@@ -1956,7 +1985,6 @@
     .pied {
       left: calc(8px + var(--sa-gauche));
       bottom: calc(var(--reserve-bas, 0px) + 8px);
-      gap: 8px;
       max-width: calc(100% - 52px);
     }
 

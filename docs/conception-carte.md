@@ -9,11 +9,12 @@ ligne.** La légende avait fini en tiroir fourre-tout ; une première passe l'av
 scindée (légende en bas à gauche, cartes anciennes repliées sous le zoom). La phase 3
 de la refonte (`PLAN_REFONTE_INTERFACE.md`) a fini le travail :
 
-- **le pied gauche est une rangée** (`.pied`, dans la page) : la légende au coin, la
-  vignette des calques à sa droite, alignées par le bas. La rangée ne capte pas le
-  pointeur et ne pose pas de `z-index` — le panneau des calques qu'elle contient doit
-  passer au-dessus de la feuille du téléphone. Une rangée plutôt que deux positions
-  absolues : la vignette suit la légende quand elle se déplie au lieu de la chevaucher ;
+- **le pied gauche est une colonne** (`.pied`, dans la page) : la vignette des calques
+  au-dessus de la légende, qui tient le coin, alignées à gauche. La colonne ne capte
+  pas le pointeur et ne pose pas de `z-index` — le panneau des calques qu'elle contient
+  doit passer au-dessus de la feuille du téléphone. Une colonne plutôt que deux
+  positions absolues : la vignette monte avec la légende quand elle se déplie au lieu
+  de la chevaucher ;
 - **la vignette des calques** (`Calques.svelte`, 72 px, 56 sous 900 px) est un
   **aperçu**, pas une icône — Cassini tant qu'on est sur le plan, le
   plan dès qu'un fond est posé, pour dire par où l'on revient. Les cartes anciennes,
@@ -101,34 +102,45 @@ règles :
 - **toucher un point ne déplace rien**, on voit déjà où il est — sauf s'il tombe sous
   un panneau : la carte glisse alors (`easeTo`), sans changer de zoom. Le même effet
   rejoue quand les marges changent ;
+- **les vols se font en deux temps** (`plonger`) : une **traversée** (`flyTo`) amène la
+  cible au centre de la part visible sans descendre, puis une **descente** (`easeTo`)
+  plonge droit sur elle, sans plus aucun glissement latéral. Un `flyTo` unique liait
+  trajet et zoom : la fin enchaînait une dizaine de niveaux en deux secondes pendant
+  que la cible glissait encore — c'est ce qui paraissait brutal, plus que la durée.
+  Un `easeTo` qui zoome **et** déplace ne convient pas davantage : le reste du trajet,
+  grossi à chaque niveau, fait sortir la cible de l'écran avant qu'elle n'y revienne.
+  Durées par niveau de zoom, pour une vitesse d'échelle constante : 650 ms par niveau
+  descendu (`dureeDescente`, 0,9 à 7,6 s), 450 par niveau remonté (`dureeTraversee`,
+  plafonnée à 6 s). Courbe `adoucir`, sinusoïdale : départ et arrivée à vitesse nulle,
+  pointe à π/2 fois la moyenne — la courbe par défaut de MapLibre, ou une courbe qui
+  freine longtemps après un élan bref, culminent bien plus haut. Un jeton
+  (`volCourant`) fait qu'un vol plus récent, ou un geste, interrompt la suite d'un
+  vol plus ancien ;
 - **choisir une notice ailleurs que sur la carte la rapproche** (`approcher`) : sous
-  z11, vol jusqu'à z17 (`ZOOM_EDIFICE`, l'échelle du bâtiment) ; au-delà, vol à zoom
-  constant seulement si elle est hors champ. Un édifice choisi **dans la recherche**
-  descend toujours jusqu'à z17 : on l'a nommé, on veut le voir. `flyTo` et non
-  `easeTo` : la ligne suivante d'une liste peut être à l'autre bout du pays. Durée
-  selon le saut d'échelle (`dureeApproche`, 1,6 à 5 s). Carte masquée par la liste, le
-  vol devient un saut ;
+  z11, plongée jusqu'à z17 (`ZOOM_EDIFICE`, l'échelle du bâtiment) ; au-delà, simple
+  traversée à zoom constant, seulement si elle est hors champ. Un édifice choisi **dans
+  la recherche** descend toujours jusqu'à z17 : on l'a nommé, on veut le voir. Carte
+  masquée par la liste, le vol devient un saut ;
 - **un lien `?ref=` sans `c=` s'ouvre sur sa notice**, une seule fois, sans animation,
   dès que le nuage la porte. Avec `c=`, la vue de l'expéditeur l'emporte ;
-- **« Au hasard » vole** (`survoler`), à la manière d'Earth : `flyTo` avec `minZoom` au
-  zoom qui cadre la métropole, ce qui donne le recul puis la descente, et une durée
-  **fixe** de 8 s — à 3,8 s, douze niveaux de zoom passaient d'un trait. Pas
-  `maxDuration` : MapLibre ne plafonne pas un vol trop long, il
-  le **remplace par un saut** (`duration = 0`, lu dans sa source 4.7.1). La fiche
+- **« Au hasard » vole** (`survoler`), à la manière d'Earth : traversée **forcée**
+  jusqu'au zoom qui cadre la métropole — même proche de la cible, on remonte à la France
+  entière, c'est ce qui dit « ailleurs » —, puis descente jusqu'au bâtiment. Environ
+  10 s depuis la France entière. Des durées toujours **fixées** par le code, jamais
+  `maxDuration` : MapLibre ne plafonne pas un vol trop long, il le **remplace par un
+  saut** (`duration = 0`, lu dans sa source 4.7.1). La fiche
   s'ouvre à l'arrivée ; celle qui était ouverte se ferme au décollage. Un fond
   historique est suspendu le temps du vol — une dizaine de niveaux de zoom traversés,
   à ~170 Ko la tuile Cassini ;
-- **les vols suivent `adoucir`** (`camera.ts`), pas la courbe symétrique de MapLibre :
-  30 % du temps à accélérer, 70 % à freiner (cubique), raccordés en valeur et en pente.
-  La descente finale, la plus belle part du vol, se pose au lieu de passer d'un trait ;
 - **`offset`, jamais l'option `padding`** pour viser le centre de la part visible :
   `padding` reste posé sur la carte après le mouvement et décale tout ce qui suit,
   `getCenter` compris, donc la vue copiée dans un lien.
 
-`survoler` pose son écouteur `moveend` **après** `flyTo` : celui-ci commence par
-arrêter le mouvement en cours, ce qui émet un `moveend` qui n'est pas le sien. Et sous
+`mouvement()` pose son écouteur `moveend` **après** l'appel : un mouvement commence par
+arrêter celui en cours, ce qui émet un `moveend` qui n'est pas le sien. Et sous
 mouvement réduit le saut est déjà fini à ce point — d'où le test `isMoving()` plutôt
-qu'un écouteur qui n'entendrait plus rien.
+qu'un écouteur qui n'entendrait plus rien. Entre les deux temps d'un vol, aucune image
+ne passe : la descente part dans la micro-tâche qui suit le `moveend`.
 
 **Le survol d'une ligne de liste cercle son point** (`monuments-survol`) : un anneau
 plus large et plus léger que celui de la sélection, pour ne pas confondre « je regarde »
@@ -220,6 +232,15 @@ intermittence depuis :
 
 Avant d'imputer un échec résiduel à une modification, refaire la comparaison en
 alternance : le compter sur une seule exécution ne prouve rien.
+
+**Les libellés du fond sont en français** (`lib/carte/libelles.ts`, `franciser`), dans
+les deux thèmes. Positron et dark-matter écrivent `{name_en}` aux petites échelles et
+`{name}` au-delà : « Germany », « Brittany », « Garonne River ». Leurs tuiles
+(`carto.streets`, schéma OpenMapTiles) portent pourtant `name:fr`, vérifié sur les
+tuiles z5 et z8 de la France. Chaque couche `symbol` qui affiche un nom reçoit
+`['coalesce', ['get', 'name:fr'], ['get', 'name']]` : le français quand OSM le connaît,
+le nom local sinon — une rue n'a pas de `name:fr`, son nom est déjà le bon. Appelée dans
+`poserCouches`, donc rejouée à chaque `setStyle`.
 
 **Le fond de carte suit le thème, et le clair est repeint.** `FONDS`
 (`theme.svelte.ts`) porte deux feuilles CARTO servies sans clé : dark-matter en sombre,
