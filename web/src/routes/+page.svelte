@@ -8,6 +8,7 @@
   import {
     auHasard,
     cardinalites,
+    etiquette,
     facette,
     histogrammeProtections,
     histogrammeSiecles,
@@ -49,6 +50,7 @@
   import { base } from '$app/paths';
   import { versCollection } from '$lib/db/points';
   import { MESSAGES_POSITION, position } from '$lib/state/position.svelte';
+  import type { Marges } from '$lib/carte/camera';
 
   const FACETTES: FacetKey[] = [
     'statut', 'domaines', 'denominations', 'regions',
@@ -164,7 +166,14 @@
 
   // Position de depart de la carte, portee par le lien partage et par lui seul.
   const cadrageInitial = initial.cadrage;
-  let vueCarte = $state<{ vueCourante: () => VueCarte | null } | undefined>();
+  let vueCarte = $state<
+    | {
+        vueCourante: () => VueCarte | null;
+        approcher: (reference: string, anime: boolean) => void;
+        survoler: (lon: number, lat: number, reserve: Marges) => Promise<void>;
+      }
+    | undefined
+  >();
 
   // Instance de la fiche, pour lui rendre le focus apres un geste d'ouverture
   // — meme procede que `vueCarte` ci-dessus.
@@ -449,7 +458,14 @@
   let titreTiroir: HTMLElement | undefined = $state();
   let boutonFiltres: HTMLElement | undefined = $state();
 
-  function ouvrirFiche(ref: string) {
+  // `origine` dit d'ou vient le geste. Depuis la carte, on voit deja ou est le
+  // point : rien ne bouge, sauf s'il tombe sous un panneau. Depuis la liste,
+  // la carte se rapproche de l'edifice — sinon ouvrir une fiche a l'echelle
+  // nationale ne disait pas ou il se trouve.
+  function ouvrirFiche(ref: string, origine: 'carte' | 'liste' = 'carte') {
+    // Toute ouverture annule l'arrivee d'un vol en cours : sa fiche ne doit
+    // pas remplacer celle qu'un geste vient de demander.
+    jetonVol += 1;
     const actif = document.activeElement;
     foyerFiche = actif instanceof HTMLElement && actif !== document.body ? actif : null;
     // Une feuille fermee s'ouvre en apercu ; une feuille deja ouverte garde son
@@ -458,7 +474,10 @@
     selection = ref;
     // La fiche affiche d'abord « Chargement… » : `focaliser()` vise l'aside
     // lui-meme, toujours present, pas son titre qui arrive plus tard.
-    tick().then(() => detailPanel?.focaliser());
+    tick().then(() => {
+      detailPanel?.focaliser();
+      if (origine === 'liste') vueCarte?.approcher(ref, vue === 'carte');
+    });
   }
 
   function fermerFiche() {
@@ -644,14 +663,35 @@
     if (event.detail === 0) basculerCran();
   }
 
-  // Ce que la feuille masque en bas de la carte : la carte y ramene un point
-  // choisi qui tomberait dessous. Depliee, la feuille couvre tout, il n'y a
-  // plus rien a ramener.
-  const reserveBas = $derived(
-    telephone && selection !== null && vue === 'carte' && cran === 'apercu'
-      ? Math.round((hauteurScene - 8) * (1 - PART_CACHEE))
-      : 0
-  );
+  // Ce que les panneaux masquent de la carte, bord par bord : elle y ramene un
+  // point choisi qui tomberait dessous, et y centre ses vols. Les largeurs sont
+  // mesurees, pas recopiees de la feuille de style — elles changent de gabarit
+  // en gabarit.
+  //
+  // `ficheOuverte` est un parametre et non la lecture de `selection` : « Au
+  // hasard » vise la place que la fiche prendra **a l'arrivee**, alors qu'elle
+  // n'est pas encore ouverte au decollage.
+  let largeurFiche = $state(0);
+  let largeurTiroir = $state(0);
+
+  function margesCarte(ficheOuverte: boolean): Marges {
+    // Une feuille fermee s'ouvre en apercu, cf. `ouvrirFiche`. Depliee, elle
+    // couvre tout : il n'y a plus rien a ramener.
+    const apercu = selection === null || cran === 'apercu';
+    return {
+      top: 0,
+      bottom:
+        telephone && ficheOuverte && vue === 'carte' && apercu
+          ? Math.round((hauteurScene - 8) * (1 - PART_CACHEE))
+          : 0,
+      left: tiroirPose ? largeurTiroir : 0,
+      // La fiche flotte a 12 px du bord droit, et on lui laisse autant d'air
+      // de l'autre cote.
+      right: ficheOuverte && !telephone ? largeurFiche + 24 : 0
+    };
+  }
+
+  const marges = $derived(margesCarte(selection !== null));
 
   // Pose `inert` sur tout ce qui n'est pas le calque modal courant, depuis
   // l'exterieur : la carte et la frise appartiennent a d'autres
@@ -702,10 +742,34 @@
     return () => clearTimeout(minuteur);
   });
 
+  // « Au hasard », a la maniere d'Earth : sur la carte, on vole jusqu'a
+  // l'edifice et sa fiche s'ouvre a l'arrivee. La fiche en cours se referme au
+  // decollage — la garder ouverte ferait survoler la France sous la notice
+  // d'un edifice qu'on quitte. Un geste qui interrompt le vol n'empeche pas la
+  // fiche de s'ouvrir ; un second tirage, ou une autre fiche ouverte entre
+  // temps, annule l'arrivee du premier (`jetonVol`).
+  //
+  // Hors de la carte, ou pour une notice sans coordonnees, il n'y a pas de vol
+  // a regarder : la fiche s'ouvre tout de suite.
+  let jetonVol = 0;
+
   async function hasard() {
-    const ref = await auHasard(filters);
-    if (ref) ouvrirFiche(ref);
-    else avis = 'Aucune notice à tirer au sort avec ces filtres.';
+    const mien = ++jetonVol;
+    const tire = await auHasard(filters, vue === 'carte');
+    if (mien !== jetonVol) return;
+    if (!tire) {
+      avis = 'Aucune notice à tirer au sort avec ces filtres.';
+      return;
+    }
+    if (vue !== 'carte' || tire.lon === null || tire.lat === null || !vueCarte) {
+      ouvrirFiche(tire.reference, 'liste');
+      return;
+    }
+    const reserve = margesCarte(true);
+    if (selection !== null) selection = null;
+    await vueCarte.survoler(tire.lon, tire.lat, reserve);
+    if (mien !== jetonVol) return;
+    ouvrirFiche(tire.reference);
   }
 
   const actifs = $derived(countActive(filters));
@@ -847,8 +911,9 @@
           pointsAcr={pointsAcrCarte}
           bind:suivreVue
           friseOuverte={friseOuverte}
-          {reserveBas}
-          onselect={ouvrirFiche}
+          {marges}
+          {etiquette}
+          onselect={(ref) => ouvrirFiche(ref)}
           onbbox={(bbox) => (filters.bbox = bbox)}
         />
 
@@ -908,7 +973,7 @@
                 <li>
                   <button
                     class:choisi={selection === ligne.reference}
-                    onclick={() => ouvrirFiche(ligne.reference)}
+                    onclick={() => ouvrirFiche(ligne.reference, 'liste')}
                   >
                     <span class="nom">{ligne.titre}</span>
                     <span class="meta">
@@ -982,7 +1047,7 @@
              largeur et les ouvrir ne provoque aucun redimensionnement du
              canevas WebGL. Ils vivent dans la scene, pas dans `main`, pour
              laisser la frise entierement visible sous eux. -->
-        <div class="colonne facettes" class:ouvert={facettesOuvertes}>
+        <div class="colonne facettes" class:ouvert={facettesOuvertes} bind:clientWidth={largeurTiroir}>
           <div class="entete-tiroir">
             <h2 tabindex="-1" bind:this={titreTiroir}>Filtres</h2>
             <button class="fermer-tiroir frappe-44" aria-label="Fermer les filtres"
@@ -1006,6 +1071,7 @@
         {/if}
 
         <div class="colonne fiche-hote" class:ouvert={selection !== null}
+             bind:clientWidth={largeurFiche}
              class:plein={cran === 'plein'} class:glisse={decalage !== null}
              style:transform={decalage !== null ? `translateY(${decalage}px)` : undefined}>
           <!-- Poignee de la feuille, telephone seulement. Un toucher bascule le
@@ -1526,7 +1592,13 @@
   .scene {
     position: relative;
     min-height: 0;
+    /* `clip` et non `hidden` : `hidden` masque la barre de defilement mais
+       laisse la scene defilable par programme — un `focus()` ou un
+       `scrollIntoView` vers un calque translate la decalait de 354 px, carte
+       comprise. `clip` n'en fait pas un conteneur de defilement du tout.
+       `hidden` reste en repli pour les navigateurs qui ne le connaissent pas. */
     overflow: hidden;
+    overflow: clip;
     background: var(--carte-terre);
     /* Empreinte du bouton flottant. La liste recouvre la scene : sans cette
        reserve son titre passerait dessous. Meme procede que
@@ -1817,6 +1889,9 @@
        le filet ne decale aucune geometrie mesuree par les tests. */
     border: 1px solid var(--bord-flottant);
     border-radius: var(--r-l);
+    /* Le fond de la fiche est ici, pas sur `.fiche` qui defile : cf. le
+       commentaire de `DetailPanel`. */
+    background: var(--fond-carte);
     overflow: hidden;
     transform: translateX(calc(100% + 16px));
     box-shadow: var(--ombre-fiche);
@@ -2095,9 +2170,15 @@
      La fiche remonte du bas plutot que de glisser du cote : 340 px de large
      sur un ecran de 375 ne laisseraient rien voir de la carte derriere. */
   @media (max-width: 768px) {
-    /* La feuille remonte du bas : elle ne masque plus rien a droite. */
+    /* La feuille remonte du bas : elle ne masque plus rien a droite. En
+       revanche elle recouvre la legende, ancree au pied de la carte : celle-ci
+       s'efface tant que la feuille est ouverte, sans quoi ses boutons
+       resteraient dans l'ordre de tabulation, invisibles sous la feuille. Meme
+       procede que les marges : la carte lit une variable, elle ne connait pas
+       la fiche. */
     main.fiche-ouverte {
       --marge-droite: 0px;
+      --legende-visibilite: hidden;
     }
 
     /* Hauteur **definie**, et flex plutot que la grille de `.colonne`. Avec un

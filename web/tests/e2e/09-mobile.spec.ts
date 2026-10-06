@@ -261,6 +261,10 @@ test('géolocalisation et tri à proximité', async ({ browser }: { browser: Bro
 
   await p.locator('.liste li button').first().click();
   await attendre(p, '.fiche .distance');
+  // La feuille finit sa transition avant le prochain geste : cliquee en
+  // mouvement, une commande hors champ fait defiler la fiche pour s'y amener,
+  // et un defilement en apercu deplie la feuille par-dessus la liste.
+  await p.waitForTimeout(400);
   verifier('la fiche dit la distance', /de vous/.test(await p.locator('.fiche .distance').innerText()));
 
   // La carte est centree sur l'utilisateur : le lien copie ne doit pas porter

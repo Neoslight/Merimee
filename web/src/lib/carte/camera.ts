@@ -38,6 +38,56 @@ export function margesDepart(largeur: number): Marges {
     : { top: 24, bottom: 110, left: 24, right: 64 };
 }
 
+export const SANS_MARGE: Marges = { top: 0, bottom: 0, left: 0, right: 0 };
+
+/** Zoom d'arrivee sur un edifice : son point mesure une dizaine de pixels et
+ *  ses voisins restent a l'ecran — on voit ou il est, pas seulement lui. */
+export const ZOOM_EDIFICE = 14.5;
+
+/** En deca, la carte ne situe pas un edifice : choisir une notice ailleurs que
+ *  sur la carte rapproche alors la vue au lieu de la laisser nationale. */
+export const ZOOM_PROCHE = 11;
+
+/** Duree du vol de « Au hasard », en millisecondes. Fixe, et non laissee au
+ *  calcul de MapLibre : son `maxDuration` ne plafonne pas un vol trop long, il
+ *  le remplace par un saut — exactement ce qu'on ne veut pas vers l'outre-mer. */
+export const DUREE_VOL = 3800;
+
+/** Jeu laisse entre un point et le bord de la part visible. */
+const AISANCE = 24;
+
+/**
+ * Le point tombe-t-il dans la part de la carte que rien ne recouvre ?
+ *
+ * `p` est en pixels du conteneur ; `marges` dit ce que les panneaux ouverts
+ * masquent sur chaque bord.
+ */
+export function estVisible(
+  p: { x: number; y: number },
+  largeur: number,
+  hauteur: number,
+  marges: Marges
+): boolean {
+  return (
+    p.x >= marges.left + AISANCE &&
+    p.x <= largeur - marges.right - AISANCE &&
+    p.y >= marges.top + AISANCE &&
+    p.y <= hauteur - marges.bottom - AISANCE
+  );
+}
+
+/**
+ * Decalage a passer a `easeTo` / `flyTo` pour que la cible arrive au centre de
+ * la part visible et non au centre du canevas.
+ *
+ * `offset`, et non l'option `padding` de MapLibre : celle-ci **reste posee**
+ * sur la carte apres le mouvement et deplace tout ce qui suit, `getCenter`
+ * compris — donc la vue copiee dans un lien.
+ */
+export function decalage(marges: Marges): [number, number] {
+  return [(marges.left - marges.right) / 2, (marges.top - marges.bottom) / 2];
+}
+
 /** En deca, la vue couvre plus d'une centaine de kilometres : son centre ne
  *  dit qu'une region. */
 export const ZOOM_DISCRET = 9;

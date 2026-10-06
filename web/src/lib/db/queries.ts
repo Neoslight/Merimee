@@ -400,11 +400,24 @@ export async function detail(reference: string): Promise<Detail> {
   };
 }
 
+/** Notice tiree au sort, avec de quoi y voler. */
+export interface Tirage {
+  reference: string;
+  /** Nulles pour une notice sans coordonnees. */
+  lon: number | null;
+  lat: number | null;
+}
+
 /**
- * Une notice au hasard, de preference parmi celles dont l'historique est
- * renseigne : `has_historique` est un **ordre**, pas un filtre. En filtre, le
- * bouton restait muet des que la selection courante ne gardait que des
- * notices sans historique.
+ * Une notice au hasard, de preference parmi celles qui ont quelque chose a
+ * montrer : `has_historique` et `has_photo` sont des **ordres**, pas des
+ * filtres. En filtre, le bouton restait muet des que la selection courante ne
+ * gardait que des notices sans historique.
+ *
+ * `situee` fait passer d'abord les notices localisees : sur la carte, le
+ * tirage se termine par un vol, et il lui faut une destination. La liste, elle,
+ * tire dans tout le corpus — les 2 276 notices sans coordonnees y restent
+ * accessibles.
  *
  * `ORDER BY random() LIMIT 1` et non `USING SAMPLE 1 ROWS` : l'echantillon
  * passe **sous** le filtre dans le plan, il tirait donc une ligne de la table
@@ -413,11 +426,27 @@ export async function detail(reference: string): Promise<Detail> {
  * mesure : trois clics muets sur cinq. Le tri sur 46 760 lignes ne coute rien
  * a cote d'un bouton qui ne repond pas.
  */
-export async function auHasard(f: Filters): Promise<string | null> {
-  const [row] = await query<{ reference: string }>(`
-    SELECT reference FROM monuments
+export async function auHasard(f: Filters, situee: boolean): Promise<Tirage | null> {
+  const [row] = await query<Tirage>(`
+    SELECT reference, lon::DOUBLE AS lon, lat::DOUBLE AS lat FROM monuments
     WHERE ${buildWhere(f)}
-    ORDER BY has_historique DESC, random() LIMIT 1
+    ORDER BY ${situee ? '(lat IS NOT NULL) DESC, ' : ''}has_historique DESC, has_photo DESC, random()
+    LIMIT 1
   `);
-  return row?.reference ?? null;
+  return row ?? null;
+}
+
+/** Ce que l'infobulle de survol affiche : assez pour reconnaitre l'edifice. */
+export interface Etiquette {
+  titre: string;
+  commune: string;
+}
+
+/** Nom et commune d'une notice. Le nuage de points ne porte que la reference :
+ *  y ajouter 44 484 titres pour un survol ferait payer le premier ecran. */
+export async function etiquette(reference: string): Promise<Etiquette | null> {
+  const [row] = await query<Etiquette>(`
+    SELECT titre, commune FROM monuments WHERE reference = ${lit(reference)}
+  `);
+  return row ?? null;
 }

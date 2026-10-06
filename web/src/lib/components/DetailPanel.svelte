@@ -537,7 +537,11 @@
     /* En feuille du bas sur telephone, la fiche est une modale : son geste de
        defilement ne remonte pas a la page. */
     overscroll-behavior: contain;
-    background: var(--fond-carte);
+    /* Pas de fond ici : il est porte par le calque qui heberge la fiche
+       (`.fiche-hote`, dans la page). Un conteneur defilant **opaque** sous un
+       parent translate fait croire au compositeur de Chromium qu'il masque la
+       carte la ou il serait sans la translation : en feuille d'apercu, le haut
+       du canevas n'etait plus dessine. Mesure, cf. `docs/contraintes.md`. */
     padding: 0 0 8px;
   }
 

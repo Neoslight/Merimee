@@ -144,7 +144,15 @@ trois clics sans effet sur cinq. `ORDER BY random() LIMIT 1` corrige, et
 plus un filtre : sous une sélection qui ne garde que des notices sans historique, le
 bouton restait muet. Il préfère toujours une notice qui a quelque chose à lire, et
 retombe sur les autres plutôt que sur rien ; sous un filtre vide, la page le dit
-(`avis`).
+(`avis`). `has_photo` s'y ajoute de la même façon, et sur la carte les notices situées
+passent en tête (`situee`) : le tirage s'y termine par un vol, il lui faut une
+destination. En vue liste, le tirage reste ouvert aux 2 276 notices sans coordonnées.
+
+**`has_photo` est un booléen de `monuments`, miroir de `details.commons` non vide.**
+Les noms de fichiers restent dans les fragments ; « Au hasard » peut préférer une notice
+illustrée sans en télécharger un seul. +4,2 Ko sur `monuments.parquet` (2 150 102 →
+2 154 310 octets). Hors oracle : il suit l'instantané tiers, pas le fichier source.
+`test_has_photo_suit_les_fragments` vérifie l'égalité notice par notice.
 
 **Deux filtres ont un état miroir hors de `filters`.** `retirer()` ne suffit donc pas,
 et c'est la page qui complète : `recherche` a le champ de la barre, qui l'alimente par

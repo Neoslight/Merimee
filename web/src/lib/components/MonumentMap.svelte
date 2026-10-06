@@ -11,7 +11,19 @@
   import { erreurDepuisCode, position } from '$lib/state/position.svelte';
   import { teinter } from '$lib/teinte';
   import { HISTORIQUES, tuiles } from '$lib/carte/fonds';
-  import { devoilePosition, margesDepart, METROPOLE } from '$lib/carte/camera';
+  import {
+    decalage,
+    devoilePosition,
+    DUREE_VOL,
+    estVisible,
+    margesDepart,
+    METROPOLE,
+    SANS_MARGE,
+    ZOOM_EDIFICE,
+    ZOOM_PROCHE,
+    type Marges
+  } from '$lib/carte/camera';
+  import type { Etiquette } from '$lib/db/queries';
   import { STATUTS } from '$lib/statuts';
   import type { FondHistorique, VueCarte } from '$lib/state/permalien';
 
@@ -32,10 +44,14 @@
      *  barre et le panneau. Elle se replie alors en une bande de cles, sans ses
      *  commandes — celles-ci restent atteignables des que la frise se referme. */
     friseOuverte: boolean;
-    /** Hauteur en pixels que la feuille de fiche masque en bas de la carte,
-     *  sur telephone. Un point choisi qui tomberait dessous est ramene dans la
-     *  part visible : on toucherait sinon un monument pour ne plus le voir. */
-    reserveBas?: number;
+    /** Ce que les panneaux ouverts masquent sur chaque bord de la carte, en
+     *  pixels : la fiche, le tiroir pose a cote, la feuille du telephone. Un
+     *  point choisi qui tomberait dessous est ramene dans la part visible — on
+     *  toucherait sinon un monument pour ne plus le voir. */
+    marges?: Marges;
+    /** Nom et commune d'une notice, pour l'infobulle de survol. Fournie par la
+     *  page : la carte ne connait pas DuckDB, elle ne recoit que des points. */
+    etiquette?: (reference: string) => Promise<Etiquette | null>;
     /** Couche Architecture contemporaine remarquable affichee. Liee a la page,
      *  qui l'ecrit dans l'URL. Hors du filtrage croise : aucun filtre ne s'y
      *  applique. */
@@ -53,7 +69,8 @@
     fond = $bindable(),
     suivreVue = $bindable(),
     friseOuverte,
-    reserveBas = 0,
+    marges = SANS_MARGE,
+    etiquette,
     acr = $bindable(false),
     pointsAcr = null,
     onselect,
@@ -466,7 +483,15 @@
         });
       },
       zoom: () => map.getZoom(),
-      centre: () => map.getCenter().toArray()
+      centre: () => map.getCenter().toArray(),
+      bornes: () => map.getBounds().toArray().flat(),
+      enMouvement: () => map.isMoving(),
+      // Position a l'ecran d'une coordonnee, en pixels de page.
+      projeter: (lon: number, lat: number) => {
+        const boite = conteneur.getBoundingClientRect();
+        const p = map.project([lon, lat]);
+        return { x: boite.left + p.x, y: boite.top + p.y };
+      }
     };
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
     // Sous le zoom, dans la meme colonne : c'est un outil de cadrage, comme
@@ -509,10 +534,50 @@
       pret = true;
     });
 
-    const popup = new maplibregl.Popup({ closeButton: false, offset: 10 });
+    // Infobulle de survol, au pointeur fin seulement : au doigt il n'y a pas de
+    // survol, le toucher ouvre la fiche. Le nuage ne porte que la reference ;
+    // le nom vient d'une requete, retardee de 120 ms pour qu'un balayage de la
+    // carte n'en emette pas une par point traverse, et gardee en memoire.
+    //
+    // Le contenu passe par `textContent` et `setDOMContent`, jamais `setHTML` :
+    // un titre de notice est une donnee, et `setHTML` est le chemin de l'avis
+    // GHSA-jrc7-96c5-q579 qui pese sur maplibre-gl 4.x.
+    const popup = new maplibregl.Popup({
+      closeButton: false,
+      closeOnClick: false,
+      offset: 12,
+      className: 'infobulle'
+    });
+    const pointeurFin = window.matchMedia('(hover: hover) and (pointer: fine)');
+    const etiquettes = new Map<string, Etiquette | null>();
+    let survolee: string | null = null;
+    let jetonSurvol = 0;
     map.on('mouseenter', 'monuments-points', () => (map.getCanvas().style.cursor = 'pointer'));
+    map.on('mousemove', 'monuments-points', (event) => {
+      const entite = event.features?.[0];
+      const ref = entite?.properties?.reference;
+      if (!etiquette || !pointeurFin.matches || typeof ref !== 'string' || ref === survolee) return;
+      survolee = ref;
+      const mien = ++jetonSurvol;
+      const ou = (entite!.geometry as GeoJSON.Point).coordinates as [number, number];
+      setTimeout(async () => {
+        if (mien !== jetonSurvol) return;
+        if (!etiquettes.has(ref)) etiquettes.set(ref, await etiquette(ref).catch(() => null));
+        const nom = etiquettes.get(ref);
+        if (mien !== jetonSurvol || !nom) return;
+        const noeud = document.createElement('div');
+        const titre = document.createElement('b');
+        titre.textContent = nom.titre;
+        const lieu = document.createElement('span');
+        lieu.textContent = nom.commune;
+        noeud.append(titre, lieu);
+        popup.setLngLat(ou).setDOMContent(noeud).addTo(map);
+      }, 120);
+    });
     map.on('mouseleave', 'monuments-points', () => {
       map.getCanvas().style.cursor = '';
+      survolee = null;
+      jetonSurvol += 1;
       popup.remove();
     });
     map.on('mouseenter', 'acr-points', () => (map.getCanvas().style.cursor = 'pointer'));
@@ -551,6 +616,9 @@
         map.easeTo({ center: event.lngLat, zoom: Math.min(map.getZoom() + 2, ZOOM_AMAS) });
         return;
       }
+      // L'infobulle nommait le point ; la fiche qui s'ouvre le fait mieux, et
+      // l'epingle se pose exactement la ou elle est.
+      popup.remove();
       onselect(retenue);
     });
     map.on('moveend', () => {
@@ -573,6 +641,7 @@
       clearTimeout(minuteur);
       map.remove();
       carte = undefined;
+      epingle = undefined;
       pret = false;
     };
   });
@@ -619,30 +688,159 @@
     carte.setLayoutProperty('acr-selection', 'visibility', visibilite);
   });
 
-  // Recentrage sous la feuille de fiche. Il ne part que si le point est hors
-  // de la part visible : ouvrir un monument deja bien place ne doit pas
-  // deplacer la carte, et passer d'un voisin a l'autre en apercu non plus.
-  // Le nuage est lu sans dependance — un filtre qui le remplace ne doit pas
+  // --- Camera ----------------------------------------------------------------
+  // Tout ce qui deplace la vue vers une notice passe par ici. Les calculs —
+  // ce qui est visible, ou viser — sont dans `lib/carte/camera.ts`.
+
+  /** Coordonnees d'une notice, lues dans le nuage deja charge : aucune
+   *  requete. Nulles pour une notice hors filtre ou sans coordonnees. */
+  function coordonnees(reference: string): [number, number] | null {
+    const trouvee =
+      points.features.find((f) => f.properties?.reference === reference) ??
+      pointsAcr?.features.find((f) => f.properties?.reference === reference);
+    return trouvee ? ((trouvee.geometry as GeoJSON.Point).coordinates as [number, number]) : null;
+  }
+
+  // Recentrage sous un panneau. Il ne part que si le point choisi est hors de
+  // la part visible : ouvrir un monument deja bien place ne doit pas deplacer
+  // la carte, et passer d'un voisin a l'autre non plus. Il rejoue quand les
+  // marges changent — la fiche qui s'ouvre, le tiroir qui se pose — mais le
+  // nuage est lu sans dependance : un filtre qui le remplace ne doit pas
   // rejouer le cadrage.
   $effect(() => {
     const ref = selection;
-    const reserve = reserveBas;
-    if (!pret || !carte || !ref || reserve <= 0) return;
+    const masque = marges;
+    if (!pret || !carte || !ref) return;
     const map = carte;
     untrack(() => {
-      const trouvee =
-        points.features.find((f) => f.properties?.reference === ref) ??
-        pointsAcr?.features.find((f) => f.properties?.reference === ref);
-      if (!trouvee) return;
-      const [lon, lat] = (trouvee.geometry as GeoJSON.Point).coordinates;
-      const p = map.project([lon, lat]);
-      const hauteur = conteneur.clientHeight;
-      const visible = hauteur - reserve;
-      if (p.y > 16 && p.y < visible - 24) return;
-      // Le centre de la carte vaut `hauteur / 2` : l'offset y pose le point
-      // aux deux cinquiemes de la part visible.
-      map.easeTo({ center: [lon, lat], offset: [0, visible * 0.4 - hauteur / 2] });
+      const ou = coordonnees(ref);
+      if (!ou) return;
+      if (estVisible(map.project(ou), conteneur.clientWidth, conteneur.clientHeight, masque)) return;
+      map.easeTo({ center: ou, offset: decalage(masque) });
     });
+  });
+
+  // Un lien `?ref=` sans `c=` s'ouvre sur la notice, pas sur la France : c'est
+  // elle qu'on a partagee. Une seule fois, au depart, et sans animation — le
+  // nuage arrivant apres la carte, l'effet attend qu'il porte la notice. Il se
+  // desarme si la selection a change entre-temps.
+  let departCadre = untrack(() => vueInitiale !== null || selection === null);
+  const selectionDepart = untrack(() => selection);
+
+  $effect(() => {
+    if (departCadre || !pret || !carte) return;
+    if (untrack(() => selection) !== selectionDepart || !selectionDepart) {
+      departCadre = true;
+      return;
+    }
+    const ou = coordonnees(selectionDepart);
+    if (!ou) return;
+    departCadre = true;
+    carte.easeTo({ center: ou, zoom: ZOOM_EDIFICE, offset: decalage(untrack(() => marges)), duration: 0 });
+  });
+
+  /**
+   * Rapproche la vue d'une notice choisie **ailleurs que sur la carte** — une
+   * ligne de liste. A l'echelle nationale, ouvrir sa fiche laissait la carte
+   * ou elle etait : rien ne disait ou se trouve l'edifice. Toucher un point de
+   * la carte, lui, ne deplace rien : on voit deja ou il est.
+   *
+   * `anime` est faux quand la carte est masquee par une autre vue : un vol que
+   * personne ne regarde ne vaut pas ses images.
+   */
+  export function approcher(reference: string, anime: boolean): void {
+    const map = carte;
+    if (!map || !pret) return;
+    const ou = coordonnees(reference);
+    if (!ou) return;
+    // Deja a l'echelle d'une ville : on garde ce zoom, et on ne bouge que si
+    // l'edifice est hors champ. `flyTo` plutot qu'`easeTo` — la notice
+    // suivante d'une liste peut etre a l'autre bout du pays, et un glissement
+    // en ligne droite a z12 chargerait toutes les tuiles du trajet.
+    const proche = map.getZoom() >= ZOOM_PROCHE;
+    if (proche && estVisible(map.project(ou), conteneur.clientWidth, conteneur.clientHeight, marges)) return;
+    map.flyTo({
+      center: ou,
+      zoom: proche ? map.getZoom() : ZOOM_EDIFICE,
+      offset: decalage(marges),
+      ...(anime ? {} : { duration: 0 })
+    });
+  }
+
+  /**
+   * Le vol de « Au hasard » : recul jusqu'a la France entiere, puis descente
+   * vers l'edifice. `minZoom` donne le sommet de la trajectoire, MapLibre
+   * calcule l'arc. La promesse se resout a l'arrivee — ou tout de suite si le
+   * vol n'a pas lieu.
+   *
+   * **Jamais `essential: true`** : sous `prefers-reduced-motion`, MapLibre
+   * remplace alors le vol par un saut, et c'est le comportement voulu.
+   *
+   * `reserve` est ce que la fiche masquera **a l'arrivee** : elle n'est pas
+   * encore ouverte quand le vol part.
+   *
+   * Un fond historique est suspendu le temps du vol : la trajectoire traverse
+   * une dizaine de niveaux de zoom, et Cassini pese ~170 Ko la tuile.
+   */
+  export function survoler(lon: number, lat: number, reserve: Marges): Promise<void> {
+    const map = carte;
+    if (!map || !pret) return Promise.resolve();
+    const recul =
+      map.cameraForBounds([...METROPOLE] as [number, number, number, number], {
+        padding: margesDepart(conteneur.clientWidth)
+      })?.zoom ?? 5;
+    const suspendu = fond;
+    if (suspendu) map.setLayoutProperty(`fond-${suspendu}`, 'visibility', 'none');
+    map.flyTo({
+      center: [lon, lat],
+      zoom: ZOOM_EDIFICE,
+      minZoom: recul,
+      offset: decalage(reserve),
+      duration: DUREE_VOL
+    });
+    return new Promise((resoudre) => {
+      const arrivee = () => {
+        if (suspendu && fond === suspendu && map.getLayer(`fond-${suspendu}`)) {
+          map.setLayoutProperty(`fond-${suspendu}`, 'visibility', 'visible');
+        }
+        resoudre();
+      };
+      // L'ecouteur se pose **apres** `flyTo` : celui-ci commence par arreter le
+      // mouvement en cours, ce qui emet un `moveend` qui n'est pas le sien. Et
+      // sous mouvement reduit le saut est deja fini a ce point : il n'y aura
+      // pas d'autre `moveend` a attendre.
+      if (map.isMoving()) map.once('moveend', arrivee);
+      else arrivee();
+    });
+  }
+
+  // Epingle de la notice choisie. L'anneau de 11 px disait quel point, pas ou
+  // regarder : a l'echelle d'une ville il se perdait parmi ses voisins. C'est
+  // un `Marker` — du DOM, peint par jetons dans `app.css` — qui survit donc a
+  // `setStyle` sans passer par `poserCouches`.
+  let epingle: maplibregl.Marker | undefined;
+
+  function creerEpingle(): HTMLElement {
+    const noeud = document.createElement('div');
+    noeud.className = 'epingle';
+    noeud.innerHTML =
+      '<svg viewBox="0 0 26 34" aria-hidden="true">' +
+      '<path fill="currentColor" d="M13 0C5.8 0 0 5.7 0 12.8 0 22 13 34 13 34s13-12 13-21.2C26 5.7 20.2 0 13 0z"/>' +
+      '<circle cx="13" cy="12.6" r="4.6"/></svg>';
+    return noeud;
+  }
+
+  $effect(() => {
+    const map = carte;
+    const ref = selection;
+    if (!map) return;
+    const ou = ref ? coordonnees(ref) : null;
+    if (!ou) {
+      epingle?.remove();
+      return;
+    }
+    epingle ??= new maplibregl.Marker({ element: creerEpingle(), anchor: 'bottom' });
+    epingle.setLngLat(ou).addTo(map);
   });
 
   // Les points restent la couche interactive : les masquer sous la densite
@@ -920,6 +1118,8 @@
     font-size: 11.5px;
     color: var(--texte-faible);
     transition: left var(--t-tiroir);
+    /* Posee par la page quand un panneau recouvre entierement la legende. */
+    visibility: var(--legende-visibilite, visible);
   }
 
   .cles {

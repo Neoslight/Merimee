@@ -325,6 +325,27 @@ corrigent ensemble :
 - **le `ResizeObserver` de la frise ne retient qu'une mesure par image.** Chaque mesure retenue reconstruit intégralement le graphique
   (`Plot.plot()` puis `replaceChildren`), pas seulement son échelle.
 
+**`.scene` porte `overflow: clip`, pas seulement `hidden`.** `hidden` masque la barre
+de défilement mais laisse la scène défilable par programme : un `focus()` ou un
+`scrollIntoView` vers un calque encore translaté la décalait de 354 px, carte comprise
+(cf. `preventScroll` plus haut). `clip` n'en fait pas un conteneur de défilement du
+tout ; `hidden` reste écrit avant lui, en repli.
+
+**Le fond de la fiche est porté par `.fiche-hote`, jamais par `.fiche` qui défile.**
+Mesuré en Chromium : un conteneur défilant **opaque** sous un parent translaté fait
+croire au compositeur qu'il masque le canevas à l'endroit où il serait **sans** la
+translation. En feuille d'aperçu, toute une bande en haut de la carte n'était plus
+dessinée — un aplat couleur de terre, de la largeur de la fiche et de la hauteur de sa
+part visible. Le défaut figurait déjà dans les captures d'audit
+(`carte_mobile_*_fiche.png`). Déplacer le fond sur le calque hôte, qui ne défile pas,
+suffit ; rendre `.fiche` non défilante ou à peine translucide aussi, mais ce sont des
+contorsions. `14-camera.spec.ts` vérifie les deux fonds. Cf. `docs/contraintes.md`
+pour la méthode de mesure — une capture découpée (`clip`) ne montre **pas** le défaut.
+
+**Sur téléphone, la feuille ouverte efface la légende** (`--legende-visibilite`,
+posée par la page) : elle est entièrement dessous, et gardait ses boutons dans l'ordre
+de tabulation.
+
 **La fiche en feuille ne défilait pas, et la cause était la grille.** `.fiche-hote`
 héritait de `.colonne` un `display: grid`, et le gabarit téléphone ne lui donnait qu'un
 `max-height: 82%`. Sa hauteur restait donc **indéfinie** : la rangée implicite de la
@@ -387,11 +408,13 @@ transition/animation résiduelle — y compris celles écrites en dur dans les c
 hors de ces jetons — est neutralisée au même endroit par une règle générique
 (`*, *::before, *::after`). MapLibre respecte nativement cette préférence pour
 `flyTo`/`easeTo`/`fitBounds` — il lit `matchMedia('(prefers-reduced-motion: reduce)')`
-lui-même à chaque appel — sauf si `essential: true` est passé. Trois déplacements
-animés existent désormais dans `MonumentMap.svelte` : le rapprochement sur un amas
-touché, le cadrage du contrôle de géolocalisation, le recentrage sous la feuille de
-fiche. **Aucun ne passe `essential: true`**, le contrôle natif non plus (vérifié dans
-sa source, 4.7.1). « Au hasard » ouvre toujours une fiche sans toucher au cadrage.
+lui-même à chaque appel — sauf si `essential: true` est passé. Les déplacements
+animés de `MonumentMap.svelte` — rapprochement sur un amas touché, cadrage du contrôle
+de géolocalisation, recentrage d'un point passé sous un panneau, rapprochement depuis
+la liste, vol de « Au hasard » (cf. `docs/conception-carte.md`, « Caméra ») — **ne
+passent jamais `essential: true`**, le contrôle natif non plus (vérifié dans sa
+source, 4.7.1). Sous mouvement réduit, le vol devient un saut et la fiche s'ouvre
+aussitôt ; `14-camera.spec.ts` le vérifie avec `reducedMotion: 'reduce'`.
 
 **Des pastilles de filtrage rapide dans la fiche, portées par `fiche.auteurs`
 (cf. `docs/conception-donnees.md`).** Un clic sur un auteur l'ajoute au filtre courant

@@ -452,6 +452,16 @@ def test_couverture_photographique(details):
     assert details.commons.map(len).max() <= 3
 
 
+@pytestmark_artifacts
+def test_has_photo_suit_les_fragments(monuments, details):
+    # `monuments.has_photo` n'a pas d'existence propre : il doit dire exactement
+    # ce que `details.commons` contient, notice par notice. Un écart ferait
+    # voler « Au hasard » vers une fiche annoncée illustrée et qui ne l'est pas.
+    attendu = details.set_index("reference").commons.map(len).gt(0)
+    obtenu = monuments.set_index("reference").has_photo
+    assert obtenu.sort_index().equals(attendu.sort_index().rename("has_photo"))
+
+
 def test_images_absentes_ne_cassent_pas_le_build(tmp_path, monkeypatch):
     """Sans instantané, la colonne vaut la liste vide et rien ne lève.
 

@@ -221,6 +221,16 @@ celui des **fonds**, la palette devenait dépendance, et une bascule de thème r
 suivant les annulait, et l'`AbortError` ci-dessus remontait. Seul, il ne pose qu'une
 couleur scalaire.
 
+**Un conteneur défilant opaque sous un parent translaté masque le canevas ailleurs.**
+Chromium (compositeur `cc`, relevé en sans tête) calcule l'occlusion de ce conteneur
+comme s'il n'était pas translaté, et ne dessine plus le canevas WebGL à cet endroit.
+C'était la feuille de fiche en aperçu : bande du haut de la carte en aplat. Le fond
+vit donc sur le calque hôte (cf. `docs/conception-interface.md`). **Méthode** : le
+défaut se voit dans une capture pleine fenêtre et dans les images de
+`Page.startScreencast` — ce que le compositeur présente réellement — mais **pas** dans
+une capture découpée par `clip`, qui repasse par un autre chemin de rendu. Une
+vérification qui échantillonne une capture `clip` conclut à tort que tout va bien.
+
 **`pixelRatio` est plafonné à 2.** Sans l'option, MapLibre suit `devicePixelRatio` : sur
 un téléphone à 3x le canevas compose **neuf fois** les pixels CSS à chaque image de
 déplacement, pour 44 484 cercles à liseré. L'écart visible est marginal, le fill-rate

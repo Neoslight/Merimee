@@ -80,7 +80,7 @@ npm run test:unit              # Vitest, 52 tests sur la logique pure
 npm run build && npm run test  # build statique + 181 vérifications en Chromium
 ```
 
-`npm run test` lance Chromium sur le build, réparti en 13 fichiers
+`npm run test` lance Chromium sur le build, réparti en 14 fichiers
 (`tests/e2e/*.spec.ts`) qui couvrent le démarrage de DuckDB-Wasm, le filtrage croisé,
 la recherche dans une facette au-delà des 40 valeurs affichées, les
 permaliens, le chemin clavier des deux frises, le gabarit téléphone, les deux

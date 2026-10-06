@@ -458,6 +458,65 @@ a {
   background-color: var(--position-halo);
 }
 
+/* --- Epingle de selection ---------------------------------------------------
+   Un `Marker` MapLibre, donc du DOM cree hors de tout composant : ses regles
+   ne peuvent pas etre scopees. Elle prend `--carte-selection`, le maximum de
+   contraste contre le sol — pas `--accent`, qui vaut `--classe` et ferait
+   passer la selection pour un edifice classe. Elle ne capte aucun pointeur :
+   le clic doit continuer d'atteindre les points qu'elle surplombe. */
+.epingle {
+  width: 26px;
+  height: 34px;
+  color: var(--carte-selection);
+  pointer-events: none;
+  filter: drop-shadow(0 2px 3px rgb(var(--voile) / 35%));
+}
+
+.epingle svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.epingle circle {
+  fill: var(--fond-carte);
+}
+
+/* --- Infobulle de survol ----------------------------------------------------
+   Popup MapLibre restylee par jetons : blanche par defaut, elle ne suivait pas
+   le theme. Sans pointe et sans pointeur — elle nomme ce qu'on survole, elle
+   ne doit pas s'interposer entre la souris et le point. */
+.maplibregl-popup.infobulle {
+  pointer-events: none;
+}
+
+.infobulle .maplibregl-popup-tip {
+  display: none;
+}
+
+.infobulle .maplibregl-popup-content {
+  max-width: 260px;
+  padding: 7px 11px 8px;
+  border: 1px solid var(--bord-flottant);
+  border-radius: var(--r-s);
+  background: var(--fond-carte);
+  box-shadow: var(--ombre-carte);
+  color: var(--texte);
+  font-family: var(--police);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.infobulle b {
+  display: block;
+  font-weight: 600;
+}
+
+.infobulle span {
+  color: var(--texte-faible);
+  font-size: 11px;
+}
+
 /* --- Zones de frappe -------------------------------------------------------
    Le produit assume sa densite : plusieurs commandes tiennent en 19 a 31 px de
    haut, la ou le doigt en demande 44 (WCAG 2.5.5). Agrandir les pastilles

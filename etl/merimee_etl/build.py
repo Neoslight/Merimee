@@ -50,6 +50,11 @@ MONUMENTS_SCHEMA = pa.schema([
     ("proprietaires", _LIST_STR),
     ("nb_palissy", pa.int32()),
     ("has_historique", pa.bool_()),
+    # Miroir de `details.commons` non vide. Les noms de fichiers restent dans
+    # les fragments ; `monuments` n'en garde qu'un booléen, pour que « Au
+    # hasard » puisse préférer une notice illustrée sans télécharger un seul
+    # fragment. Hors oracle : il suit l'instantané tiers, pas le fichier source.
+    ("has_photo", pa.bool_()),
     ("search_key", _STR),
 ])
 
@@ -215,6 +220,7 @@ def transform(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFram
         titre = normalize_text(row.Titre_editorial_de_la_notice)
         commune = normalize_text(row.Commune_forme_editoriale)
         historique = normalize_text(row.Historique)
+        images = _images_commons().get(ref, [])
 
         if lat is not None:
             report.geolocalisees += 1
@@ -243,6 +249,7 @@ def transform(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFram
                                          row.Statut_juridique_de_l_edifice),
             "nb_palissy": len(palissy),
             "has_historique": bool(historique),
+            "has_photo": bool(images),
             "search_key": search_key(titre, commune,
                                      normalize_text(row.Departement_en_lettres)),
         })
@@ -264,7 +271,7 @@ def transform(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFram
             "liens_externes": parse_links(row.Liens_externes),
             "palissy": palissy,
             "renvois": split_multi(row.Renvoi_vers_une_notice_de_la_base_Merimee_ou_Palissy),
-            "commons": _images_commons().get(ref, []),
+            "commons": images,
             "memoire": _illustrations_memoire().get(ref, 0),
         })
 

@@ -55,6 +55,49 @@ filtre et la fiche. **Les couleurs n'ont pas bougé** : la teinte la plus dense 
 déjà le niveau le plus fort. Frise ouverte sur gabarit étroit (`.compacte`), titre et
 gloses cèdent et les clés reviennent à plat.
 
+**Caméra.** Tout ce qui déplace la vue vers une notice passe par `MonumentMap` ; les
+calculs — ce qui est visible, où viser — sont dans `lib/carte/camera.ts`, pur et testé
+en Vitest. La page fournit `marges` : ce que chaque panneau ouvert masque sur chaque
+bord (fiche à droite, tiroir posé à gauche, feuille du téléphone en bas), largeurs
+**mesurées** par `bind:clientWidth`, jamais recopiées de la feuille de style. Cinq
+règles :
+
+- **toucher un point ne déplace rien**, on voit déjà où il est — sauf s'il tombe sous
+  un panneau : la carte glisse alors (`easeTo`), sans changer de zoom. Le même effet
+  rejoue quand les marges changent ;
+- **choisir une notice ailleurs que sur la carte la rapproche** (`approcher`) : sous
+  z11, vol jusqu'à z14,5 ; au-delà, vol à zoom constant seulement si elle est hors
+  champ. `flyTo` et non `easeTo` : la ligne suivante d'une liste peut être à l'autre
+  bout du pays. Carte masquée par la liste, le vol devient un saut ;
+- **un lien `?ref=` sans `c=` s'ouvre sur sa notice**, une seule fois, sans animation,
+  dès que le nuage la porte. Avec `c=`, la vue de l'expéditeur l'emporte ;
+- **« Au hasard » vole** (`survoler`), à la manière d'Earth : `flyTo` avec `minZoom` au
+  zoom qui cadre la métropole, ce qui donne le recul puis la descente, et une durée
+  **fixe** de 3,8 s. Pas `maxDuration` : MapLibre ne plafonne pas un vol trop long, il
+  le **remplace par un saut** (`duration = 0`, lu dans sa source 4.7.1). La fiche
+  s'ouvre à l'arrivée ; celle qui était ouverte se ferme au décollage. Un fond
+  historique est suspendu le temps du vol — une dizaine de niveaux de zoom traversés,
+  à ~170 Ko la tuile Cassini ;
+- **`offset`, jamais l'option `padding`** pour viser le centre de la part visible :
+  `padding` reste posé sur la carte après le mouvement et décale tout ce qui suit,
+  `getCenter` compris, donc la vue copiée dans un lien.
+
+`survoler` pose son écouteur `moveend` **après** `flyTo` : celui-ci commence par
+arrêter le mouvement en cours, ce qui émet un `moveend` qui n'est pas le sien. Et sous
+mouvement réduit le saut est déjà fini à ce point — d'où le test `isMoving()` plutôt
+qu'un écouteur qui n'entendrait plus rien.
+
+**L'épingle de sélection est un `Marker`**, du DOM peint par jetons dans `app.css`
+(`--carte-selection`, comme l'anneau) : elle survit à `setStyle` sans passer par
+`poserCouches`, et ne capte aucun pointeur. L'anneau de 11 px reste dessous ; à
+l'échelle d'une ville, il ne suffisait pas à dire où regarder.
+
+**L'infobulle de survol nomme l'édifice**, au pointeur fin seulement. Le nuage ne
+porte que la référence : le nom vient de `etiquette()`, retardée de 120 ms pour qu'un
+balayage n'émette pas une requête par point traversé, et gardée en mémoire. Contenu
+posé par `textContent` + `setDOMContent`, **jamais `setHTML`** — c'est le chemin de
+l'avis GHSA-jrc7-96c5-q579. Elle se retire à l'ouverture de la fiche.
+
 **Un toucher vise une boîte, pas un pixel.** L'écouteur de couche MapLibre
 (`map.on('click', 'monuments-points')`) ne répond qu'au pixel exact d'un cercle : un
 point mesure 1,2 à 4,5 px de rayon jusqu'à z10, et au doigt le toucher relevait du

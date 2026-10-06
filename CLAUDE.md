@@ -38,7 +38,7 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `etl/merimee_etl/commons.py` | second instantané photo, séparé de `wikidata.py` — lancé à part |
 | `etl/merimee_etl/memoire.py` | compte les illustrations POP **sans les reprendre** — lancé à part |
 | `web/static/data/points.json` | nuage du premier écran (446 Ko gzip), écrit par `build.py::points_colonnaires`, remplacé par DuckDB dès sa première réponse |
-| `etl/tests/test_pipeline.py` | 78 tests : unitaires sur les cas tordus + intégration sur les artefacts (sautée d'elle-même sans eux) |
+| `etl/tests/test_pipeline.py` | 79 tests : unitaires sur les cas tordus + intégration sur les artefacts (sautée d'elle-même sans eux) |
 | `etl/tests/test_annexes.py` | 24 tests : fonctions pures des scripts annexes (`wikidata.py`, `commons.py`) et des alias, sans réseau |
 | `etl/out/rejets.csv` | segments hors-format rencontrés, jamais supprimés silencieusement |
 | `.nvmrc` / `.github/workflows/ci.yml` | version Node lue par la CI ; workflow GitHub Actions (jobs `etl` et `web`), jamais l'ETL complet ni `tests/e2e/` |
@@ -54,15 +54,15 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `web/src/lib/teinte.ts` | repeint le fond clair par **nature de couche**, jamais par identifiant |
 | `web/src/lib/state/carte.svelte.ts` | ce que la carte a réellement peint — le seul témoin d'un repeint muet |
 | `web/src/lib/carte/fonds.ts` | table des fonds historiques IGN et construction des tuiles — extrait de `MonumentMap.svelte` |
-| `web/src/lib/carte/camera.ts` | cadrage, calculs purs : emprise de départ, marges, et quand taire la vue dans un lien copié |
+| `web/src/lib/carte/camera.ts` | cadrage, calculs purs : emprise de départ, part visible sous les panneaux, décalage de visée, et quand taire la vue dans un lien copié |
 | `web/src/lib/statuts.ts` | libellé, glose et définition de chaque niveau de protection — source unique de la légende |
 | `web/src/lib/photo.ts` | cadrage des photographies de fiche, calculs purs — extrait de `DetailPanel.svelte` |
 | `web/src/lib/format.ts` | `romain`, `nf`, formats de nombres — étaient recopiés dans plusieurs composants |
 | `web/src/service-worker.ts` | cache des actifs hachés uniquement |
 | `web/scripts/precharger.mjs` | injecte le préchargement du wasm dans le shell HTML après build, chaîné à `build` et `build:pages` |
 | `web/src/lib/components/` | `MonumentMap`, `FacetPanel`, `Jetons`, `Timeline`, `DetailPanel` |
-| `web/tests/e2e/` | 254 vérifications en Chromium réel : 13 fichiers `NN-domaine.spec.ts` + `_soutien.ts` (`verifier()` adossé à `expect.soft`), `playwright.config.ts` en `workers: 1` / `retries: 0` |
-| `web/tests/unit/` | 73 tests Vitest sur la logique pure : `buildWhere`, `permalien`, `shards`, `teinte`, `points`, `acr`, `camera`, distances |
+| `web/tests/e2e/` | 294 vérifications en Chromium réel : 14 fichiers `NN-domaine.spec.ts` + `_soutien.ts` (`verifier()` adossé à `expect.soft`), `playwright.config.ts` en `workers: 1` / `retries: 0` |
+| `web/tests/unit/` | 79 tests Vitest sur la logique pure : `buildWhere`, `permalien`, `shards`, `teinte`, `points`, `acr`, `camera`, distances |
 | `web/tests/apercu-social.mjs` | régénère la vignette Open Graph depuis l'application |
 | `web/tests/audit-visuel.mjs` | 104 captures + relevés WCAG chiffrés, **hors** `npm run test` |
 
@@ -75,11 +75,11 @@ cd etl  && python -m merimee_etl.commons   # complète par les fichiers citant l
 cd etl  && python -m merimee_etl.wikidata --acr  # idem pour la couche ACR (après l'ETL)
 cd etl  && python -m merimee_etl.commons --acr
 cd etl  && python -m merimee_etl.memoire   # compte les illustrations POP, 1,36 Go lus en flux
-cd etl  && python -m pytest tests -q    # 102 tests (78 + 24 dans test_annexes.py)
+cd etl  && python -m pytest tests -q    # 103 tests (79 + 24 dans test_annexes.py)
 cd web  && npm run dev                  # http://localhost:5173
 cd web  && npm run check                # svelte-check, doit rester à 0/0
-cd web  && npm run test:unit            # Vitest, 73 tests, logique pure
-cd web  && npm run build && npm run test # build statique + 254 vérifications en Chromium (tests/e2e/)
+cd web  && npm run test:unit            # Vitest, 79 tests, logique pure
+cd web  && npm run build && npm run test # build statique + 294 vérifications en Chromium (tests/e2e/)
 cd web  && npm run apercu               # régénère static/apercu-social.png
 cd web  && npm run audit                # 104 captures + relevés dans .audit-screenshots/
 cd web  && npm run deploy               # predeploy (check + test:unit) puis build /Merimee + push sur gh-pages
@@ -154,6 +154,8 @@ avant de toucher à ce domaine** : cet index oriente, il ne remplace pas la lect
 - `liseret()` reste un effet séparé — le fusionner avec la palette ou les fonds réintroduit l'`AbortError` ou une saccade
 - `pixelRatio` plafonné à 2
 - le wasm est préchargé (`precharger.mjs`) puis refetché en `blob:` par le document, jamais laissé au worker — sinon deux copies, 68,5 Mo
+- un conteneur défilant opaque sous un parent translaté masque le canevas ailleurs ; le défaut ne se voit pas dans une capture `clip`
+- `flyTo` : `maxDuration` dépassé = saut, pas vol ; écouter `moveend` **après** l'appel
 - `points.json` peint le premier écran avant le moteur : JSON (gzippé par Pages) et non binaire, même passe que `monuments.parquet`, jamais en cache SW, jamais demandé avec un filtre dans l'URL
 
 ### Données et requêtes — [docs/conception-donnees.md](docs/conception-donnees.md)
@@ -162,7 +164,7 @@ avant de toucher à ce domaine** : cet index oriente, il ne remplace pas la lect
 - colonnes mortes retirées des Parquet, jamais lues côté navigateur : **−10 % sur `monuments.parquet`**
 - une facette annonce ce qu'elle cache, sans son propre filtre ; sa recherche descend en SQL (40 valeurs affichées, tout le reste cherchable)
 - plein texte précalculé par l'ETL, résolu **une fois par cycle** dans une table temporaire (LRU 8), pas réinjecté à chaque requête
-- `USING SAMPLE` ignore le filtre — « Au hasard » veut `ORDER BY random()` ; `has_historique` y est un ordre, pas un filtre
+- `USING SAMPLE` ignore le filtre — « Au hasard » veut `ORDER BY random()` ; `has_historique` et `has_photo` y sont des ordres, pas des filtres
 - le retour arrière lit `location` sur `popstate`, jamais `page.url` — SvelteKit y garde l'adresse du chargement sous `pushState`/`replaceState`
 - deux filtres ont un miroir hors de `filters` (recherche, bbox) qu'un simple `retirer()` ne suffit pas à effacer
 - permalien : paramètre répété pour les valeurs multiples, `bbox` exclue, vue à part (tue si elle montre la position de l'utilisateur), comparaison de chaînes normalisées ; seule l'ouverture d'une fiche empile, la fermeture remplace
@@ -178,6 +180,8 @@ avant de toucher à ce domaine** : cet index oriente, il ne remplace pas la lect
 - les commandes de la carte sont rangées par question : légende, fonds historiques, zoom, zone visible
 - la vue de départ est une emprise (`METROPOLE`) cadrée avec marges, plus un centre et un zoom fixes
 - la légende porte un titre et une glose par niveau de protection (`lib/statuts.ts`) ; les couleurs ne bougent pas
+- caméra : toucher ne bouge rien sauf sous un panneau, la liste rapproche, `?ref=` sans `c=` centre, « Au hasard » vole ; `offset`, jamais `padding`
+- épingle de sélection en `Marker` DOM, infobulle de survol par `setDOMContent`, jamais `setHTML`
 - le fond clair est repeint couche par couche **par nature**, jamais par identifiant CARTO
 - le thème sombre n'est pas repeint : `teinter()` sort immédiatement
 - le liseré des points vaut le sol, et bascule au sombre sous un fond historique ≥ 50 % d'opacité
@@ -204,6 +208,7 @@ avant de toucher à ce domaine** : cet index oriente, il ne remplace pas la lect
 - tout `:hover` vit sous `@media (hover: hover)`, toute couleur vit dans `app.css` — vérifiés par lecture de source (`11-sources.spec.ts`)
 - trois défauts mobiles partagés : `100dvh`, `overscroll-behavior: contain`, un seul redessin de graphique par image
 - les jetons `--sa-*` (+ `viewport-fit=cover`) tiennent la mise en page hors des zones physiques iOS
+- `.scene` en `overflow: clip` ; le fond de la fiche sur `.fiche-hote`, jamais sur `.fiche` qui défile
 - la feuille de fiche doit avoir une **hauteur définie** (flex, pas grille + `max-height`) sinon elle ne défile pas ; crans par `transform`, aperçu non modal
 - sous 768 px les vues passent en onglets au pied (`.onglets`), `.bascule`/`.replier` masqués ; champs à 16 px au doigt contre le zoom iOS
 
