@@ -39,8 +39,8 @@ test('fiche et photographies', async () => {
       [...infos.octets].filter(([c]) => c.startsWith('/data/details/')).reduce((s, [, n]) => s + n, 0);
     const avantFiche = cumulDetails();
     await page.locator('.bascule button', { hasText: 'Liste' }).click();
-    await attendre(page, '.liste button');
-    await page.locator('.liste button').first().click();
+    await attendre(page, '.liste li button');
+    await page.locator('.liste li button').first().click();
     await attendre(page, '.fiche .fermer');
     const titre = await page.textContent('.fiche h2');
     verifier('fiche ouverte', titre !== 'Fiche du monument', titre ?? '');
@@ -164,7 +164,9 @@ test('fiche et photographies', async () => {
     });
     verifier(
       'la fiche sans photo s ouvre sur son titre',
-      nu.nu && nu.hauteur < 80 && nu.pastilles === 2,
+      // Une seule pastille sur la bande : fermer. Copier le lien a rejoint la
+      // rangee d'actions, sous le titre.
+      nu.nu && nu.hauteur < 80 && nu.pastilles === 1,
       `bande de ${Math.round(nu.hauteur)} px, ${nu.pastilles} pastilles, titre a ${Math.round(nu.titre)} px`
     );
     const renvoi = page.locator('.fiche .renvoi-photo');

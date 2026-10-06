@@ -64,7 +64,7 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `web/src/service-worker.ts` | cache des actifs hachés uniquement |
 | `web/scripts/precharger.mjs` | injecte le préchargement du wasm dans le shell HTML après build, chaîné à `build` et `build:pages` |
 | `web/src/lib/components/` | `MonumentMap` (rendu seul), `Recherche`, `Calques`, `Legende`, `ListeResultats`, `PucesFiltres`, `FacetPanel` (aussi par section : `seules`), `Jetons`, `Timeline`, `DetailPanel` |
-| `web/tests/e2e/` | 370 vérifications en Chromium réel : 17 fichiers `NN-domaine.spec.ts` + `_soutien.ts` (`verifier()` adossé à `expect.soft`), `playwright.config.ts` en `workers: 1` / `retries: 0` |
+| `web/tests/e2e/` | 385 vérifications en Chromium réel : 18 fichiers `NN-domaine.spec.ts` + `_soutien.ts` (`verifier()` adossé à `expect.soft`), `playwright.config.ts` en `workers: 1` / `retries: 0` |
 | `web/tests/unit/` | 86 tests Vitest sur la logique pure : `buildWhere`, `permalien`, `shards`, `teinte`, `points`, `acr`, `camera`, `recherche`, distances |
 | `web/tests/apercu-social.mjs` | régénère la vignette Open Graph depuis l'application |
 | `web/tests/audit-visuel.mjs` | 120 captures + relevés WCAG chiffrés, **hors** `npm run test` |
@@ -82,7 +82,7 @@ cd etl  && python -m pytest tests -q    # 103 tests (79 + 24 dans test_annexes.p
 cd web  && npm run dev                  # http://localhost:5173
 cd web  && npm run check                # svelte-check, doit rester à 0/0
 cd web  && npm run test:unit            # Vitest, 86 tests, logique pure
-cd web  && npm run build && npm run test # build statique + 370 vérifications en Chromium (tests/e2e/)
+cd web  && npm run build && npm run test # build statique + 385 vérifications en Chromium (tests/e2e/)
 cd web  && npm run apercu               # régénère static/apercu-social.png
 cd web  && npm run audit                # 120 captures + relevés dans .audit-screenshots/
 cd web  && npm run deploy               # predeploy (check + test:unit) puis build /Merimee + push sur gh-pages
@@ -211,6 +211,8 @@ avant de toucher à ce domaine** : cet index oriente, il ne remplace pas la lect
 - le focus suit les calques ouverts par un geste, jamais ceux posés par un permalien, toujours en `preventScroll` ; `inert` est posé depuis la page, tiroir fermé compris
 - `Échap` global ferme le calque le plus haut ; les composants qui le gèrent localement appellent `preventDefault`
 - deux états vides (`.vide-liste`, `.vide-carte`) évitent qu'un filtre trop serré laisse un écran blanc
+- fiche : rangée d'actions (voir sur la carte, itinéraire OSM, partager au doigt, copier le lien), statut glosé, flèches entre photos, « À proximité » sans les filtres, fermer = retour à la liste quand elle est dessous
+- liste : siècle et pastille de statut, ordres mobilier/pertinence, A–Z, proximité ; pagination par 200 ; survol d'une ligne = anneau sur la carte
 - les cibles touchent 44 px par un `::after` transparent, jamais par un agrandissement de la pilule
 - tout `:hover` vit sous `@media (hover: hover)`, toute couleur vit dans `app.css` — vérifiés par lecture de source (`11-sources.spec.ts`)
 - trois défauts mobiles partagés : `100dvh`, `overscroll-behavior: contain`, un seul redessin de graphique par image
@@ -270,9 +272,8 @@ mesurée), pas le *quoi*.
   Guerre de Cent Ans et Révolution sur l'axe *construction*, 1840 (première liste
   Mérimée), 1913 (loi) et 1962 (Malraux) sur l'axe *protection*. Les mélanger sur une
   seule frise serait faux.
-- Export CSV de la sélection courante, et liste paginée au-delà des 200 lignes.
-- Filtres « figures » préréglés (Vauban, Guimard, Le Corbusier) en un clic, au-dessus
-  de la facette auteurs existante. Devenus de simples liens depuis les permaliens.
+- Export CSV de la sélection courante (la liste, elle, se pagine désormais au-delà de
+  200 lignes ; les filtres « figures » sont devenus les raccourcis du champ vide).
 - Exploitation NLP des 23,6 Mo de texte libre. **L'indexation lexicale est faite**
   (`texte.py`, BM25) sur les 15,1 Mo d'`historique` ; ce qui reste est l'extraction
   d'entités, et `precision_protection` — 6,7 Mo de langue d'arrêtés — n'est pas indexé.

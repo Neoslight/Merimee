@@ -53,6 +53,8 @@
      *  point choisi qui tomberait dessous est ramene dans la part visible — on
      *  toucherait sinon un monument pour ne plus le voir. */
     marges?: Marges;
+    /** Notice survolee dans la liste : son point est mis en evidence. */
+    survol?: string | null;
     /** Nom et commune d'une notice, pour l'infobulle de survol. Fournie par la
      *  page : la carte ne connait pas DuckDB, elle ne recoit que des points. */
     etiquette?: (reference: string) => Promise<Etiquette | null>;
@@ -76,6 +78,7 @@
     densite,
     suivreVue = $bindable(),
     marges = SANS_MARGE,
+    survol = null,
     etiquette,
     acr = false,
     pointsAcr = null,
@@ -367,6 +370,23 @@
         'circle-stroke-color': palette.carteSelection,
         'circle-stroke-width': 2,
         'circle-radius': 11
+      }
+    });
+
+    // Le point d'une ligne de liste survolee : un anneau plus large et plus
+    // leger que celui de la selection, pour qu'on ne confonde pas « je regarde »
+    // et « j'ai choisi ».
+    map.addLayer({
+      id: 'monuments-survol',
+      type: 'circle',
+      source: 'monuments',
+      filter: ['==', ['get', 'reference'], untrack(() => survol) ?? ''],
+      paint: {
+        'circle-color': 'transparent',
+        'circle-stroke-color': palette.carteSelection,
+        'circle-stroke-width': 3,
+        'circle-stroke-opacity': 0.55,
+        'circle-radius': 15
       }
     });
 
@@ -668,6 +688,11 @@
 
   $effect(() => {
     if (!pret) return;
+    carte?.setFilter('monuments-survol', ['==', ['get', 'reference'], survol ?? '']);
+  });
+
+  $effect(() => {
+    if (!pret) return;
     carte?.setFilter('monuments-selection', ['==', ['get', 'reference'], selection ?? '']);
     carte?.setFilter('acr-selection', ['==', ['get', 'reference'], selection ?? '']);
   });
@@ -764,6 +789,16 @@
       offset: decalage(marges),
       ...(anime ? {} : { duration: 0 })
     });
+  }
+
+  /** « Voir sur la carte » : vol jusqu'a l'edifice, au zoom d'un edifice,
+   *  qu'il soit deja a l'ecran ou non. */
+  export function centrer(reference: string): void {
+    const map = carte;
+    if (!map || !pret) return;
+    const ou = coordonnees(reference);
+    if (!ou) return;
+    map.flyTo({ center: ou, zoom: Math.max(map.getZoom(), ZOOM_EDIFICE), offset: decalage(marges) });
   }
 
   /**
@@ -919,6 +954,7 @@
     // une couleur inchangee. Il vit dans l'effet des fonds historiques, qui
     // porte deja ces deux dependances.
     carte.setPaintProperty('monuments-selection', 'circle-stroke-color', palette.carteSelection);
+    carte.setPaintProperty('monuments-survol', 'circle-stroke-color', palette.carteSelection);
     carte.setPaintProperty('acr-points', 'circle-color', palette.acr);
     carte.setPaintProperty('acr-selection', 'circle-stroke-color', palette.carteSelection);
     carte.setPaintProperty('monuments-densite', 'heatmap-color', rampeChaleur());

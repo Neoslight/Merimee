@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { formaterDistance, nf } from '$lib/format';
+  import { formaterDistance, nf, romain } from '$lib/format';
   import { palette } from '$lib/state/theme.svelte';
   import { STATUTS } from '$lib/statuts';
   import type { Ligne, Totaux } from '$lib/db/queries';
@@ -8,9 +8,9 @@
     resultats: Ligne[];
     compteurs: Totaux | null;
     selection: string | null;
-    /** Ordre de la liste. `null` tant qu'aucune position n'est connue :
-     *  proposer un tri par distance sans position serait un bouton mort. */
-    tri: 'pertinence' | 'proximite';
+    /** Ordre de la liste. La distance n'est proposee qu'une position connue :
+     *  un tri par distance sans position serait un bouton mort. */
+    tri: 'pertinence' | 'alpha' | 'proximite';
     proposerProximite: boolean;
     /** Le classement est celui du plein texte (BM25), pas du mobilier. */
     pertinence: boolean;
@@ -20,6 +20,10 @@
     oneffacer: () => void;
     /** Defilement de la liste : en feuille d'apercu, la page la deplie. */
     ondefile?: () => void;
+    /** Ligne survolee : la carte met son point en evidence. */
+    onsurvol?: (reference: string | null) => void;
+    /** Demande les lignes suivantes. */
+    onsuite?: () => void;
   }
 
   let {
@@ -32,7 +36,9 @@
     portee,
     onouvrir,
     oneffacer,
-    ondefile
+    ondefile,
+    onsurvol,
+    onsuite
   }: Props = $props();
 
   const proche = $derived(tri === 'proximite' && proposerProximite);
@@ -59,11 +65,13 @@
       {compteurs ? nf.format(compteurs.total) : '—'} notices
       {#if compteurs && compteurs.total > resultats.length}
         <em>
-          (200 premières, {proche
+          ({nf.format(resultats.length)} premières, {proche
             ? 'les plus proches'
-            : pertinence
-              ? 'les plus pertinentes'
-              : 'les plus riches en mobilier'})
+            : tri === 'alpha'
+              ? 'dans l’ordre alphabétique'
+              : pertinence
+                ? 'les plus pertinentes'
+                : 'les plus riches en mobilier'})
         </em>
       {/if}
     </h3>
@@ -73,16 +81,18 @@
         absentes de la carte{proche ? ' et de ce tri' : ''}
       </p>
     {/if}
-    {#if proposerProximite}
-      <div class="tri" role="group" aria-label="Ordre de la liste">
-        <button class="frappe-44-v" class:actif={tri === 'pertinence'} aria-pressed={tri === 'pertinence'}
-                onclick={() => (tri = 'pertinence')}>
-          {pertinence ? 'Pertinence' : 'Mobilier'}
-        </button>
+    <div class="tri" role="group" aria-label="Ordre de la liste">
+      <button class="frappe-44-v" class:actif={tri === 'pertinence'} aria-pressed={tri === 'pertinence'}
+              onclick={() => (tri = 'pertinence')}>
+        {pertinence ? 'Pertinence' : 'Mobilier'}
+      </button>
+      <button class="frappe-44-v" class:actif={tri === 'alpha'} aria-pressed={tri === 'alpha'}
+              onclick={() => (tri = 'alpha')}>A–Z</button>
+      {#if proposerProximite}
         <button class="frappe-44-v" class:actif={tri === 'proximite'} aria-pressed={tri === 'proximite'}
                 onclick={() => (tri = 'proximite')}>À proximité</button>
-      </div>
-    {/if}
+      {/if}
+    </div>
     <!-- Le plafond de la recherche plein texte se dit : une notice sur deux ne
          porte aucun historique, et un resultat vide serait autrement
          indiscernable d'un filtre trop serre. -->
@@ -102,18 +112,33 @@
     <ul>
       {#each resultats as ligne (ligne.reference)}
         <li>
-          <button class:choisi={selection === ligne.reference} onclick={() => onouvrir(ligne.reference)}>
+          <button class:choisi={selection === ligne.reference} onclick={() => onouvrir(ligne.reference)}
+                  onmouseenter={() => onsurvol?.(ligne.reference)} onmouseleave={() => onsurvol?.(null)}>
             <i class="pastille" style="background:{teinte(ligne.statut)}" aria-hidden="true"></i>
             <span class="nom">{ligne.titre}</span>
             <span class="meta">
               {#if ligne.distance_m != null}<b class="distance">à {formaterDistance(ligne.distance_m)}</b> · {/if}
-              {ligne.commune} · {ligne.departement_nom}
-              {#if ligne.nb_palissy > 0}· {nf.format(ligne.nb_palissy)} objets{/if}
+              {[
+                ligne.commune,
+                ligne.departement_nom,
+                ligne.siecle ? `${romain(ligne.siecle)}e s.` : null,
+                ligne.nb_palissy > 0 ? `${nf.format(ligne.nb_palissy)} objets` : null
+              ]
+                .filter(Boolean)
+                .join(' · ')}
             </span>
           </button>
         </li>
       {/each}
     </ul>
+    <!-- Au-dela de 200 lignes, la suite se demande : tout charger d'un coup
+         rendrait des milliers de boutons pour une liste qu'on parcourt du
+         doigt. -->
+    {#if onsuite && compteurs && compteurs.total > resultats.length && resultats.length > 0}
+      <button class="suite" onclick={onsuite}>
+        Afficher {nf.format(Math.min(200, compteurs.total - resultats.length))} notices de plus
+      </button>
+    {/if}
     {#if compteurs && compteurs.total === 0}
       <!-- En mode historiques, `.portee` dit deja pourquoi — le plafond
            structurel et les mots inconnus — pas de doublon, seul le bouton
@@ -262,6 +287,26 @@
   .meta .distance {
     font-weight: 600;
     color: var(--position);
+  }
+
+  .suite {
+    display: block;
+    margin: 4px auto 18px;
+    padding: 8px 18px;
+    border: 1px solid var(--bord-appuye);
+    border-radius: var(--r-pilule);
+    background: transparent;
+    color: var(--texte-moyen);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .suite:hover {
+      border-color: var(--inscrit);
+      color: var(--inscrit-texte);
+    }
   }
 
   /* Pose au fil de la liste plutot qu'en surface flottante : elle n'a rien a

@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { detail, type Detail } from '$lib/db/queries';
+  import { detail, voisins as chercherVoisins, type Detail, type Voisin } from '$lib/db/queries';
+  import { STATUTS } from '$lib/statuts';
+  import { palette } from '$lib/state/theme.svelte';
   import { ficheAcr } from '$lib/db/acr';
   import { estAcr, libelleLabel } from '$lib/acr';
   import { formaterDistance, nf, romain } from '$lib/format';
@@ -23,9 +25,65 @@
      *  le signal que la page attend pour deplier la feuille : on ne lit pas un
      *  historique dans 45 % d'ecran. */
     ondefile?: () => void;
+    /** La fiche a ete ouverte depuis la liste, qui l'attend dessous : fermer,
+     *  c'est revenir. La croix devient une fleche, et le dit. */
+    retour?: boolean;
+    /** Partage natif du systeme, seulement la ou il existe (telephones) : le
+     *  lien se copie partout ailleurs. */
+    onpartager?: () => void;
+    /** Ramene la carte sur l'edifice, au zoom d'un edifice. */
+    oncentrer?: () => void;
+    /** Ouvre la fiche d'un voisin. */
+    onvoisin?: (reference: string) => void;
   }
 
-  let { reference, copie, oncopier, onclose, ontitre, ondefile }: Props = $props();
+  let {
+    reference,
+    copie,
+    oncopier,
+    onclose,
+    ontitre,
+    ondefile,
+    retour = false,
+    onpartager,
+    oncentrer,
+    onvoisin
+  }: Props = $props();
+
+  /** Le statut, dit en mots : libelle et glose de la legende. */
+  const statut = $derived(STATUTS.find((x) => x.valeur === fiche?.statut) ?? null);
+
+  // --- A proximite -------------------------------------------------------------
+  // Les cinq notices les plus proches, sans les filtres poses : la question
+  // est « qu'y a-t-il autour ? ». Pas pour une notice ACR, ni sans coordonnees.
+  let proches = $state.raw<Voisin[]>([]);
+
+  $effect(() => {
+    const f = fiche;
+    proches = [];
+    if (!f || f.acr || f.lon === null || f.lat === null) return;
+    let annule = false;
+    chercherVoisins(f.reference, f.lon, f.lat)
+      .then((liste) => {
+        if (!annule) proches = liste;
+      })
+      .catch(() => {
+        // Sans voisins, la section ne s'affiche pas : rien a signaler.
+      });
+    return () => {
+      annule = true;
+    };
+  });
+
+  function teinte(valeur: string): string {
+    const s = STATUTS.find((x) => x.valeur === valeur);
+    return s ? palette[s.jeton] : palette.statutNul;
+  }
+
+  /** Itineraire vers l'edifice, chez OpenStreetMap : le fond de carte en vient
+   *  deja, et le lien n'emporte rien de l'utilisateur. */
+  const itineraire = (lat: number, lon: number) =>
+    `https://www.openstreetmap.org/directions?to=${lat.toFixed(5)}%2C${lon.toFixed(5)}`;
 
   /** Distance a l'utilisateur, si sa position est connue et la notice situee. */
   const distance = $derived.by(() => {
@@ -171,8 +229,22 @@
    */
   let glissement: { x: number; y: number; px: number; py: number } | null = null;
 
+  /** Image precedente ou suivante, en boucle : la bande de vignettes ne se
+   *  parcourait qu'au toucher de chacune (ANO-49). */
+  function changerImage(pas: number) {
+    if (images.length < 2) return;
+    imageChoisie = (Math.min(imageChoisie, images.length - 1) + pas + images.length) % images.length;
+  }
+
+  // Au doigt, un balayage horizontal change d'image — sauf sur une image
+  // recadree, ou le meme geste la fait glisser dans son cadre.
+  let balayage: { x: number; y: number } | null = null;
+
   function saisir(event: PointerEvent) {
-    if (!recadree) return;
+    if (!recadree) {
+      if (event.pointerType === 'touch' && images.length > 1) balayage = { x: event.clientX, y: event.clientY };
+      return;
+    }
     const boite = event.currentTarget as HTMLElement;
     boite.setPointerCapture(event.pointerId);
     glissement = { x: event.clientX, y: event.clientY, px: cadrageX, py: cadrageY };
@@ -192,8 +264,14 @@
     cadrageY = resultat.y;
   }
 
-  function relacher() {
+  function relacher(event?: PointerEvent) {
     glissement = null;
+    const b = balayage;
+    balayage = null;
+    if (!b || !event) return;
+    const dx = event.clientX - b.x;
+    const dy = event.clientY - b.y;
+    if (Math.abs(dx) > 40 && Math.abs(dy) < 40) changerImage(dx < 0 ? 1 : -1);
   }
 
   function signalerCassee(nom: string) {
@@ -294,8 +372,14 @@
               onload={(e) => mesurer(e.currentTarget as HTMLImageElement)}
               onerror={() => signalerCassee(courante)}
               onpointerdown={saisir} onpointermove={deplacer}
-              onpointerup={relacher} onpointercancel={relacher}
+              onpointerup={relacher} onpointercancel={() => relacher()}
             />
+            {#if images.length > 1}
+              <button class="defiler precedente frappe-44" aria-label="Photographie précédente"
+                      onclick={() => changerImage(-1)}>‹</button>
+              <button class="defiler suivante frappe-44" aria-label="Photographie suivante"
+                      onclick={() => changerImage(1)}>›</button>
+            {/if}
           </div>
           {#if images.length > 1}
             <div class="bande">
@@ -318,28 +402,16 @@
         </figure>
       {/if}
 
-      <button class="pastille fermer frappe-44" onclick={onclose} aria-label="Fermer la fiche">
-        <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-          <polyline points="8.5,2.5 4,7 8.5,11.5" stroke="currentColor" stroke-width="1.5"
-                    stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
-      </button>
-      <!-- Le nom accessible differe du libelle de la barre : deux boutons de
-           meme nom seraient indiscernables, pour un lecteur d'ecran comme pour
-           un test. -->
-      <button class="pastille copier frappe-44" onclick={oncopier}
-              aria-label="Copier le lien de la notice">
-        {#if copie}
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-            <polyline points="2.5,7.5 5.5,10.5 11.5,3.5" stroke="currentColor"
-                      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+      <button class="pastille fermer frappe-44" onclick={onclose}
+              aria-label={retour ? 'Retour à la liste' : 'Fermer la fiche'}>
+        {#if retour}
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <polyline points="8.5,2.5 4,7 8.5,11.5" stroke="currentColor" stroke-width="1.5"
+                      stroke-linecap="round" stroke-linejoin="round" />
           </svg>
         {:else}
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-            <rect x="1.75" y="1.75" width="7.5" height="7.5" rx="1.6"
-                  stroke="currentColor" stroke-width="1.3" />
-            <rect x="4.75" y="4.75" width="7.5" height="7.5" rx="1.6"
-                  stroke="currentColor" stroke-width="1.3" fill="var(--fond-carte)" />
+          <svg width="12" height="12" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
           </svg>
         {/if}
       </button>
@@ -360,8 +432,12 @@
           </span>
           {#if fiche.siecle_detail}<span class="badge sourd">{fiche.siecle_detail}</span>{/if}
         {:else}
-          <span class="badge {fiche.statut === 'classé' ? 'or' : fiche.statut === 'inscrit' ? 'bleu' : 'violet'}">
-            {fiche.statut}{fiche.partiel ? ' (partiellement)' : ''}
+          <!-- Le statut dit en mots, avec sa glose : « classé » seul ne disait ni
+               la hierarchie ni ce que le cas mixte designe. Texte de la legende,
+               `lib/statuts.ts`. -->
+          <span class="badge {fiche.statut === 'classé' ? 'or' : fiche.statut === 'inscrit' ? 'bleu' : 'violet'}"
+                title={statut?.definition}>
+            {statut?.libelle ?? fiche.statut}{fiche.partiel ? ' (partiellement)' : ''}
           </span>
           {#if fiche.siecles.length}
             <span class="badge sourd">{fiche.siecles.map(romain).join(' · ')}</span>
@@ -369,7 +445,26 @@
           {#each fiche.periodes as periode}<span class="badge sourd">{periode}</span>{/each}
         {/if}
       </p>
+      {#if !acr && statut}
+        <p class="glose-statut">{statut.glose}</p>
+      {/if}
+      <!-- Ce qu'on fait d'un lieu, a la maniere des cartes en ligne : le voir,
+           y aller, le partager. Puis ce qu'on en lit ailleurs. -->
       <p class="actions">
+        {#if oncentrer && fiche.lon !== null}
+          <button class="action" onclick={oncentrer}>Voir sur la carte</button>
+        {/if}
+        {#if fiche.lat !== null && fiche.lon !== null}
+          <a class="action" href={itineraire(fiche.lat, fiche.lon)} target="_blank" rel="noreferrer">Itinéraire ↗</a>
+        {/if}
+        {#if onpartager}
+          <button class="action" onclick={onpartager}>Partager</button>
+        {/if}
+        <!-- Le nom accessible dit de quoi c'est le lien : un « copier le lien »
+             nu se confondrait avec celui d'un autre panneau. -->
+        <button class="action copier" onclick={oncopier} aria-label="Copier le lien de la notice">
+          {copie ? 'Lien copié' : 'Copier le lien'}
+        </button>
         <a href={popUrl(fiche.reference)} target="_blank" rel="noreferrer">
           Notice POP {fiche.reference} ↗
         </a>
@@ -497,6 +592,23 @@
     </section>
     {/if}
 
+    {#if proches.length}
+      <section>
+        <h3>À proximité</h3>
+        <ul class="proches">
+          {#each proches as v (v.reference)}
+            <li>
+              <button onclick={() => onvoisin?.(v.reference)}>
+                <i style="background:{teinte(v.statut)}" aria-hidden="true"></i>
+                <span class="nom-proche">{v.titre}</span>
+                <span class="meta-proche">{v.commune} · {formaterDistance(v.distance_m)}</span>
+              </button>
+            </li>
+          {/each}
+        </ul>
+      </section>
+    {/if}
+
     {#if fiche.palissy.length}
       <section>
         <h3>Objets mobiliers <em>{nf.format(fiche.palissy.length)}</em></h3>
@@ -611,8 +723,90 @@
     left: 20px;
   }
 
-  .copier {
-    right: 20px;
+  /* Fleches de la photographie : posees sur ses bords, a mi-hauteur. */
+  .cadre {
+    position: relative;
+  }
+
+  .defiler {
+    position: absolute;
+    top: 50%;
+    width: 30px;
+    height: 30px;
+    margin-top: -15px;
+    border: none;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--fond-carte) 88%, transparent);
+    color: var(--texte);
+    font-size: 19px;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: 0 4px 12px -4px rgb(var(--voile) / 35%);
+  }
+
+  .precedente {
+    left: 8px;
+  }
+
+  .suivante {
+    right: 8px;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .defiler:hover {
+      background: var(--fond-carte);
+    }
+  }
+
+  .glose-statut {
+    margin: 8px 0 0;
+    font-size: 11.5px;
+    color: var(--texte-faible);
+  }
+
+  .proches {
+    display: grid;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .proches button {
+    display: grid;
+    grid-template-columns: 9px 1fr;
+    align-items: baseline;
+    column-gap: 9px;
+    width: 100%;
+    padding: 6px 8px;
+    border: none;
+    border-radius: var(--r-s);
+    background: none;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .proches button:hover {
+      background: var(--fond-creux);
+    }
+  }
+
+  .proches i {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+  }
+
+  .nom-proche {
+    font-size: 13px;
+    color: var(--texte);
+  }
+
+  .meta-proche {
+    grid-column: 2;
+    font-size: 11px;
+    color: var(--texte-faible);
   }
 
   header {
@@ -721,7 +915,8 @@
     margin: 18px 0 0;
   }
 
-  .actions a {
+  .actions a,
+  .actions .action {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -732,6 +927,19 @@
     font-weight: 600;
     color: var(--texte-moyen);
     transition: all var(--t-rapide);
+  }
+
+  .actions .action {
+    background: transparent;
+    font-family: inherit;
+    cursor: pointer;
+  }
+
+  /* Le premier geste est le plus courant : il porte l'aplat. */
+  .actions .action:first-child {
+    border-color: var(--plein-fond);
+    background: var(--plein-fond);
+    color: var(--plein-texte);
   }
 
   /* Second renvoi vers la meme page : il repond a une autre question — « ou
@@ -756,7 +964,8 @@
       font-weight: 500;
     }
 
-    .actions a:hover {
+    .actions a:hover,
+    .actions .action:not(:first-child):hover {
       border-color: var(--inscrit);
       color: var(--inscrit-texte);
       text-decoration: none;

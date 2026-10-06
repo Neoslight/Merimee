@@ -107,7 +107,7 @@ test('permalien', async () => {
     const mention = await page.textContent('.liste header p');
     verifier('notices sans coordonnees signalees', /2\s?276/.test(mention ?? ''), mention ?? '');
 
-    await page.locator('.liste button').first().click();
+    await page.locator('.liste li button').first().click();
     await attendre(page, '.fiche .fermer');
     const urlFiche = page.url();
     verifier('reference portee par l URL', /[?&]ref=/.test(urlFiche), urlFiche.slice(-60));
@@ -129,7 +129,7 @@ test('permalien', async () => {
 
     // Fermer a la croix remplace l'entree d'historique au lieu d'en empiler
     // une : le bouton retour ne doit pas rouvrir la fiche qu'on vient de quitter.
-    await page.locator('.liste button').first().click();
+    await page.locator('.liste li button').first().click();
     await attendre(page, '.fiche .fermer');
     await page.locator('.fiche .fermer').click();
     await page.waitForSelector('.fiche .fermer', { state: 'detached', timeout: 10_000 }).catch(() => {});

@@ -226,10 +226,17 @@ export interface Ligne {
   departement_nom: string;
   statut: string;
   nb_palissy: number;
+  /** Dernier siecle de construction indexe, `null` si la notice n'en porte
+   *  aucun : il situe une ligne dans le temps comme la commune dans l'espace. */
+  siecle: number | null;
   /** Distance a la position de l'utilisateur, en metres. Presente seulement
    *  quand la liste est triee par proximite. */
   distance_m?: number;
 }
+
+/** Ordre de la liste quand elle n'est pas triee par distance. `pertinence`
+ *  vaut le classement BM25 en plein texte, le mobilier Palissy sinon. */
+export type Ordre = 'pertinence' | 'alpha';
 
 /** Point de reference du tri par proximite. */
 export interface Proche {
@@ -269,7 +276,13 @@ function ordreTexte(f: Filters): string | null {
  * BM25 se voit. La carte et les facettes n'ont besoin que de l'appartenance,
  * et scorer pour elles serait payer un tri que personne ne lit.
  */
-export async function liste(f: Filters, limite = 200, proche: Proche | null = null): Promise<Ligne[]> {
+export async function liste(
+  f: Filters,
+  limite = 200,
+  proche: Proche | null = null,
+  ordreListe: Ordre = 'pertinence'
+): Promise<Ligne[]> {
+  const colonnes = `reference, titre, commune, departement_nom, statut, nb_palissy, siecle_max::INT AS siecle`;
   // La proximite l'emporte sur la pertinence : c'est un choix explicite de
   // l'utilisateur, et le filtre plein texte reste applique par `buildWhere`.
   // Elle ecarte les notices sans coordonnees — une distance ne se calcule pas
@@ -277,26 +290,63 @@ export async function liste(f: Filters, limite = 200, proche: Proche | null = nu
   // garde toutes.
   if (proche) {
     return query<Ligne>(`
-      SELECT reference, titre, commune, departement_nom, statut, nb_palissy,
-             ${distanceSql(proche)}::DOUBLE AS distance_m
+      SELECT ${colonnes}, ${distanceSql(proche)}::DOUBLE AS distance_m
       FROM monuments
       WHERE lat IS NOT NULL AND ${buildWhere(f)}
       ORDER BY distance_m ASC, titre ASC LIMIT ${limite}
     `);
   }
+  // L'ordre alphabetique replie la casse et les accents : « église » ne doit
+  // pas tomber apres « Zénith ».
+  if (ordreListe === 'alpha') {
+    return query<Ligne>(`
+      SELECT ${colonnes}
+      FROM monuments WHERE ${buildWhere(f)}
+      ORDER BY strip_accents(lower(titre)) ASC, commune ASC LIMIT ${limite}
+    `);
+  }
   const ordre = ordreTexte(f);
   if (ordre) {
     return query<Ligne>(`
-      SELECT m.reference, m.titre, m.commune, m.departement_nom, m.statut, m.nb_palissy
+      SELECT m.reference, m.titre, m.commune, m.departement_nom, m.statut, m.nb_palissy,
+             m.siecle_max::INT AS siecle
       FROM monuments m JOIN ${ordre} s USING (reference)
       WHERE ${buildWhere(f)}
       ORDER BY s.score DESC, m.titre ASC LIMIT ${limite}
     `);
   }
   return query<Ligne>(`
-    SELECT reference, titre, commune, departement_nom, statut, nb_palissy
+    SELECT ${colonnes}
     FROM monuments WHERE ${buildWhere(f)}
     ORDER BY nb_palissy DESC, titre ASC LIMIT ${limite}
+  `);
+}
+
+/** Une notice voisine, pour la section « A proximite » de la fiche. */
+export interface Voisin {
+  reference: string;
+  titre: string;
+  commune: string;
+  statut: string;
+  distance_m: number;
+}
+
+/**
+ * Les notices les plus proches d'un point, la notice elle-meme exclue.
+ *
+ * Sans les filtres poses : la fiche repond a « qu'y a-t-il autour ? », pas a
+ * « qu'y a-t-il autour qui soit aussi une eglise romane ? ». Le meme calcul
+ * haversine que le tri par proximite ; une fenetre de deux degres l'epargne
+ * a la France entiere.
+ */
+export async function voisins(reference: string, lon: number, lat: number, n = 5): Promise<Voisin[]> {
+  const ici = { lon, lat };
+  return query<Voisin>(`
+    SELECT reference, titre, commune, statut, ${distanceSql(ici)}::DOUBLE AS distance_m
+    FROM monuments
+    WHERE lat BETWEEN ${lat - 1} AND ${lat + 1} AND lon BETWEEN ${lon - 1.5} AND ${lon + 1.5}
+      AND reference <> ${lit(reference)}
+    ORDER BY distance_m ASC LIMIT ${n}
   `);
 }
 

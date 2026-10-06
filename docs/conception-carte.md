@@ -114,6 +114,11 @@ arrêter le mouvement en cours, ce qui émet un `moveend` qui n'est pas le sien.
 mouvement réduit le saut est déjà fini à ce point — d'où le test `isMoving()` plutôt
 qu'un écouteur qui n'entendrait plus rien.
 
+**Le survol d'une ligne de liste cercle son point** (`monuments-survol`) : un anneau
+plus large et plus léger que celui de la sélection, pour ne pas confondre « je regarde »
+et « j'ai choisi ». Posé dans `poserCouches`, filtre reposé par son propre effet, teinte
+suivie par l'effet de palette.
+
 **L'épingle de sélection est un `Marker`**, du DOM peint par jetons dans `app.css`
 (`--carte-selection`, comme l'anneau) : elle survit à `setStyle` sans passer par
 `poserCouches`, et ne capte aucun pointeur. L'anneau de 11 px reste dessous ; à

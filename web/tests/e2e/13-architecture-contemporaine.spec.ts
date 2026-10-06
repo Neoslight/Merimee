@@ -134,7 +134,7 @@ test('couche architecture contemporaine remarquable', async () => {
     verifier('pas de section actes de protection', (await page.locator('.fiche .actes').count()) === 0);
     verifier('section description presente', (await page.locator('.fiche h3', { hasText: 'Description' }).count()) === 1);
     verifier('lien POP vers la notice ACR',
-      (await page.getAttribute('.fiche .actions a', 'href'))?.endsWith('/notice/merimee/ACR0000002'));
+      (await page.getAttribute('.fiche .actions a[href*="pop.culture.gouv.fr"]', 'href'))?.endsWith('/notice/merimee/ACR0000002'));
   });
 
   await test.step('photographie d une notice ACR illustree', async () => {

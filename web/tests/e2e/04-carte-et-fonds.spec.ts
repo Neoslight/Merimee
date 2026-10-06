@@ -207,8 +207,8 @@ test('carte et fonds historiques', async () => {
     // etre intercepte par le panneau (`preventDefault`) avant d'atteindre
     // l'ecouteur global qui referme la fiche.
     await page.locator('.bascule button', { hasText: 'Liste' }).click();
-    await attendre(page, '.liste button');
-    await page.locator('.liste button').first().click();
+    await attendre(page, '.liste li button');
+    await page.locator('.liste li button').first().click();
     await attendre(page, '.fiche .fermer');
     await page.locator('.bascule button', { hasText: 'Carte' }).click();
 

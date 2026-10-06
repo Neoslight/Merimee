@@ -194,6 +194,7 @@
         approcher: (reference: string, anime: boolean) => void;
         survoler: (lon: number, lat: number, reserve: Marges) => Promise<void>;
         cadrer: (bornes: Bornes) => void;
+        centrer: (reference: string) => void;
       }
     | undefined
   >();
@@ -407,7 +408,7 @@
   // se tenait celui qui l'a copie. A la **premiere** position obtenue, la liste
   // passe d'elle-meme en proximite — c'est ce qu'on demandait en touchant le
   // bouton — puis le choix n'appartient plus qu'a l'utilisateur.
-  type Tri = 'pertinence' | 'proximite';
+  type Tri = 'pertinence' | 'alpha' | 'proximite';
   let tri = $state<Tri>('pertinence');
   let proximiteProposee = false;
 
@@ -427,13 +428,26 @@
   // Comme les facettes et la frise, la liste ne part qu'ouverte : elle vit
   // dans le volet, ferme au demarrage — deux requetes au premier ecran, le
   // nuage et les totaux, au lieu de trois.
+  // La liste se pagine par 200 : « Afficher 200 de plus » releve le plafond,
+  // et tout changement de filtre ou d'ordre le ramene a 200.
+  const PAGE_LISTE = 200;
+  let plafondListe = $state(PAGE_LISTE);
+
+  $effect(() => {
+    signature;
+    tri;
+    untrack(() => (plafondListe = PAGE_LISTE));
+  });
+
   $effect(() => {
     signature;
     cleProche;
+    const plafond = plafondListe;
+    const ordreListe = tri === 'alpha' ? 'alpha' : 'pertinence';
     if (vue !== 'liste') return;
     const mien = ++jetonListe;
     const ici = untrack(() => proche);
-    liste(filters, 200, ici ? { lon: ici.lon, lat: ici.lat } : null)
+    liste(filters, plafond, ici ? { lon: ici.lon, lat: ici.lat } : null, ordreListe)
       .then((lst) => {
         if (mien !== jetonListe) return;
         resultats = lst;
@@ -562,6 +576,33 @@
   // Le presse-papier peut etre refuse (contexte non securise, permission) :
   // l'echec bascule sur une selection manuelle plutot que de ne rien faire.
   let copie = $state(false);
+
+  // Le partage natif — la feuille de partage du telephone — n'existe que la
+  // ou le systeme le fournit, et ne se propose qu'au doigt : sur ordinateur,
+  // copier le lien est le geste attendu.
+  const partageNatif =
+    browser && 'share' in navigator && window.matchMedia('(pointer: coarse)').matches;
+
+  async function partagerLien() {
+    const requete = encoder({ filtres: filters, selection, vue, fond, acr: acrVisible }, vueCarte?.vueCourante());
+    try {
+      await navigator.share({ title: titreFiche ?? 'Mérimée', url: location.origin + location.pathname + requete });
+    } catch {
+      // Partage annule par l'utilisateur, ou refuse : rien a dire.
+    }
+  }
+
+  /** « Voir sur la carte » depuis la fiche. Sur telephone, la feuille redescend
+   *  en apercu : la carte doit se voir. */
+  function centrerFiche() {
+    if (!selection) return;
+    if (telephone && cran === 'plein') cran = 'apercu';
+    vue = 'carte';
+    vueCarte?.centrer(selection);
+  }
+
+  /** Notice survolee dans la liste, mise en evidence sur la carte. */
+  let survolee = $state<string | null>(null);
 
   async function copierLien() {
     // Seul endroit ou la vue de carte entre dans une URL. L'URL vivante n'en
@@ -975,6 +1016,7 @@
           pointsAcr={pointsAcrCarte}
           bind:suivreVue
           {marges}
+          survol={survolee}
           {etiquette}
           onselect={(ref) => ouvrirFiche(ref)}
           onbbox={(bbox) => (filters.bbox = bbox)}
@@ -1115,6 +1157,10 @@
 
           <div class="colonne fiche-hote" class:ouvert={contenu === 'fiche'} hidden={contenu !== 'fiche'}>
             <DetailPanel reference={selection} {copie} oncopier={copierLien}
+                         retour={vue === 'liste'}
+                         onpartager={partageNatif ? partagerLien : undefined}
+                         oncentrer={centrerFiche}
+                         onvoisin={(ref) => ouvrirFiche(ref, 'liste')}
                          bind:this={detailPanel} onclose={fermerFiche}
                          ontitre={(t) => (titreFiche = t)}
                          ondefile={() => {
@@ -1130,8 +1176,13 @@
                               portee={cible === 'historiques' && indexTexte.stats
                                 ? { notices: indexTexte.stats.n, inconnus: indexTexte.inconnus }
                                 : null}
-                              onouvrir={(ref) => ouvrirFiche(ref, 'liste')}
+                              onouvrir={(ref) => {
+                                survolee = null;
+                                ouvrirFiche(ref, 'liste');
+                              }}
                               oneffacer={toutEffacer}
+                              onsurvol={(ref) => (survolee = ref)}
+                              onsuite={() => (plafondListe += PAGE_LISTE)}
                               ondefile={() => {
                                 if (telephone && cran === 'apercu' && decalage === null) cran = 'plein';
                               }} />

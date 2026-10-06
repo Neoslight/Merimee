@@ -216,6 +216,13 @@ depuis le chargement serait revenu. La page écoute `popstate` et décode
 `location.search` (`relireUrl`). `07-permalien.spec.ts` vérifie que la vue liste
 survit au retour, et qu'un retour après fermeture à la croix ne rouvre rien.
 
+**La liste dit le siècle, se trie et se pagine** (phase 6). Chaque ligne porte le
+dernier siècle indexé (`siecle_max`) et la pastille de son statut. Trois ordres :
+mobilier (ou pertinence BM25 en plein texte), **A–Z** (`strip_accents(lower(titre))` —
+« église » ne tombe pas après « Zénith »), proximité une position connue. « Afficher 200
+de plus » relève le plafond ; tout changement de filtre ou d'ordre le ramène à 200. Le
+survol d'une ligne (pointeur fin) cercle son point sur la carte (`monuments-survol`).
+
 **La liste ne part qu'ouverte** (phase 4), comme les facettes et la frise : elle vit
 dans le volet, fermé au démarrage. Le premier écran n'émet plus que deux requêtes, le
 nuage et les totaux.

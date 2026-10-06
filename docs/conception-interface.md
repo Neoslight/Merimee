@@ -427,6 +427,24 @@ passent jamais `essential: true`**, le contrôle natif non plus (vérifié dans 
 source, 4.7.1). Sous mouvement réduit, le vol devient un saut et la fiche s'ouvre
 aussitôt ; `14-camera.spec.ts` le vérifie avec `reducedMotion: 'reduce'`.
 
+**La fiche porte une rangée d'actions** (phase 6), à la manière des fiches de lieu des
+cartes en ligne : « Voir sur la carte » (vol jusqu'à l'édifice, au zoom d'un édifice ;
+sur téléphone la feuille redescend en aperçu), « Itinéraire » (OpenStreetMap — le fond
+de carte en vient déjà, et le lien n'emporte rien de l'utilisateur), « Partager » (la
+feuille de partage du système, **seulement au doigt et là où elle existe**), « Copier le
+lien » — sorti de l'image où il était une pastille sans libellé —, puis les renvois
+POP. Quatre autres points :
+
+- **le statut se dit en mots** : le libellé et la glose de la légende (`lib/statuts.ts`),
+  la définition en `title`. « classé+inscrit » brut ne disait rien ;
+- **fermer, c'est revenir** quand la fiche vient de la liste : la croix devient une
+  flèche nommée « Retour à la liste », et la liste réapparaît dessous ;
+- **des flèches et un balayage au doigt parcourent les photographies** (ANO-49) — sauf
+  sur une image recadrée, où le même geste la fait glisser dans son cadre ;
+- **« À proximité »** : les cinq notices les plus proches, sans les filtres posés (la
+  question est « qu'y a-t-il autour ? »), même haversine que le tri de la liste, fenêtre
+  de deux degrés. Pas pour une notice ACR ni sans coordonnées.
+
 **Des pastilles de filtrage rapide dans la fiche, portées par `fiche.auteurs`
 (cf. `docs/conception-donnees.md`).** Un clic sur un auteur l'ajoute au filtre courant
 — jamais ne le retire, ce n'est pas une case à cocher, juste un raccourci vers le

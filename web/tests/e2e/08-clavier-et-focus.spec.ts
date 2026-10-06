@@ -39,15 +39,15 @@ test('clavier et focus', async () => {
 
   await test.step('cliquer une ligne place le focus dans la fiche, la croix le rend', async () => {
     await page.locator('.bascule button', { hasText: 'Liste' }).click();
-    await attendre(page, '.liste button');
-    await page.locator('.liste button').first().click();
+    await attendre(page, '.liste li button');
+    await page.locator('.liste li button').first().click();
     await attendre(page, '.fiche .fermer');
     const focusDansFiche = await page.evaluate(() => document.activeElement?.closest('.fiche') !== null);
     verifier('cliquer une ligne de la liste place le focus dans la fiche', Boolean(focusDansFiche));
 
     await page.locator('.fiche .fermer').click();
     await page.waitForTimeout(300);
-    const focusRetourLigne = await page.evaluate(() => document.activeElement?.closest('.liste button') !== null);
+    const focusRetourLigne = await page.evaluate(() => document.activeElement?.closest('.liste li button') !== null);
     verifier('fermer la fiche par la croix rend le focus au bouton de ligne clique', Boolean(focusRetourLigne));
   });
 
@@ -73,7 +73,7 @@ test('clavier et focus', async () => {
   });
 
   await test.step('la fiche a perdu son aria-live', async () => {
-    await page.locator('.liste button').first().click();
+    await page.locator('.liste li button').first().click();
     await attendre(page, '.fiche .fermer');
     const live = await page.evaluate(() => document.querySelector('.fiche')?.hasAttribute('aria-live'));
     verifier('.fiche ne porte plus aria-live', live === false, String(live));
@@ -82,7 +82,7 @@ test('clavier et focus', async () => {
   });
 
   await test.step('Echap ferme la fiche', async () => {
-    await page.locator('.liste button').first().click();
+    await page.locator('.liste li button').first().click();
     await attendre(page, '.fiche .fermer');
     await page.keyboard.press('Escape');
     await page.waitForTimeout(300);
