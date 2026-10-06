@@ -42,15 +42,26 @@ voir. Ils ne répondent plus qu'au geste. Deux conséquences :
 
 **Le bouton « Filtres » vit dans la rangée d'outils** et reste visible tiroir
 ouvert : `aria-expanded` dit son état, un second appui referme. Il porte le nombre de
-critères posés.
+critères posés. **Tout effacer le suit immédiatement** (`.outil.raz`, une pastille
+ronde à croix, « Effacer N filtres » pour un lecteur d'écran), dès qu'un critère est
+posé : en bout de rangée de puces, la remise à zéro partait hors champ dès le troisième
+filtre.
 
 **Sous les outils, une rangée de puces** (`PucesFiltres.svelte`), à la manière des
 cartes en ligne : « Frises », six facettes courantes (Protection, Domaine, Type
 d'édifice, Région, Département, Architecte), « Zone visible », puis les filtres posés
-(`Jetons`, mêmes puces qu'avant, même `.raz`). Cinq points :
+(`Jetons`, mêmes puces qu'avant). Six points :
 
 - **la rangée défile à l'horizontale**, elle ne s'enroule pas : sa hauteur est fixe, et
   le volet qui s'ouvre dessous (`--hauteur-haut`) ne saute pas à chaque filtre posé ;
+- **au large, elle court sur toute la carte** et non dans les 440 px du bloc : la
+  moitié des puces y étaient hors champ, sans rien qui le dise ni geste pour y aller à
+  la souris. Ses vides laissent passer le pointeur jusqu'à la carte. Quand elle déborde
+  encore, **le bord coupé se fond** (`mask-image`), **une flèche y mène** (pointeur fin
+  seulement, hors de l'ordre de tabulation : le clavier parcourt les puces, le
+  navigateur suit le focus) et **la molette verticale défile à l'horizontale**
+  (écouteur non passif, sinon la carte dessous zoomerait). Le débord se remesure au
+  redimensionnement et à chaque filtre posé (`ResizeObserver` + `MutationObserver`) ;
 - **une puce de facette ouvre un menu** qui reprend la section du tiroir
   (`FacetPanel seules={[cle]}`, remonté par `{#key}` à chaque puce) — même recherche,
   mêmes pilules, mêmes comptes. Le menu vit hors de la rangée, qui le rognerait, en

@@ -3,14 +3,13 @@
 
   interface Props {
     jetons: Jeton[];
-    /** Compte de `countActive` : une cle, pas une valeur. Le libelle du bouton
-     *  de remise a zero est celui d'avant, au caractere pres. */
-    actifs: number;
     onretirer: (jeton: Jeton) => void;
-    onreset: () => void;
   }
 
-  let { jetons, actifs, onretirer, onreset }: Props = $props();
+  /* La remise a zero n'est plus ici : en bout de rangee, elle partait hors
+     champ des que trois filtres etaient poses. Elle vit a cote du bouton
+     « Filtres » (`.raz`, dans la page). */
+  let { jetons, onretirer }: Props = $props();
 
   function cle(jeton: Jeton): string {
     return `${jeton.cle}:${jeton.valeur ?? ''}`;
@@ -27,9 +26,6 @@
       <i aria-hidden="true">×</i>
     </button>
   {/each}
-  <button class="raz frappe-44-v" onclick={onreset}>
-    effacer {actifs} filtre{actifs > 1 ? 's' : ''}
-  </button>
 </div>
 
 <style>
@@ -89,22 +85,6 @@
 
     button:hover i {
       opacity: 1;
-    }
-  }
-
-  /* La remise a zero n'est pas un critere : elle se distingue des puces. */
-  .raz {
-    padding: 0 13px;
-    border-color: var(--bord-flottant);
-    background: var(--fond-carte);
-    color: var(--texte-tenu);
-    font-weight: 500;
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .raz:hover {
-      background: var(--fond-creux);
-      color: var(--texte);
     }
   }
 </style>

@@ -55,7 +55,7 @@ test('puces de filtres', async () => {
     verifier('et rend le focus a la puce', await page.evaluate(() => document.activeElement?.textContent?.includes('Domaine') ?? false));
     verifier('le filtre reste pose', /domaine=/.test(page.url()));
 
-    await page.locator('.rangee .jetons button.raz').click();
+    await page.locator('.outils button.raz').click();
     await attendreTotal(page, 46_760);
   });
 
@@ -88,7 +88,7 @@ test('puces de filtres', async () => {
       `${vue.centre.map((v) => v.toFixed(2)).join(', ')} z${vue.zoom.toFixed(1)}`
     );
     await page.keyboard.press('Escape');
-    await page.locator('.rangee .jetons button.raz').click();
+    await page.locator('.outils button.raz').click();
     await attendreTotal(page, 46_760);
   });
 
@@ -102,5 +102,48 @@ test('puces de filtres', async () => {
     verifier('retouchee, elle le retire', (await page.locator('.rangee .jetons').count()) === 0);
   });
 
+  await test.step('effacer vit a cote de Filtres', async () => {
+    await page.goto(`${infos.url}?domaine=${encodeURIComponent('architecture militaire')}&statut=${encodeURIComponent('classé')}`, { waitUntil: 'domcontentloaded' });
+    await attendre(page, '.chiffres b');
+    const filtres = (await page.locator('.outils button.filtres').boundingBox())!;
+    const raz = (await page.locator('.outils button.raz').boundingBox())!;
+    verifier('la croix suit immediatement « Filtres »', raz.x > filtres.x + filtres.width && raz.x - (filtres.x + filtres.width) < 12,
+      `${Math.round(raz.x - filtres.x - filtres.width)} px`);
+    verifier('nommee par ce qu’elle efface', (await page.getByRole('button', { name: 'Effacer 2 filtres' }).count()) === 1);
+    await page.locator('.outils button.raz').click();
+    await attendreTotal(page, 46_760);
+    verifier('plus de croix sans filtre', (await page.locator('.outils button.raz').count()) === 0);
+  });
+
   verifier('aucune erreur console (puces)', erreursConsole.length === 0, erreursConsole.slice(0, 3).join(' | '));
+});
+
+test('rangée trop longue : fondu, flèche et molette', async ({ browser }: { browser: Browser }) => {
+  const etroit = await browser.newContext({ viewport: { width: 1000, height: 800 }, colorScheme: 'dark' });
+  const p = await etroit.newPage();
+  await p.goto(
+    `${infos.url}?domaine=${encodeURIComponent('architecture militaire')}&statut=${encodeURIComponent('classé')}&region=Bretagne`,
+    { waitUntil: 'domcontentloaded' }
+  );
+  await attendre(p, '.chiffres b');
+  await attendre(p, '.rangee .jetons button');
+  await p.waitForTimeout(300);
+  const rangee = p.locator('.rangee');
+  const largeur = (await rangee.boundingBox())!.width;
+  verifier('au large, la rangee court sur la carte, au-dela du bloc', largeur > 900, `${Math.round(largeur)} px`);
+  verifier('elle deborde : bord droit fondu', (await p.locator('.rangee.debord-droite').count()) === 1);
+  verifier('une fleche y mene', await p.locator('.fleche.droite').isVisible());
+  await p.locator('.fleche.droite').click();
+  await p.waitForTimeout(700);
+  verifier('la fleche fait defiler', (await rangee.evaluate((el) => el.scrollLeft)) > 100);
+  verifier('et fait apparaitre la fleche de retour', await p.locator('.fleche.gauche').isVisible());
+  await rangee.evaluate((el) => el.scrollTo(0, 0));
+  await p.waitForTimeout(200);
+  const boite = (await p.locator('.rangee .puce').first().boundingBox())!;
+  await p.mouse.move(boite.x + boite.width / 2, boite.y + boite.height / 2);
+  await p.mouse.wheel(0, 2000);
+  await p.waitForTimeout(400);
+  const derniere = (await p.locator('.rangee .jetons button').last().boundingBox())!;
+  verifier('la molette mene jusqu’au dernier filtre pose', derniere.x + derniere.width <= 1000, `${Math.round(derniere.x + derniere.width)} px`);
+  await etroit.close();
 });

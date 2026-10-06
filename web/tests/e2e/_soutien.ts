@@ -216,7 +216,7 @@ export const PNG_VIDE = Buffer.from(
 
 /** Le bouton de remise a zero ne s'affiche qu'avec des filtres poses. */
 export async function effacerTout(page: Page): Promise<void> {
-  const raz = page.locator('.jetons button.raz');
+  const raz = page.locator('.outils button.raz');
   if (await raz.count()) await raz.click();
 }
 

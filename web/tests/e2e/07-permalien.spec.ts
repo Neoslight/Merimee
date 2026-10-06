@@ -167,7 +167,7 @@ test('permalien', async () => {
     const facetteCochee = await page.locator('section:has(.nom-section:text("Domaine")) .option.choisi').count();
     verifier('facette rouverte cochee', facetteCochee === 1, `${facetteCochee} option(s)`);
 
-    await page.getByRole('button', { name: /effacer \d+ filtres?/ }).click();
+    await page.getByRole('button', { name: /effacer \d+ filtres?/i }).click();
     await page.waitForFunction(() => !/[?&]domaine=/.test(location.search), null, { timeout: 20_000 });
     verifier('remise a zero nettoie l URL', page.url().split('?')[1] === undefined || !/domaine/.test(page.url()));
   });

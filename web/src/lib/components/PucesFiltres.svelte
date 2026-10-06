@@ -86,6 +86,50 @@
     fermer();
   }
 
+  // La rangee deborde des qu'elle porte plus de puces que de largeur : a la
+  // souris, rien ne le disait — pas de barre, pas de geste lateral, et les
+  // puces de droite etaient inatteignables. Un fondu marque le bord coupe, une
+  // fleche y mene, et la molette verticale fait defiler a l'horizontale.
+  let rangee: HTMLElement | undefined = $state();
+  let debordGauche = $state(false);
+  let debordDroite = $state(false);
+
+  function mesurer() {
+    const r = rangee;
+    if (!r) return;
+    debordGauche = r.scrollLeft > 2;
+    debordDroite = r.scrollLeft + r.clientWidth < r.scrollWidth - 2;
+  }
+
+  function defiler(sens: 1 | -1) {
+    rangee?.scrollBy({ left: sens * Math.max(160, (rangee.clientWidth * 2) / 3), behavior: 'smooth' });
+  }
+
+  $effect(() => {
+    const r = rangee;
+    if (!r) return;
+    mesurer();
+    // La largeur change avec la fenetre, le contenu avec chaque filtre pose :
+    // les deux se surveillent.
+    const taille = new ResizeObserver(mesurer);
+    taille.observe(r);
+    const contenu = new MutationObserver(mesurer);
+    contenu.observe(r, { childList: true, subtree: true, characterData: true });
+    // Non passif : sans `preventDefault`, la molette ferait aussi zoomer la
+    // carte sous la rangee.
+    const molette = (event: WheelEvent) => {
+      if (r.scrollWidth <= r.clientWidth || Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return;
+      event.preventDefault();
+      r.scrollLeft += event.deltaY;
+    };
+    r.addEventListener('wheel', molette, { passive: false });
+    return () => {
+      taille.disconnect();
+      contenu.disconnect();
+      r.removeEventListener('wheel', molette);
+    };
+  });
+
   // Toucher ailleurs referme le menu, comme tout menu.
   $effect(() => {
     if (ouverte === null) return;
@@ -102,8 +146,11 @@
 
 <!-- La rangee defile a l'horizontale plutot que de s'enrouler : elle garde une
      hauteur fixe, et le volet qui s'ouvre dessous ne saute pas a chaque filtre
-     pose. -->
-<div class="rangee" role="group" aria-label="Filtres rapides">
+     pose. Les fleches sont un raccourci du pointeur : le clavier parcourt les
+     puces, et le navigateur fait defiler jusqu'a celle qui prend le focus. -->
+<div class="rail">
+<div class="rangee" class:debord-gauche={debordGauche} class:debord-droite={debordDroite}
+     role="group" aria-label="Filtres rapides" bind:this={rangee} onscroll={mesurer}>
   <!-- Le nom est le libelle : « Frises », l'etat dit par `aria-expanded`. La
        croix du panneau garde « Masquer les frises » ; deux boutons de meme nom
        seraient indiscernables. -->
@@ -132,6 +179,19 @@
           onclick={() => (suivreVue = !suivreVue)}>Zone visible</button>
   {@render children?.()}
 </div>
+{#if debordGauche}
+  <button class="fleche gauche" tabindex="-1" aria-hidden="true" onclick={() => defiler(-1)}>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+         stroke-linejoin="round"><path d="m15 6-6 6 6 6" /></svg>
+  </button>
+{/if}
+{#if debordDroite}
+  <button class="fleche droite" tabindex="-1" aria-hidden="true" onclick={() => defiler(1)}>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+         stroke-linejoin="round"><path d="m9 6 6 6-6 6" /></svg>
+  </button>
+{/if}
+</div>
 
 {#if ouverte}
   <div class="menu-puce" id="menu-puce" role="dialog" aria-label={titreOuvert} tabindex="-1"
@@ -150,6 +210,11 @@
 {/if}
 
 <style>
+  .rail {
+    position: relative;
+    min-width: 0;
+  }
+
   .rangee {
     display: flex;
     gap: 6px;
@@ -164,6 +229,63 @@
 
   .rangee::-webkit-scrollbar {
     display: none;
+  }
+
+  /* Le bord coupe se fond : une puce tranchee net passait pour la derniere. */
+  .rangee.debord-droite {
+    mask-image: linear-gradient(to right, black calc(100% - 44px), transparent);
+  }
+
+  .rangee.debord-gauche {
+    mask-image: linear-gradient(to left, black calc(100% - 44px), transparent);
+  }
+
+  .rangee.debord-gauche.debord-droite {
+    mask-image: linear-gradient(to right, transparent, black 44px, black calc(100% - 44px), transparent);
+  }
+
+  /* Les fleches ne servent qu'au pointeur fin : au doigt, la rangee se fait
+     glisser, et le fondu suffit a dire qu'il y a une suite. */
+  .fleche {
+    display: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .fleche {
+      position: absolute;
+      top: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      margin-top: -14px;
+      padding: 0;
+      border: 1px solid var(--bord-flottant);
+      border-radius: 50%;
+      background: var(--fond-carte);
+      box-shadow: var(--ombre-carte);
+      color: var(--texte-moyen);
+      cursor: pointer;
+    }
+
+    .fleche.gauche {
+      left: 0;
+    }
+
+    .fleche.droite {
+      right: 0;
+    }
+
+    .fleche svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .fleche:hover {
+      color: var(--texte);
+      border-color: var(--bord-appuye);
+    }
   }
 
   .puce {

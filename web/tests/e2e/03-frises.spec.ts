@@ -45,7 +45,7 @@ test('frises', async () => {
     await page.waitForTimeout(700);
     const brosses = new URL(page.url()).searchParams.getAll('siecle');
     verifier('un glissement pose une plage de siecles', brosses.length >= 3, brosses.join(', ') || 'aucun siecle');
-    await page.getByRole('button', { name: /effacer \d+ filtres?/ }).click();
+    await page.getByRole('button', { name: /effacer \d+ filtres?/i }).click();
     await attendreTotal(page, 46760);
   });
 
@@ -59,7 +59,7 @@ test('frises', async () => {
       /^\d{4}-\d{4}$/.test(uneAnnee ?? '') && uneAnnee!.split('-')[0] === uneAnnee!.split('-')[1],
       uneAnnee ?? 'aucune'
     );
-    await page.getByRole('button', { name: /effacer \d+ filtres?/ }).click();
+    await page.getByRole('button', { name: /effacer \d+ filtres?/i }).click();
     await page.waitForFunction(() => !/annees=/.test(location.search), null, { timeout: 20_000 });
   });
 
@@ -92,7 +92,7 @@ test('frises', async () => {
       siecles.join(', ')
     );
 
-    await page.getByRole('button', { name: /effacer \d+ filtres?/ }).click();
+    await page.getByRole('button', { name: /effacer \d+ filtres?/i }).click();
     await attendreTotal(page, 46760);
   });
 
@@ -113,7 +113,7 @@ test('frises', async () => {
     const [a, b] = (bornes ?? '').split('-').map(Number);
     verifier('Majuscule + fleche sur l’axe des protections pose une plage croissante', Number.isInteger(a) && Number.isInteger(b) && a < b, bornes ?? 'aucune');
 
-    await page.getByRole('button', { name: /effacer \d+ filtres?/ }).click();
+    await page.getByRole('button', { name: /effacer \d+ filtres?/i }).click();
     await page.waitForFunction(() => !/annees=/.test(location.search), null, { timeout: 20_000 });
   });
 

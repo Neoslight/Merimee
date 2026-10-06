@@ -140,7 +140,7 @@ test('facettes et filtres', async () => {
     const apresPuce = await total(page);
     verifier('retirer une puce ne retire qu elle', apresPuce === militaire, `obtenu ${apresPuce}`);
 
-    await page.getByRole('button', { name: /effacer \d+ filtres?/ }).click();
+    await page.getByRole('button', { name: /effacer \d+ filtres?/i }).click();
     await attendreTotal(page, 46760);
     verifier('remise a zero des filtres', (await total(page)) === 46760);
 
@@ -274,7 +274,7 @@ test('facettes et filtres', async () => {
     );
 
     await sectionAuteurs.locator('input.filtre').fill('');
-    await page.getByRole('button', { name: /effacer \d+ filtres?/ }).click();
+    await page.getByRole('button', { name: /effacer \d+ filtres?/i }).click();
     await attendreTotal(page, 46760);
     await sectionAuteurs.locator('button.titre').click();
   });

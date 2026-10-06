@@ -108,7 +108,7 @@ async function ouvrirFrises(page) {
 }
 
 async function effacerFiltres(page) {
-  const raz = page.getByRole('button', { name: /effacer \d+ filtres?/ });
+  const raz = page.getByRole('button', { name: /effacer \d+ filtres?/i });
   if ((await raz.count()) === 0) return;
   await raz.click();
   await page.waitForFunction(

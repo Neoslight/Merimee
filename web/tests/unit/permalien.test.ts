@@ -173,3 +173,12 @@ describe('bbox', () => {
     expect(decoder('?bbox=2,48,3,49').filtres.bbox).toBeNull();
   });
 });
+
+describe('communes', () => {
+  it('fait l’aller-retour, parentheses comprises', () => {
+    const depart = etat({ communes: ['Baden (Morbihan)', 'Rouen (Seine-Maritime)'] });
+    const chaine = encoder(depart);
+    expect(chaine).toContain('commune=Baden+%28Morbihan%29');
+    expect(decoder(chaine).filtres.communes).toEqual(depart.filtres.communes);
+  });
+});

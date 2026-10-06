@@ -74,6 +74,7 @@ const MULTIVALUES = {
   auteurs: 'auteur',
   regions: 'region',
   departements: 'departement',
+  communes: 'commune',
   proprietaires: 'proprietaire'
 } as const;
 

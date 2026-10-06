@@ -19,6 +19,7 @@ export type FacetKey =
   | 'auteurs'
   | 'regions'
   | 'departements'
+  | 'communes'
   | 'proprietaires'
   | 'anneeProtection'
   | 'nbPalissy'
@@ -35,6 +36,10 @@ export interface Filters {
   auteurs: string[];
   regions: string[];
   departements: string[];
+  /** Communes choisies dans la recherche, sous la forme `Baden (Morbihan)` :
+   *  le nom seul ne suffit pas, 514 des 16 374 noms de commune du corpus
+   *  existent dans plusieurs departements. */
+  communes: string[];
   proprietaires: string[];
   anneeProtection: [number, number] | null;
   nbPalissy: number;
@@ -85,6 +90,7 @@ export function filtresVides(): Filters {
     auteurs: [],
     regions: [],
     departements: [],
+    communes: [],
     proprietaires: [],
     anneeProtection: null,
     nbPalissy: 0,
@@ -152,6 +158,16 @@ export function termesTexte(): readonly number[] | null {
   return termesResolus;
 }
 
+/** Une commune et son departement, tels que le filtre `communes` les compare.
+ *  Une notice sans departement garde son nom seul. */
+export const SQL_COMMUNE =
+  "(CASE WHEN departement_nom IS NULL THEN commune ELSE commune || ' (' || departement_nom || ')' END)";
+
+/** Meme forme, cote navigateur : la valeur que la recherche pose. */
+export function libelleCommune(commune: string, departement: string | null): string {
+  return departement ? `${commune} (${departement})` : commune;
+}
+
 /** Colonne `LIST` -> `list_has_any`, sans jointure ni table de liaison. */
 function listeClause(colonne: string, valeurs: readonly string[]): string | null {
   return valeurs.length ? `list_has_any(${colonne}, ${litList(valeurs)})` : null;
@@ -184,6 +200,10 @@ const CLAUSES: Record<FacetKey, (f: Filters) => string | null> = {
   // porter sur la meme colonne que les libelles affiches.
   departements: (f) =>
     f.departements.length ? `departement_nom IN (${f.departements.map(lit).join(', ')})` : null,
+  // Meme forme que le libelle de la suggestion qui l'a posee (`libelleCommune`) :
+  // le departement departage les homonymes.
+  communes: (f) =>
+    f.communes.length ? `${SQL_COMMUNE} IN (${f.communes.map(lit).join(', ')})` : null,
   // Semi-jointure sur les actes plutot que sur `annee_premiere/derniere` :
   // une notice protegee en 1925 puis en 1990 ne doit pas apparaitre pour 1960.
   anneeProtection: (f) =>
@@ -270,7 +290,7 @@ export interface Jeton {
 /** Cles multivaluees : une puce par valeur cochee. */
 const MULTIPLES: readonly FacetKey[] = [
   'statut', 'domaines', 'denominations', 'auteurs',
-  'regions', 'departements', 'proprietaires', 'periodes'
+  'regions', 'departements', 'communes', 'proprietaires', 'periodes'
 ];
 
 /**

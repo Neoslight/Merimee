@@ -40,6 +40,7 @@
     retirer,
     toggle,
     toggleSiecle,
+    libelleCommune,
     type FacetKey,
     type Jeton
   } from '$lib/state/filters.svelte';
@@ -266,17 +267,20 @@
   let cadrerResultats = false;
 
   // --- Ce que la recherche propose -------------------------------------------
+  // Un lieu choisi est un filtre — commune comprise : chercher « Baden » et
+  // garder a l'ecran tout le reste du pays ne repondait pas a la question.
+  // L'effet des lieux cadre ensuite la carte sur ce qui reste.
   function surLieu(s: Suggestion) {
-    const cle = CLE_FILTRE[s.genre];
-    if (cle) {
-      // Region, departement : un filtre, que l'effet des lieux cadre ensuite.
-      const liste = filters[cle as 'regions' | 'departements'];
-      if (!liste.includes(s.libelle)) liste.push(s.libelle);
-      terme = '';
-    } else if (s.bornes) {
-      // Une commune n'est pas une facette : la carte y va, sans rien filtrer.
-      vueCarte?.cadrer(s.bornes);
-    }
+    const cle = CLE_FILTRE[s.genre] as 'regions' | 'departements' | undefined;
+    const [liste, valeur] =
+      s.genre === 'commune'
+        ? [filters.communes, libelleCommune(s.libelle, s.precision)]
+        : cle
+          ? [filters[cle], s.libelle]
+          : [null, ''];
+    if (!liste) return;
+    if (!liste.includes(valeur)) liste.push(valeur);
+    terme = '';
   }
 
   function surEdifice(s: Suggestion) {
@@ -333,14 +337,15 @@
   let jeton = 0;
   let jetonFacettes = 0;
 
-  // Choisir une region ou un departement cadre la carte dessus, une fois les
-  // points arrives : la selection dit elle-meme ou regarder. Seulement quand
-  // on en **ajoute** un — en retirer ne doit pas faire sauter la vue.
+  // Choisir une region, un departement ou une commune cadre la carte dessus,
+  // une fois les points arrives : la selection dit elle-meme ou regarder.
+  // Seulement quand on en **ajoute** un — en retirer ne doit pas faire sauter
+  // la vue.
   let cadrerLieu = false;
-  let nbLieux = filters.regions.length + filters.departements.length;
+  let nbLieux = filters.regions.length + filters.departements.length + filters.communes.length;
 
   $effect(() => {
-    const n = filters.regions.length + filters.departements.length;
+    const n = filters.regions.length + filters.departements.length + filters.communes.length;
     untrack(() => {
       if (n > nbLieux) cadrerLieu = true;
       nbLieux = n;
@@ -1185,6 +1190,17 @@
               </svg>
               Filtres{#if actifs > 0} <em>{actifs}</em>{/if}
             </button>
+            {#if actifs > 0}
+              <!-- Tout effacer, a cote de ce qu'on efface : en bout de rangee de
+                   puces, ce bouton partait hors champ des le troisieme filtre. -->
+              <button class="outil raz frappe-44" onclick={toutEffacer}
+                      aria-label="Effacer {actifs} filtre{actifs > 1 ? 's' : ''}" title="Effacer tous les filtres">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                     stroke-linecap="round" aria-hidden="true">
+                  <path d="M7 7l10 10M17 7 7 17" />
+                </svg>
+              </button>
+            {/if}
             <!-- Le theme, sur telephone : au large il tient le coin haut droit
                  de la carte. Un seul des deux est jamais visible. -->
             <button class="theme theme-etroit frappe-44" onclick={basculer}
@@ -1199,7 +1215,7 @@
           <PucesFiltres {facettes} {cardinaux} {chargement} bind:ouverte={puceOuverte} bind:suivreVue
                         bind:frise={friseOuverte}>
             {#if puces.length > 0}
-              <Jetons jetons={puces} {actifs} onretirer={retirerJeton} onreset={toutEffacer} />
+              <Jetons jetons={puces} onretirer={retirerJeton} />
             {/if}
           </PucesFiltres>
         </div>
@@ -1450,6 +1466,27 @@
     max-width: calc(100% - 24px);
   }
 
+  /* Au large, la rangee de puces deborde du bloc et court sur toute la
+     largeur de la carte, a la maniere des cartes en ligne : dans les 440 px du
+     bloc, la moitie des puces etaient hors champ. Ses vides laissent passer le
+     pointeur jusqu'a la carte ; seules les puces le prennent. */
+  @media (min-width: 769px) {
+    .haut :global(.rail) {
+      width: calc(100vw - 24px - var(--sa-gauche) - var(--sa-droite));
+      pointer-events: none;
+    }
+
+    .haut :global(.rail .rangee) {
+      pointer-events: none;
+    }
+
+    .haut :global(.rail .rangee > *),
+    .haut :global(.rail .rangee .jetons > *),
+    .haut :global(.rail .fleche) {
+      pointer-events: auto;
+    }
+  }
+
   /* La carte de recherche : une surface posee, comme tout ce qui flotte sur la
      carte — fond plein, filet plus sombre que les terres, ombre. */
   .barre {
@@ -1581,6 +1618,16 @@
       border-color: var(--accent);
       color: var(--accent);
     }
+  }
+
+  /* Effacer : une pastille ronde, sans libelle — l'icone et sa place, collee
+     au bouton « Filtres » qui porte le compte, disent ce qu'elle efface. */
+  .outil.raz {
+    width: 34px;
+    margin-left: -4px;
+    padding: 0;
+    justify-content: center;
+    color: var(--texte-faible);
   }
 
   .outil[aria-expanded='true'] {

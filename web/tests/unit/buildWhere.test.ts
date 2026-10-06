@@ -6,7 +6,7 @@
  * pose qu'au travers de `poserTermes`.
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildWhere, filtresVides, poserTermes, type Filters } from '$lib/state/filters.svelte';
+import { buildWhere, filtresVides, libelleCommune, poserTermes, type Filters } from '$lib/state/filters.svelte';
 
 function f(partiel: Partial<Filters>): Filters {
   return { ...filtresVides(), ...partiel };
@@ -131,5 +131,21 @@ describe('gardes numeriques', () => {
 
   it('ecarte une bbox non finie', () => {
     expect(buildWhere(f({ bbox: [2, 48, Number.NaN, 49] }))).toBe('TRUE');
+  });
+});
+
+describe('communes', () => {
+  it('compare la commune et son departement, pas le nom seul', () => {
+    const where = buildWhere(f({ communes: [libelleCommune('Baden', 'Morbihan')] }));
+    expect(where).toContain("commune || ' (' || departement_nom || ')'");
+    expect(where).toContain("IN ('Baden (Morbihan)')");
+  });
+
+  it('echappe l’apostrophe d’un nom de commune', () => {
+    expect(buildWhere(f({ communes: ["L'Isle-Adam (Val-d'Oise)"] }))).toContain("'L''Isle-Adam (Val-d''Oise)'");
+  });
+
+  it('un nom sans departement reste nu', () => {
+    expect(libelleCommune('Baden', null)).toBe('Baden');
   });
 });

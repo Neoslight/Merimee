@@ -22,7 +22,7 @@ IGN, cartes de Cassini et de l'état-major, couleur des points, densité, archit
 contemporaine ; et
 « Zone visible », qui restreint le corpus, est une puce de filtre comme les autres.
 « Au hasard » vole jusqu'à un édifice, à la manière d'Earth. La recherche propose avant de filtrer :
-une commune cadre la carte, une région ou un architecte posent leur filtre, un édifice
+une commune ou une région isolent leurs notices et cadrent la carte, un architecte pose son filtre, un édifice
 ouvre sa fiche, et le champ vide suggère des pistes — Vauban, Guimard, les mégalithes,
 les phares.
 
@@ -81,8 +81,8 @@ rencontrés sont listés dans `etl/out/rejets.csv`.
 cd web
 npm install
 npm run dev                    # http://localhost:5173
-npm run test:unit              # Vitest, 86 tests sur la logique pure
-npm run build && npm run test  # build statique + 385 vérifications en Chromium
+npm run test:unit              # Vitest, 94 tests sur la logique pure
+npm run build && npm run test  # build statique + 410 vérifications en Chromium
 ```
 
 `npm run test` lance Chromium sur le build, réparti en 18 fichiers

@@ -99,7 +99,7 @@ test('fiche et photographies', async () => {
       verifier('cliquer une pastille auteur pose une puce de filtre', puceAuteur >= 1, `${puceAuteur} puce(s)`);
       verifier('la fiche reste ouverte apres le filtrage par auteur', (await page.locator('.fiche .fermer').count()) === 1);
       // Retour a l'etat neutre.
-      await page.getByRole('button', { name: /effacer \d+ filtres?/ }).click();
+      await page.getByRole('button', { name: /effacer \d+ filtres?/i }).click();
     }
   });
 

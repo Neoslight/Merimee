@@ -1,6 +1,6 @@
 /**
- * Recherche a suggestions : raccourcis du champ vide, lieux (une commune
- * cadre, une region filtre), edifices (la fiche), categories (un filtre),
+ * Recherche a suggestions : raccourcis du champ vide, lieux (une commune ou une
+ * region filtrent et cadrent), edifices (la fiche), categories (un filtre),
  * clavier, ligatures. La saisie ne filtre plus a chaque frappe.
  */
 import { test, type Browser, type BrowserContext, type Page } from '@playwright/test';
@@ -20,7 +20,7 @@ async function vider(p: Page) {
     await effacer.click();
     await p.keyboard.press('Escape');
   }
-  const raz = p.locator('.jetons button.raz');
+  const raz = p.locator('.outils button.raz');
   if ((await raz.count()) === 1) await raz.click();
   await attendreTotal(p, 46_760);
 }
@@ -78,10 +78,15 @@ test('recherche', async () => {
     await vider(page);
   });
 
-  await test.step('une commune cadre la carte, sans filtrer', async () => {
+  await test.step('une commune isole ses notices et cadre la carte', async () => {
     await page.fill('.recherche', 'rouen');
     await ligne(page, 'Seine-Maritime').waitFor();
     await ligne(page, 'Seine-Maritime').click();
+    // Mesure DuckDB sur monuments.parquet : 233 notices a Rouen.
+    await attendreTotal(page, 233);
+    verifier('commune dans l’URL, departement compris',
+      new URL(page.url()).searchParams.getAll('commune').includes('Rouen (Seine-Maritime)'), page.url().slice(-60));
+    verifier('la puce porte la commune', (await page.locator('.rangee .jetons button', { hasText: 'Rouen (Seine-Maritime)' }).count()) === 1);
     await page.waitForTimeout(1500);
     const vue = await page.evaluate(() => {
       const o = (window as unknown as { __carteOutils: { centre: () => [number, number]; zoom: () => number } }).__carteOutils;
@@ -92,7 +97,6 @@ test('recherche', async () => {
       Math.abs(vue.centre[0] - 1.09) < 0.2 && Math.abs(vue.centre[1] - 49.44) < 0.2 && vue.zoom > 10,
       `${vue.centre.map((v) => v.toFixed(2)).join(', ')} z${vue.zoom.toFixed(1)}`
     );
-    verifier('aucun filtre pose', (await total(page)) === 46_760);
     await vider(page);
   });
 

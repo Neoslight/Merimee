@@ -50,10 +50,15 @@ applique :
   géocodeur, aucun appel réseau ; débattue à 150 ms, un jeton écarte les réponses
   périmées. Les suggestions **ignorent les filtres posés** : on cherche un nom, pas une
   intersection ;
-- **chaque famille a son geste** : une commune **cadre** la carte sur l'emprise de ses
-  notices sans rien filtrer — ce n'est pas une facette ; une région ou un département
-  **pose** sa facette (et l'effet des lieux cadre) ; un édifice **ouvre** sa fiche ; une
-  catégorie pose sa facette. Le champ se vide quand une puce porte désormais le filtre ;
+- **chaque famille a son geste** : une commune, une région ou un département **pose**
+  son filtre, et l'effet des lieux cadre ce qui reste ; un édifice **ouvre** sa fiche ;
+  une catégorie pose sa facette. Le champ se vide quand une puce porte désormais le
+  filtre. La commune n'est pas une facette du panneau mais un filtre à part entière
+  (`communes`, `commune=` dans l'URL) : chercher « Baden » cadrait la commune en
+  laissant tout le pays à l'écran, la carte ne répondait pas à la question. Sa valeur
+  est `Baden (Morbihan)` — commune et département, comparés en SQL sous la même forme
+  (`SQL_COMMUNE`, `libelleCommune`) : 514 des 16 374 noms de commune du corpus existent
+  dans plusieurs départements ;
 - **Entrée** — ou la première ligne, « Toutes les notices contenant… » — applique le
   filtre de titre (`recherche`, `q=`), ouvre la liste, et cadre l'emprise des résultats
   **si elle tient en métropole** (`dansMetropole`) : « Saint-Pierre » trouve aussi la
@@ -227,7 +232,7 @@ survol d'une ligne (pointeur fin) cercle son point sur la carte (`monuments-surv
 dans le volet, fermé au démarrage. Le premier écran n'émet plus que deux requêtes, le
 nuage et les totaux.
 
-**Choisir une région ou un département cadre la carte dessus**, une fois les points
+**Choisir une région, un département ou une commune cadre la carte dessus**, une fois les points
 arrivés : `emprise()` (`lib/carte/camera.ts`, pure) calcule les bornes du nuage
 filtré, `cadrer()` les ajuste, plafonné à z12. Aucune table de contours à embarquer :
 la sélection dit elle-même où regarder. Seulement quand on **ajoute** un lieu — en
