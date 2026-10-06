@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
   import { palette } from '$lib/state/theme.svelte';
   import { STATUTS } from '$lib/statuts';
   import { TRANCHES, type Mode } from '$lib/carte/semiologie';
@@ -12,7 +11,7 @@
     /** Couche Architecture contemporaine affichee : sa cle s'ajoute. */
     acr: boolean;
     /** La frise occupe le bas de l'ecran : sur gabarit etroit, la legende
-     *  revient a une bande de cles, sans titre ni gloses. */
+     *  depliee revient a une bande de cles, sans titre ni gloses. */
     compacte: boolean;
     /** Definitions et effectifs depliees. Liee a la page, qui ne demande les
      *  effectifs que dans ce cas. */
@@ -57,40 +56,23 @@
       .filter((c) => !STATUTS.some((s) => s.valeur === c.valeur))
       .reduce((total, c) => total + c.n, 0)
   );
-
-  // Premiere visite sur un ecran large : la legende s'ouvre une fois, depliee,
-  // puis se replie aux visites suivantes. C'est le moment ou l'on decouvre ce
-  // que « classe » et « inscrit » veulent dire ; ensuite, la glose suffit. Sur
-  // telephone elle ne s'impose pas : depliee, elle prendrait la moitie de la
-  // carte. Preference de lecture, donc `localStorage`, jamais l'URL.
-  const CLE = 'merimee-legende-vue';
-
-  $effect(() => {
-    untrack(() => {
-      try {
-        if (!localStorage.getItem(CLE) && window.matchMedia('(min-width: 901px)').matches) depliee = true;
-        localStorage.setItem(CLE, '1');
-      } catch {
-        // Stockage refuse : la legende reste repliee, la glose dit l'essentiel.
-      }
-    });
-  });
 </script>
 
-<div class="legende" class:compacte class:depliee={depliee && statut}>
+<!-- Repliee, la legende n'est qu'une rangee de cles : elle dit les couleurs
+     sans occuper la carte. Depliee a la demande (« ? »), elle titre, glose,
+     definit et compte. Elle s'ouvrait seule a la premiere visite et prenait
+     alors un tiers de l'ecran : c'est le geste qui la deplie, plus l'arrivee. -->
+<div class="legende" class:compacte class:depliee role="group" aria-labelledby="titre-legende">
   <div class="tete">
-    <!-- Le titre dit de quoi parlent les couleurs. Sans lui, « classé » et
-         « inscrit » etaient trois mots de metier poses sur la carte : rien ne
-         disait que ce sont des niveaux de protection. -->
-    <p class="titre-legende">{titre}</p>
-    {#if statut}
-      <button class="comprendre frappe-44" aria-expanded={depliee} onclick={() => (depliee = !depliee)}>
-        {depliee ? 'Réduire' : 'Comprendre'}
-      </button>
+    <!-- Le titre dit de quoi parlent les couleurs ; repliee, il reste lu par
+         les lecteurs d'ecran, qui nomment le groupe avec lui. -->
+    <p class="titre-legende" class:lecteur-seul={!depliee} id="titre-legende">{titre}</p>
+    {#if depliee}
+      <button class="reduire frappe-44" aria-expanded="true" onclick={() => (depliee = false)}>Réduire</button>
     {/if}
   </div>
 
-  <div class="liste-cles" class:empilees={statut}>
+  <div class="liste-cles" class:empilees={statut && depliee}>
     {#if densite}
       <!-- Sous la densite, les teintes de statut ne disent plus rien : la
            legende montre la rampe qui est effectivement a l'ecran. -->
@@ -101,20 +83,22 @@
         de quelques notices à plusieurs centaines
       </span>
     {:else if statut}
-      <!-- Une ligne par niveau, du plus fort au plus faible, chacune avec sa
-           glose. Toucher une ligne filtre sur ce niveau : la legende sert a
-           lire **et** a trier, comme les cles d'une carte qu'on pointe du
-           doigt. Le texte vit dans `lib/statuts.ts`. -->
+      <!-- Une cle par niveau, du plus fort au plus faible. Toucher une cle
+           filtre sur ce niveau : la legende sert a lire **et** a trier. Le
+           texte vit dans `lib/statuts.ts`. -->
       {#each STATUTS as s (s.valeur)}
         {@const actif = statutsActifs.includes(s.valeur)}
         {@const n = compte(s.valeur)}
         <button class="cle ligne" class:actif class:eteinte={statutsActifs.length > 0 && !actif}
-                aria-pressed={actif} onclick={() => onstatut(s.valeur)}>
+                aria-pressed={actif} title={depliee ? undefined : `${s.libelle} — ${s.glose}`}
+                onclick={() => onstatut(s.valeur)}>
           <i style="background:{palette[s.jeton]}"></i>
           <b>{s.libelle}</b>
-          <span class="glose">{s.glose}</span>
-          {#if depliee && n !== null}<span class="compte">{nf.format(n)}</span>{/if}
-          {#if depliee}<span class="definition">{s.definition}</span>{/if}
+          {#if depliee}
+            <span class="glose">{s.glose}</span>
+            {#if n !== null}<span class="compte">{nf.format(n)}</span>{/if}
+            <span class="definition">{s.definition}</span>
+          {/if}
         </button>
       {/each}
       {#if depliee && nonPrecises > 0}
@@ -133,6 +117,12 @@
     {#if acr}
       <span class="cle"><i style="background:{palette.acr}"></i>archi. contemporaine</span>
     {/if}
+    {#if !depliee}
+      <!-- Le seul chemin vers les definitions : un « ? » au bout des cles,
+           plutot qu'un bouton libelle qui doublait la largeur de la legende. -->
+      <button class="comprendre frappe-44" aria-expanded="false" aria-label="Comprendre la légende"
+              title="Comprendre la légende" onclick={() => (depliee = true)}>?</button>
+    {/if}
   </div>
 
   {#if depliee && statut}
@@ -144,39 +134,38 @@
 </div>
 
 <style>
-  /* `--marge-gauche` est posee par la page : la largeur du tiroir des filtres
-     quand il est pose a cote de la carte. La legende ne connait pas ce
-     tiroir, elle lit une variable heritee. Elle se range a droite de la
-     vignette des calques, qui tient le coin. */
+  /* La legende est un element de la rangee du pied (`.pied`, dans la page) :
+     elle ne se positionne pas elle-meme, la vignette des calques se range a
+     sa droite. */
   .legende {
-    position: absolute;
-    left: calc(var(--marge-gauche, 0px) + 12px + var(--empreinte-calques) + 10px);
-    bottom: 12px;
+    position: relative;
     z-index: 2;
     display: flex;
+    flex: 0 1 auto;
     flex-direction: column;
     gap: 7px;
-    max-width: min(46vw, 360px);
-    max-height: calc(100% - 140px);
+    min-width: 0;
+    max-width: 360px;
+    max-height: calc(100dvh - 220px);
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding: 10px 14px 11px;
+    padding: 6px 7px 6px 12px;
     border: 1px solid var(--bord-flottant);
     border-radius: var(--r-l);
     background: color-mix(in srgb, var(--fond) 94%, transparent);
     box-shadow: var(--ombre-carte);
     /* Pas de flou au-dessus d'un canevas WebGL : il se paie a chaque image. */
     backdrop-filter: none;
-    font-size: 11.5px;
+    font-size: 11px;
     color: var(--texte-faible);
-    transition: left var(--t-tiroir);
     /* Posee par la page quand un panneau recouvre entierement la legende. */
     visibility: var(--legende-visibilite, visible);
-    --empreinte-calques: 72px;
   }
 
   .legende.depliee {
     max-width: min(60vw, 400px);
+    padding: 10px 14px 11px;
+    font-size: 11.5px;
   }
 
   .tete {
@@ -184,6 +173,10 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+  }
+
+  .legende:not(.depliee) .tete {
+    display: contents;
   }
 
   /* Meme voix que les intitules du panneau des calques : un titre, pas une cle. */
@@ -196,7 +189,19 @@
     color: var(--texte-tenu);
   }
 
-  .comprendre {
+  .lecteur-seul {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+    padding: 0;
+    margin: -1px;
+  }
+
+  .reduire {
     flex: 0 0 auto;
     padding: 2px 9px;
     border: 1px solid var(--bord);
@@ -209,9 +214,29 @@
     transition: border-color var(--t-rapide);
   }
 
+  .comprendre {
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 1px solid var(--bord);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--texte-moyen);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    transition:
+      border-color var(--t-rapide),
+      color var(--t-rapide);
+  }
+
   @media (hover: hover) and (pointer: fine) {
+    .reduire:hover,
     .comprendre:hover {
       border-color: var(--accent);
+      color: var(--accent);
     }
   }
 
@@ -219,11 +244,11 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 6px 14px;
+    gap: 4px 12px;
   }
 
-  /* Les niveaux de protection se lisent en colonne, du plus fort au plus
-     faible : a plat, la hierarchie ne se voyait pas. */
+  /* Depliee, les niveaux de protection se lisent en colonne, du plus fort au
+     plus faible : a plat, la hierarchie ne se voyait pas. */
   .liste-cles.empilees {
     flex-direction: column;
     flex-wrap: nowrap;
@@ -253,16 +278,12 @@
     border-radius: var(--r-pilule);
   }
 
-  /* Une ligne de statut est un bouton : elle filtre. Elle garde pourtant
+  /* Une cle de statut est un bouton : elle filtre. Elle garde pourtant
      l'allure d'une cle de lecture — pas de pilule, pas de cadre — sans quoi
-     la legende ressemblerait a un second tiroir de filtres. */
+     la legende ressemblerait a une seconde rangee de filtres. */
   .ligne {
-    display: grid;
-    grid-template-columns: 9px auto 1fr auto;
-    align-items: center;
-    column-gap: 6px;
-    margin: 0 -6px;
-    padding: 3px 6px;
+    margin: 0 -4px;
+    padding: 2px 4px;
     border: none;
     border-radius: var(--r-s);
     background: transparent;
@@ -274,6 +295,15 @@
     transition:
       background var(--t-rapide),
       opacity var(--t-rapide);
+  }
+
+  .empilees .ligne {
+    display: grid;
+    grid-template-columns: 9px auto 1fr auto;
+    align-items: center;
+    column-gap: 6px;
+    margin: 0 -6px;
+    padding: 3px 6px;
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -327,35 +357,22 @@
     font-size: 10.5px;
   }
 
-  /* Sous 900 px la legende prend la largeur qui reste a cote de la vignette,
-     et remonte au-dessus de l'attribution. */
   @media (max-width: 900px) {
     .legende,
     .legende.depliee {
-      left: calc(8px + var(--empreinte-calques) + 8px);
-      right: 8px;
-      bottom: calc(var(--reserve-bas, 0px) + 36px);
       max-width: none;
       border-radius: var(--r-m);
       font-size: 10.5px;
-      --empreinte-calques: 56px;
     }
 
-    /* Legende et frise ouvertes ensemble ne laissaient qu'un quart de la
-       hauteur a la carte : la legende garde ses cles — une carte sans legende
-       ne se lit pas — et abandonne le reste, qui revient avec la carte. */
-    .legende.compacte .tete,
+    /* Legende depliee et frise ouvertes ensemble ne laissaient qu'un quart de
+       la hauteur a la carte : la legende garde ses cles — une carte sans
+       legende ne se lit pas — et abandonne le reste. */
     .legende.compacte .glose,
     .legende.compacte .definition,
     .legende.compacte .compte,
     .legende.compacte .note {
       display: none;
-    }
-
-    .legende.compacte .liste-cles.empilees {
-      flex-direction: row;
-      flex-wrap: wrap;
-      gap: 4px 12px;
     }
   }
 </style>

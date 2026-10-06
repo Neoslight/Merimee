@@ -396,8 +396,9 @@ recherche de la barre et recherche de facette. Sous 16 px, Safari iOS zoome la p
 entière à la mise au point et ne dézoome pas en sortant. La souris garde la densité.
 
 **Sur téléphone, la légende et la vignette des calques se partagent le pied de la
-carte** : la vignette à gauche (56 px), la légende dans la largeur qui reste. Le panneau
-des calques y devient une feuille basse pleine largeur. Les réglages d'affichage ont
+carte** : la légende au coin, la vignette à sa droite (56 px), le « i » des mentions
+au bout. Le panneau des calques y devient une feuille basse pleine largeur
+(`position: fixed` : la rangée du pied n'a pas la largeur de l'écran). Les réglages d'affichage ont
 quitté la légende — plus de pastille « réglages » à déplier.
 
 **Les jetons `--sa-*` (`--sa-haut`, `--sa-bas`, `--sa-gauche`, `--sa-droite`) portent les

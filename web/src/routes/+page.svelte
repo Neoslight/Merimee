@@ -1123,12 +1123,17 @@
           onbbox={(bbox) => (filters.bbox = bbox)}
         />
 
-        <Calques bind:ouvert={calquesOuverts} bind:fond bind:opacite={opaciteFond}
-                 bind:mode bind:densite bind:acr={acrVisible}
-                 nbAcr={pointsAcrCarte?.features.length ?? null} />
-        <Legende {mode} {densite} acr={acrVisible} compacte={friseOuverte}
-                 bind:depliee={legendeDepliee} comptes={comptesStatut}
-                 statutsActifs={filters.statut} onstatut={(valeur) => toggle('statut', valeur)} />
+        <!-- Le pied gauche : la legende au coin, la vignette des calques a sa
+             droite. Une rangee, pour que la vignette suive la legende quand
+             elle se deplie au lieu de la chevaucher. -->
+        <div class="pied">
+          <Legende {mode} {densite} acr={acrVisible} compacte={friseOuverte}
+                   bind:depliee={legendeDepliee} comptes={comptesStatut}
+                   statutsActifs={filters.statut} onstatut={(valeur) => toggle('statut', valeur)} />
+          <Calques bind:ouvert={calquesOuverts} bind:fond bind:opacite={opaciteFond}
+                   bind:mode bind:densite bind:acr={acrVisible}
+                   nbAcr={pointsAcrCarte?.features.length ?? null} />
+        </div>
 
         <!-- Le bloc du haut : la recherche, puis ce qui la prolonge — le compte,
              la vue, les filtres, les frises. Une colonne au large, la largeur
@@ -1408,6 +1413,28 @@
     overflow: hidden;
     overflow: clip;
     background: var(--carte-terre);
+  }
+
+  /* --- Pied gauche ------------------------------------------------------
+     Legende et vignette des calques en rangee, alignees par le bas. La rangee
+     ne capte pas le pointeur — seuls ses elements le font — et ne fixe pas de
+     `z-index` : le panneau des calques, qu'elle contient, doit pouvoir passer
+     au-dessus de la feuille du telephone. A droite, la place des commandes de
+     zoom au large, de l'attribution sur telephone. */
+  .pied {
+    position: absolute;
+    left: calc(var(--marge-gauche, 0px) + 12px + var(--sa-gauche));
+    bottom: calc(12px + var(--sa-bas));
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    max-width: calc(100% - 96px);
+    pointer-events: none;
+    transition: left var(--t-tiroir);
+  }
+
+  .pied > :global(*) {
+    pointer-events: auto;
   }
 
   /* --- Bloc du haut ----------------------------------------------------- */
@@ -1879,6 +1906,13 @@
   }
 
   @media (max-width: 900px) {
+    .pied {
+      left: calc(8px + var(--sa-gauche));
+      bottom: calc(var(--reserve-bas, 0px) + 8px);
+      gap: 8px;
+      max-width: calc(100% - 52px);
+    }
+
     .frise-attente {
       height: 317px;
     }

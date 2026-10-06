@@ -21,14 +21,6 @@ const page = await navigateur.newPage({
   colorScheme: 'dark'
 });
 
-// La legende se deplie a la premiere visite sur ecran large : une carte de lien
-// doit montrer la carte, pas l'explication. On se presente comme un habitue.
-await page.addInitScript(() => {
-  try {
-    localStorage.setItem('merimee-legende-vue', '1');
-  } catch {}
-});
-
 await page.goto(url, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('.chiffres b', { timeout: 90_000 });
 // Le compte peut etre le provisoire de `points.json` : la vignette doit montrer

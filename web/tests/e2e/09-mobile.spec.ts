@@ -94,10 +94,12 @@ test('gabarit téléphone', async () => {
   await test.step('legende et vignette des calques au pied de la carte', async () => {
     const coin = (await page.locator('button.coin').boundingBox())!;
     const legende = (await page.locator('.legende').boundingBox())!;
-    verifier('la vignette tient le coin bas gauche', coin.x < 20 && coin.width >= 44, JSON.stringify(coin));
-    verifier('la legende se range a cote, sans la recouvrir', disjointes(coin, legende) && legende.x > coin.x, JSON.stringify({ coin, legende }));
-    verifier('la legende titre ce qu’elle montre', /niveau de protection/i.test(await page.locator('.legende .titre-legende').innerText()));
-    // Sur telephone elle ne s'impose pas depliee, meme a la premiere visite.
+    verifier('la legende tient le coin bas gauche', legende.x < 20, JSON.stringify(legende));
+    verifier('la vignette garde sa taille', coin.width >= 44, JSON.stringify(coin));
+    const attribution = (await page.locator('.maplibregl-ctrl-attrib').boundingBox())!;
+    verifier('l’attribution est repliee en « i », a cote de la vignette', attribution.width < 40 && disjointes(attribution, coin), JSON.stringify(attribution));
+    verifier('la legende tient le coin, la vignette a sa droite', disjointes(coin, legende) && legende.x < coin.x, JSON.stringify({ coin, legende }));
+    verifier('la legende titre ce qu’elle montre', (await page.getByRole('group', { name: 'Niveau de protection' }).count()) === 1);
     verifier('repliee au depart sur telephone', (await page.locator('.legende .definition').count()) === 0);
     await page.getByRole('button', { name: 'Comprendre' }).click();
     await page.waitForTimeout(300);

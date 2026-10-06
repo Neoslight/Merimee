@@ -1,7 +1,7 @@
 /**
- * Legende : ce qu'elle dit (titre, gloses, definitions, effectifs), quand elle
- * se deplie d'elle-meme (premiere visite, ecran large), et ce qu'elle fait —
- * toucher un niveau de protection filtre la carte.
+ * Legende : discrete au depart (une rangee de cles et un « ? »), ce qu'elle dit
+ * une fois depliee (titre, gloses, definitions, effectifs), et ce qu'elle
+ * fait — toucher un niveau de protection filtre la carte.
  *
  * Les effectifs sont ceux de l'oracle (`ANALYSE_MERIMEE.md`) : 12 428 classes
  * seuls, 31 322 inscrits seuls, 2 562 les deux — d'ou 14 990 classes et
@@ -37,7 +37,13 @@ test.afterAll(async () => {
 });
 
 test('légende', async () => {
-  await test.step('premiere visite : depliee, avec definitions et effectifs', async () => {
+  await test.step('repliee au depart, depliee a la demande', async () => {
+    verifier('repliee : aucune definition', (await page.locator('.legende .definition').count()) === 0);
+    verifier('repliee : trois cles', (await page.locator('.legende .cle').count()) === 3);
+    const boite = (await page.locator('.legende').boundingBox())!;
+    verifier('repliee : une seule rangee basse', boite.height < 40, `${Math.round(boite.height)} px`);
+    verifier('le groupe est nomme par son titre', (await page.getByRole('group', { name: 'Niveau de protection' }).count()) === 1);
+    await page.getByRole('button', { name: 'Comprendre la légende' }).click();
     verifier('titre', /niveau de protection/i.test(await page.locator('.legende .titre-legende').innerText()));
     verifier('trois definitions', (await page.locator('.legende .definition').count()) === 3);
     await page.waitForSelector('.legende .ligne .compte', { timeout: 15_000 });
@@ -71,8 +77,7 @@ test('légende', async () => {
     await page.goto(`${infos.url}?domaine=${encodeURIComponent('architecture militaire')}`, { waitUntil: 'domcontentloaded' });
     await attendre(page, '.chiffres b');
     const n = await total(page);
-    // Seconde visite dans ce contexte : la legende ne se deplie plus seule.
-    verifier('seconde visite : repliee', (await page.locator('.legende .definition').count()) === 0);
+    verifier('un rechargement la rend repliee', (await page.locator('.legende .definition').count()) === 0);
     await page.getByRole('button', { name: 'Comprendre' }).click();
     await page.waitForSelector('.legende .ligne .compte', { timeout: 15_000 });
     await page.waitForTimeout(400);

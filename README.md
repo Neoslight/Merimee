@@ -15,10 +15,11 @@ filtres posés, qu'on retire un à un. Choisir une région cadre la carte dessus
 La carte occupe tout l'écran ; recherche, compteur, liste et filtres flottent en haut
 à gauche, et ce qu'on lit — liste, fiche, filtres — s'ouvre dans un seul volet,
 feuille à crans sur téléphone. Les commandes de la carte sont rangées par question, à
-la manière des cartes en ligne : une vignette en bas à gauche ouvre les calques — plan, photo aérienne IGN,
-cartes de Cassini et de l'état-major, couleur des points, densité, architecture
-contemporaine ; à côté, la légende dit ce que les couleurs signifient — niveau de
-protection, glose, définition et effectif sur demande — et filtre d'un toucher ; et
+la manière des cartes en ligne : au coin bas gauche, une légende discrète — trois clés
+et un « ? » qui déplie glose, définition et effectif de chaque niveau de protection —
+qui filtre d'un toucher ; à côté, une vignette ouvre les calques — plan, photo aérienne
+IGN, cartes de Cassini et de l'état-major, couleur des points, densité, architecture
+contemporaine ; et
 « Zone visible », qui restreint le corpus, est une puce de filtre comme les autres.
 « Au hasard » vole jusqu'à un édifice, à la manière d'Earth. La recherche propose avant de filtrer :
 une commune cadre la carte, une région ou un architecte posent leur filtre, un édifice

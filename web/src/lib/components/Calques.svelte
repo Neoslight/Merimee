@@ -103,9 +103,9 @@
   });
 </script>
 
-<!-- La vignette tient le coin bas gauche, comme le selecteur de calques des
-     cartes en ligne : un apercu, pas une icone. Elle ouvre le panneau plutot
-     que de basculer d'emblee — il y a quatre fonds, pas deux. -->
+<!-- La vignette se range au pied, a droite de la legende : un apercu, pas une
+     icone. Elle ouvre le panneau plutot que de basculer d'emblee — il y a
+     quatre fonds, pas deux. -->
 <button class="coin" class:actif={fond !== null} aria-expanded={ouvert}
         aria-controls="panneau-calques" bind:this={boutonCoin}
         onclick={() => (ouvert ? fermer() : ouvrir())}>
@@ -205,12 +205,11 @@
 {/if}
 
 <style>
-  /* La vignette du coin. Meme empreinte que celle que la legende reserve a
-     sa gauche (`--empreinte-calques`). */
+  /* La vignette, element de la rangee du pied (`.pied`, dans la page), apres
+     la legende. */
   .coin {
-    position: absolute;
-    left: calc(var(--marge-gauche, 0px) + 12px);
-    bottom: 12px;
+    position: relative;
+    flex: 0 0 auto;
     z-index: 3;
     width: 72px;
     height: 72px;
@@ -221,9 +220,7 @@
     background: var(--carte-terre);
     box-shadow: var(--ombre-carte);
     cursor: pointer;
-    transition:
-      left var(--t-tiroir),
-      border-color var(--t-rapide);
+    transition: border-color var(--t-rapide);
     /* Recouverte par la feuille de fiche sur telephone, comme la legende. */
     visibility: var(--legende-visibilite, visible);
   }
@@ -255,16 +252,17 @@
     border-color: var(--inscrit);
   }
 
+  /* Pose au-dessus de la rangee du pied, depuis son bord gauche. */
   .panneau-calques {
     position: absolute;
-    left: calc(var(--marge-gauche, 0px) + 12px);
-    bottom: 94px;
+    left: 0;
+    bottom: calc(100% + 10px);
     z-index: 5;
     display: flex;
     flex-direction: column;
     gap: 12px;
     width: 340px;
-    max-height: calc(100% - 110px);
+    max-height: calc(100dvh - 200px);
     overflow-y: auto;
     overscroll-behavior: contain;
     padding: 12px 14px 10px;
@@ -451,8 +449,6 @@
 
   @media (max-width: 900px) {
     .coin {
-      left: 8px;
-      bottom: calc(var(--reserve-bas, 0px) + 36px);
       width: 56px;
       height: 56px;
     }
@@ -461,18 +457,15 @@
       padding-top: 10px;
       font-size: 9.5px;
     }
-
-    .panneau-calques {
-      left: 8px;
-      bottom: 100px;
-    }
   }
 
   /* Sur telephone le panneau est une feuille basse, pleine largeur : quatre
-     tuiles de 72 px n'y tiendraient pas autrement. */
+     tuiles de 72 px n'y tiendraient pas autrement. `fixed` : la rangee du pied
+     n'a pas la largeur de l'ecran. */
   @media (max-width: 768px) {
     /* Au-dessus de la feuille du volet, repliee au pied de l'ecran. */
     .panneau-calques {
+      position: fixed;
       left: 0;
       right: 0;
       bottom: 0;

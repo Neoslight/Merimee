@@ -9,8 +9,13 @@ ligne.** La légende avait fini en tiroir fourre-tout ; une première passe l'av
 scindée (légende en bas à gauche, cartes anciennes repliées sous le zoom). La phase 3
 de la refonte (`PLAN_REFONTE_INTERFACE.md`) a fini le travail :
 
-- **la vignette des calques tient le coin bas gauche** (`Calques.svelte`, 72 px, 56
-  sous 900 px) : un **aperçu**, pas une icône — Cassini tant qu'on est sur le plan, le
+- **le pied gauche est une rangée** (`.pied`, dans la page) : la légende au coin, la
+  vignette des calques à sa droite, alignées par le bas. La rangée ne capte pas le
+  pointeur et ne pose pas de `z-index` — le panneau des calques qu'elle contient doit
+  passer au-dessus de la feuille du téléphone. Une rangée plutôt que deux positions
+  absolues : la vignette suit la légende quand elle se déplie au lieu de la chevaucher ;
+- **la vignette des calques** (`Calques.svelte`, 72 px, 56 sous 900 px) est un
+  **aperçu**, pas une icône — Cassini tant qu'on est sur le plan, le
   plan dès qu'un fond est posé, pour dire par où l'on revient. Les cartes anciennes,
   fonction la plus singulière du site, restaient cachées derrière une pastille de 31 px
   sous la géolocalisation. Elle **dit qu'un fond est posé** par un filet ocre, sinon une
@@ -35,7 +40,7 @@ de la refonte (`PLAN_REFONTE_INTERFACE.md`) a fini le travail :
   `symbol`) : c'est la vue « hybride ». Les cartes anciennes restent au-dessus — elles
   portent leur propre toponymie, deux écritures se brouilleraient. Tuiles mesurées : 12
   à 22 Ko de z8 à z18 (Paris, Lozère), `zoomMax` 19 ;
-- **la légende ne fait plus que dire** (`Legende.svelte`, à droite de la vignette), cf.
+- **la légende ne fait plus que dire** (`Legende.svelte`, au coin), cf.
   plus bas « La légende dit de quoi parlent les couleurs ». Le rail statut/époque et la
   bascule de densité l'ont quittée pour le panneau ;
 - **l'état vit dans la page** : `fond`, `mode`, `densite`, `opaciteFond`, `acrVisible`.
@@ -59,26 +64,29 @@ légende et la vignette des calques en bas, plus hautes sous 900 px où elles pr
 toute la largeur. `camera.ts` est
 pur : il dit où cadrer, `MonumentMap` reste le seul à déplacer la caméra.
 
-**La légende dit de quoi parlent les couleurs.** `classé · inscrit · les deux`, sans
-titre, étaient trois mots de métier : les visiteurs n'y lisaient ni une hiérarchie ni
-ce que « les deux » désignait. Elle porte désormais un titre (« Niveau de
-protection », « Époque de construction », « Densité de monuments ») et, en mode
-statut, **une ligne par niveau, du plus fort au plus faible**, chacune avec sa glose.
-Le texte vit dans `lib/statuts.ts`, source unique pour la légende, et à terme le
-filtre et la fiche. **Les couleurs n'ont pas bougé** : la teinte la plus dense portait
-déjà le niveau le plus fort. Frise ouverte sur gabarit étroit (`.compacte`), titre et
-gloses cèdent et les clés reviennent à plat. Quatre comportements :
+**La légende est discrète, et dit tout sur demande.** `classé · inscrit · les deux`,
+sans titre, étaient trois mots de métier : les visiteurs n'y lisaient ni une hiérarchie
+ni ce que « les deux » désignait. Une première réponse l'avait faite carte à titre,
+gloses et définitions, dépliée d'office à la première visite — elle prenait alors un
+tiers de l'écran. **Repliée** (l'état de départ, à toutes les largeurs), elle n'est
+plus qu'une rangée de clés — « Classé · Inscrit · Classé et inscrit » — et un « ? » ;
+le titre (« Niveau de protection », « Époque de construction », « Densité de
+monuments ») reste lu par les lecteurs d'écran, qui nomment le groupe avec lui, et
+chaque clé porte sa glose en `title`. **Dépliée**, une ligne par niveau, du plus fort
+au plus faible, avec glose, définition et effectif. Le texte vit dans `lib/statuts.ts`.
+**Les couleurs n'ont pas bougé** : la teinte la plus dense portait déjà le niveau le
+plus fort. Frise ouverte sur gabarit étroit (`.compacte`), gloses et définitions
+cèdent. Quatre comportements :
 
-- **« Comprendre » déplie** une définition par niveau (termes du code du patrimoine,
+- **« ? » (« Comprendre la légende ») déplie** une définition par niveau (termes du code du patrimoine,
   art. L621-1 et L621-25) et l'**effectif** de chacun, plus une ligne « Non précisé »
   quand la sélection en contient. Les effectifs viennent de `facette(filters, 'statut')`,
   **sans le filtre de statut** comme toute facette, et ne partent que légende dépliée :
   le démarrage reste à deux requêtes ;
-- **toucher une ligne filtre** sur ce niveau (`toggle('statut', …)`) ; les autres
-  reculent. La légende sert à lire et à trier ;
-- **première visite sur écran large** (≥ 901 px) : elle s'ouvre dépliée une fois, puis
-  repliée aux visites suivantes (`merimee-legende-vue` dans `localStorage`, préférence de
-  lecture, jamais l'URL). Sur téléphone elle ne s'impose pas ;
+- **toucher une clé filtre** sur ce niveau (`toggle('statut', …)`), repliée comme
+  dépliée ; les autres reculent. La légende sert à lire et à trier ;
+- **rien ne la déplie d'office** : plus de première visite dépliée, plus de drapeau
+  dans `localStorage` ;
 - elle dit « les trois ensembles sont disjoints » : les effectifs affichés sont ceux de
   chaque valeur de `statut`, qui s'additionnent — ce sont les **colonnes** classés et
   inscrits de `totaux()` qui ne s'additionnent jamais.
@@ -142,8 +150,13 @@ l'avis GHSA-jrc7-96c5-q579. Elle se retire à l'ouverture de la fiche.
 entière » (`ControleAccueil`, même groupe et même icône en masque que la
 géolocalisation, d'où son exclusion de l'inversion du thème sombre), géolocalisation.
 Elles sont ajoutées en `top-right` — MapLibre ne déplace pas une commande d'un coin à
-l'autre — et c'est leur conteneur qui descend au large, au-dessus de l'attribution
-restée en `bottom-right`. Sur téléphone il remonte sous le bloc de recherche
+l'autre — et c'est leur conteneur qui descend au large, 44 px au-dessus du pied : la
+géolocalisation touchait le « i » des mentions. **L'attribution est repliée dès le
+départ** : MapLibre déplie une attribution compacte à son premier rendu et ne la replie
+qu'au premier glissement de la carte ; dépliée, la bande passait sous la
+géolocalisation au large et couvrait la légende sur téléphone. `MonumentMap` retire
+`maplibregl-compact-show` à la première `sourcedata` qui la rend compacte ; le « i »
+la déplie au toucher, et le texte reste dans le DOM. Sur téléphone il remonte sous le bloc de recherche
 (`--hauteur-haut`) : le pied de l'écran appartient à la feuille. Les boutons de zoom
 restent au doigt : le pincement est un geste à deux doigts, WCAG 2.5.7 demande une
 alternative à un seul pointeur.

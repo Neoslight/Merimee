@@ -45,18 +45,23 @@ test('carte et fonds historiques', async () => {
     );
   });
 
-  await test.step('la vignette des calques tient le coin, le panneau est replie', async () => {
+  await test.step('la legende tient le coin, la vignette a sa droite, le panneau est replie', async () => {
     verifier('aucune tuile IGN avant activation', tuilesIgn.length === 0, `${tuilesIgn.length} requetes`);
     const coin = (await page.locator('button.coin').boundingBox())!;
     const scene = (await page.locator('.scene').boundingBox())!;
-    verifier(
-      'la vignette est en bas a gauche',
-      coin.x - scene.x < 30 && scene.y + scene.height - (coin.y + coin.height) < 30,
-      `x ${Math.round(coin.x - scene.x)}, bas ${Math.round(scene.y + scene.height - coin.y - coin.height)}`
-    );
-    verifier('le panneau est replie au depart', (await page.locator('.panneau-calques').count()) === 0);
     const legende = (await page.locator('.legende').boundingBox())!;
+    verifier(
+      'la legende est en bas a gauche',
+      legende.x - scene.x < 30 && scene.y + scene.height - (legende.y + legende.height) < 30,
+      `x ${Math.round(legende.x - scene.x)}, bas ${Math.round(scene.y + scene.height - legende.y - legende.height)}`
+    );
+    verifier('la vignette au pied, a droite de la legende', coin.x > legende.x + legende.width && scene.y + scene.height - (coin.y + coin.height) < 30);
+    verifier('le panneau est replie au depart', (await page.locator('.panneau-calques').count()) === 0);
     verifier('vignette et legende ne se recouvrent pas', disjointes(coin, legende));
+    const geoloc = (await page.locator('.maplibregl-ctrl-geolocate').boundingBox())!;
+    const mentions = (await page.locator('.maplibregl-ctrl-attrib').boundingBox())!;
+    verifier('le « i » des mentions ne touche pas la geolocalisation', mentions.y - (geoloc.y + geoloc.height) >= 8 && mentions.width < 40,
+      `ecart ${Math.round(mentions.y - geoloc.y - geoloc.height)} px, largeur ${Math.round(mentions.width)}`);
     // La vignette propose Cassini tant qu'aucun fond n'est pose.
     verifier('la vignette montre Cassini', /cassini\.jpg$/.test((await page.locator('button.coin img').getAttribute('src')) ?? ''));
     await ouvrirCalques(page);
@@ -83,7 +88,7 @@ test('carte et fonds historiques', async () => {
         tuilesIgn.every((u) => u.includes('TILEMATRIXSET=PM')),
       tuilesIgn[0]?.slice(0, 120) ?? ''
     );
-    const attributionAvec = await page.locator('.maplibregl-ctrl-attrib').innerText();
+    const attributionAvec = await page.locator('.maplibregl-ctrl-attrib').evaluate((el) => el.textContent ?? '');
     verifier('attribution Cassini affichee', /Cassini/i.test(attributionAvec), attributionAvec.slice(0, 90));
     const opacite = await page.getByRole('slider', { name: /Opacité du fond/ }).inputValue();
     verifier('une carte ancienne arrive a 65 %', opacite === '65', opacite);
@@ -175,7 +180,7 @@ test('carte et fonds historiques', async () => {
 
     await page.getByRole('button', { name: 'Plan', exact: true }).click();
     await page.waitForTimeout(300);
-    const attributionSans = await page.locator('.maplibregl-ctrl-attrib').innerText();
+    const attributionSans = await page.locator('.maplibregl-ctrl-attrib').evaluate((el) => el.textContent ?? '');
     verifier('l attribution disparait avec le fond', !/Cassini|état-major/i.test(attributionSans), attributionSans.slice(0, 90));
     verifier('le fond quitte l URL', !page.url().includes('fond='), page.url());
     verifier('le curseur part avec le fond', (await dosage.count()) === 0);

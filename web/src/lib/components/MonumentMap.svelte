@@ -541,6 +541,17 @@
     });
 
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
+    // Repliee des le depart : MapLibre deplie une attribution compacte a son
+    // premier rendu et ne la replie qu'au premier glissement de carte. Deplie,
+    // ce bandeau passait sous la geolocalisation au large et couvrait la
+    // legende sur telephone. Le « i » reste : un toucher deplie la mention.
+    const replierMentions = () => {
+      const mentions = conteneur.querySelector('.maplibregl-ctrl-attrib');
+      if (!mentions?.classList.contains('maplibregl-compact')) return;
+      mentions.classList.remove('maplibregl-compact-show');
+      map.off('sourcedata', replierMentions);
+    };
+    map.on('sourcedata', replierMentions);
 
     // Trois deplacements animes existent : le rapprochement sur un amas
     // touche, le cadrage du controle de geolocalisation (`fitBounds`), et le
@@ -1028,7 +1039,7 @@
      de licence masquee n'est pas une mention. */
   .carte :global(.maplibregl-ctrl-top-right) {
     top: auto;
-    bottom: 26px;
+    bottom: 44px;
   }
 
   /* Sur telephone, la feuille repliee tient le pied de l'ecran : l'attribution

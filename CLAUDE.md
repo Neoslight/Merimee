@@ -182,10 +182,10 @@ avant de toucher à ce domaine** : cet index oriente, il ne remplace pas la lect
 
 ### Carte — [docs/conception-carte.md](docs/conception-carte.md)
 
-- calques : vignette fixe en bas à gauche (aperçu figé), panneau à tuiles ; la légende ne fait que dire et filtrer ; l'état vit dans la page, `MonumentMap` peint
+- pied gauche en rangée (`.pied`) : légende au coin, vignette des calques à droite (aperçu figé, panneau à tuiles) ; l'état vit dans la page, `MonumentMap` peint ; attribution repliée en « i » dès le départ
 - photo aérienne sous les libellés du plan, cartes anciennes dessus ; chaque fond arrive à son dosage (100 / 65 %)
 - la vue de départ est une emprise (`METROPOLE`) cadrée avec marges, plus un centre et un zoom fixes
-- la légende porte un titre et une glose par niveau de protection (`lib/statuts.ts`) ; « Comprendre » ajoute définitions et effectifs (sans le filtre de statut, chargés seulement dépliée) ; toucher une ligne filtre ; les couleurs ne bougent pas
+- la légende est repliée au départ (trois clés et un « ? », titre pour les lecteurs d'écran) ; dépliée : glose, définition et effectif par niveau (`lib/statuts.ts`, effectifs sans le filtre de statut, chargés seulement dépliée) ; toucher une clé filtre ; les couleurs ne bougent pas
 - caméra : toucher ne bouge rien sauf sous un panneau, la liste rapproche, `?ref=` sans `c=` centre, « Au hasard » vole ; `offset`, jamais `padding`
 - épingle de sélection en `Marker` DOM, infobulle de survol par `setDOMContent`, jamais `setHTML`
 - le fond clair est repeint couche par couche **par nature**, jamais par identifiant CARTO

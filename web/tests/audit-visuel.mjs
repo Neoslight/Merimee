@@ -567,11 +567,6 @@ try {
       colorScheme: 'dark',
       deviceScaleFactor: 1
     });
-    await contexte.addInitScript(() => {
-      try {
-        localStorage.setItem('merimee-legende-vue', '1');
-      } catch {}
-    });
     const page = await contexte.newPage();
     const erreurs = [];
     page.on('console', (m) => m.type() === 'error' && erreurs.push(m.text()));
