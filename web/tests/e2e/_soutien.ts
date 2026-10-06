@@ -71,6 +71,21 @@ export async function ouvrirFiltres(page: Page): Promise<void> {
   await page.waitForTimeout(300);
 }
 
+/** La saisie ne filtre plus a chaque frappe : Entree applique la recherche
+ *  par titre, commune et departement. */
+export async function chercher(page: Page, texte: string): Promise<void> {
+  await page.fill('.recherche', texte);
+  await page.press('.recherche', 'Enter');
+}
+
+/** La recherche dans les historiques est la derniere ligne des suggestions. */
+export async function chercherHistoriques(page: Page, mot: string): Promise<void> {
+  await page.fill('.recherche', mot);
+  const ligne = page.locator('#suggestions .ligne', { hasText: 'Chercher dans les historiques' });
+  await ligne.waitFor({ timeout: 10_000 });
+  await ligne.click();
+}
+
 /** Le panneau des calques est replie au chargement, et se referme a chaque
  *  navigation comme a chaque toucher de la carte. */
 export async function ouvrirCalques(page: Page): Promise<void> {

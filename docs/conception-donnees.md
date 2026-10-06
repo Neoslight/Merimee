@@ -38,15 +38,43 @@ qu'on vient chercher par ce champ. `facette(f, cle, limite, terme)` descend
 le `LIKE` dans DuckDB via `strip_accents(lower(...))`, et **épingle les valeurs
 cochées** : sans cela, saisir un terme rendrait impossible de les décocher.
 
-**La recherche a deux cibles, et un bouton dit laquelle.** `search_key` — titre,
-commune, département — répond instantanément par un `LIKE` sur une colonne
-pré-normalisée. Les **historiques** demandent un index de 3,8 Mo, chargé au premier
-usage du mode et jamais au démarrage. Les deux s'excluent : les réunir coûterait une
-union de deux prédicats de coûts incomparables, pour un gain nul — il n'existe pas de
-titre qui contienne « jubé » (34 notices dans les historiques), ni « machicoulis »
-(550) ni « mascaron » (118) : ces trois termes n'existent que dans le texte libre.
-Le bouton **annonce le poids** qu'il engage, comme ceux des fonds historiques
-annoncent celui de leurs tuiles.
+**La recherche propose avant de filtrer** (phase 5). Taper ne filtre plus : le
+corpus tombait à « Rou » avant qu'on ait fini « Rouen ». La saisie ouvre une liste de
+suggestions (`Recherche.svelte`, motif « combobox » de l'ARIA), et c'est un geste qui
+applique :
+
+- **`suggestions()`** (`db/suggestions.ts`) répond en **une** requête `UNION ALL` sur
+  `monuments` : communes (avec leur département), départements, régions, édifices (tous
+  les mots dans `search_key`, comme le filtre de titre), dénominations, domaines,
+  auteurs. Ce qui **commence** par la saisie passe devant, puis l'effectif. Aucun
+  géocodeur, aucun appel réseau ; débattue à 150 ms, un jeton écarte les réponses
+  périmées. Les suggestions **ignorent les filtres posés** : on cherche un nom, pas une
+  intersection ;
+- **chaque famille a son geste** : une commune **cadre** la carte sur l'emprise de ses
+  notices sans rien filtrer — ce n'est pas une facette ; une région ou un département
+  **pose** sa facette (et l'effet des lieux cadre) ; un édifice **ouvre** sa fiche ; une
+  catégorie pose sa facette. Le champ se vide quand une puce porte désormais le filtre ;
+- **Entrée** — ou la première ligne, « Toutes les notices contenant… » — applique le
+  filtre de titre (`recherche`, `q=`), ouvre la liste, et cadre l'emprise des résultats
+  **si elle tient en métropole** (`dansMetropole`) : « Saint-Pierre » trouve aussi la
+  Réunion, et cadrer les deux montrerait l'océan ;
+- **la recherche dans les historiques est la dernière ligne** (« Chercher dans les
+  historiques… »), plus un bouton à côté du champ. Le mode se dit dans le champ par une
+  pastille « Historiques », qui le quitte ; vider le champ le quitte aussi. L'index
+  (3,8 Mo) part toujours au premier usage. Un lien `texte=` résout ses termes au
+  chargement, et un retour arrière aussi (ANO-12) ;
+- **le champ vide propose des raccourcis** (`RACCOURCIS`, `lib/recherche.ts`) : Vauban,
+  Guimard, Le Corbusier, Viollet-le-Duc, mégalithes, phares, cathédrales, moulins. Ils
+  remplacent les filtres courants ; leurs valeurs sont celles du corpus, à la lettre, et
+  `17-recherche.spec.ts` vérifie que chacun trouve des notices ;
+- **`replier()` plie les ligatures et les apostrophes typographiques** (`plier`) : « œ »
+  devient « oe », comme dans la quasi-totalité du corpus, « ’ » devient « ' » comme dans
+  `search_key` et le lexique (ANO-04). `surligner()` repère la saisie dans un libellé
+  malgré un repliage qui change la longueur.
+
+La liste ne se rouvre qu'à la **frappe**, au focus ou au clic — pas à tout changement du
+champ : après un choix la page le vide, et les raccourcis se rouvraient par-dessus la
+rangée de puces. `/` amène au champ depuis n'importe où, sauf depuis un autre champ.
 
 **L'index plein texte est précalculé par l'ETL, jamais par le navigateur.** Mesuré
 avant d'écrire quoi que ce soit : l'extension `fts` existe bien pour la cible wasm

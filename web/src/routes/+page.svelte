@@ -6,6 +6,9 @@
   import Legende from '$lib/components/Legende.svelte';
   import ListeResultats from '$lib/components/ListeResultats.svelte';
   import PucesFiltres from '$lib/components/PucesFiltres.svelte';
+  import Recherche from '$lib/components/Recherche.svelte';
+  import { CLE_FILTRE, type Suggestion } from '$lib/db/suggestions';
+  import { dansMetropole, type Raccourci } from '$lib/recherche';
   import { SUPERPOSITIONS } from '$lib/carte/fonds';
   import type { Mode } from '$lib/carte/semiologie';
   import MonumentMap from '$lib/components/MonumentMap.svelte';
@@ -221,34 +224,106 @@
   // charge au premier usage, puis le lexique traduit les mots en identifiants
   // avant que `filters.texte` ne declenche le cycle — cet ordre est ce que
   // `poserTermes` exige.
-  $effect(() => {
-    const saisie = terme;
-    const mode = cible;
-    const minuteur = setTimeout(async () => {
-      const mien = ++jetonTexte;
-      // La saisie brute est posee avant le filtre : c'est elle que la puce
-      // affiche, et le filtre est ce qui declenche le cycle.
-      poserSaisie(saisie);
-      if (mode === 'titres') {
-        await preparer('');
-        if (mien !== jetonTexte) return;
-        filters.texte = '';
-        filters.recherche = replier(saisie);
-        return;
-      }
-      filters.recherche = '';
-      if (!(await charger())) {
-        // Index absent de ce deploiement : on revient aux titres plutot que de
-        // laisser un mode qui ne peut rien rendre.
-        if (mien === jetonTexte) cible = 'titres';
-        return;
-      }
-      await preparer(saisie);
+  //
+  // La saisie ne filtre plus a chaque frappe : elle propose (`Recherche`), et
+  // c'est un geste — Entree, une ligne choisie — qui applique. Filtrer en
+  // tapant faisait tomber le corpus a « Rou » avant qu'on ait fini « Rouen ».
+  async function appliquerRecherche(saisie: string, mode: Cible) {
+    const mien = ++jetonTexte;
+    cible = mode;
+    terme = saisie;
+    // La saisie brute est posee avant le filtre : c'est elle que la puce
+    // affiche, et le filtre est ce qui declenche le cycle.
+    poserSaisie(saisie);
+    if (mode === 'titres') {
+      await preparer('');
       if (mien !== jetonTexte) return;
-      filters.texte = replier(saisie);
-    }, 180);
-    return () => clearTimeout(minuteur);
-  });
+      filters.texte = '';
+      filters.recherche = replier(saisie);
+      return;
+    }
+    filters.recherche = '';
+    if (!(await charger())) {
+      // Index absent de ce deploiement : on revient aux titres plutot que de
+      // laisser un mode qui ne peut rien rendre.
+      if (mien === jetonTexte) await appliquerRecherche(saisie, 'titres');
+      return;
+    }
+    await preparer(saisie);
+    if (mien !== jetonTexte) return;
+    filters.texte = replier(saisie);
+  }
+
+  // Un lien qui porte `texte=` arrive avec le filtre mais sans les identifiants
+  // de termes : le lexique doit les resoudre, sans quoi la clause s'efface.
+  if (browser && initial.filtres.texte) {
+    queueMicrotask(() => appliquerRecherche(initial.filtres.texte, 'historiques'));
+  }
+
+  /** Une recherche par mot, ou un raccourci, montre ce qu'elle a trouve : la
+   *  carte cadre l'emprise des resultats s'ils tiennent en metropole. */
+  let cadrerResultats = false;
+
+  // --- Ce que la recherche propose -------------------------------------------
+  function surLieu(s: Suggestion) {
+    const cle = CLE_FILTRE[s.genre];
+    if (cle) {
+      // Region, departement : un filtre, que l'effet des lieux cadre ensuite.
+      const liste = filters[cle as 'regions' | 'departements'];
+      if (!liste.includes(s.libelle)) liste.push(s.libelle);
+      terme = '';
+    } else if (s.bornes) {
+      // Une commune n'est pas une facette : la carte y va, sans rien filtrer.
+      vueCarte?.cadrer(s.bornes);
+    }
+  }
+
+  function surEdifice(s: Suggestion) {
+    if (s.reference) ouvrirFiche(s.reference, 'liste');
+  }
+
+  function surCategorie(s: Suggestion) {
+    const cle = CLE_FILTRE[s.genre] as 'denominations' | 'domaines' | 'auteurs' | undefined;
+    if (!cle) return;
+    if (!filters[cle].includes(s.libelle)) filters[cle].push(s.libelle);
+    terme = '';
+  }
+
+  function surRaccourci(r: Raccourci) {
+    toutEffacer();
+    if (r.filtres.auteurs) filters.auteurs = [...r.filtres.auteurs];
+    if (r.filtres.denominations) filters.denominations = [...r.filtres.denominations];
+    cadrerResultats = true;
+  }
+
+  function surTexte(texte: string, mode: Cible) {
+    if (!texte) return;
+    appliquerRecherche(texte, mode);
+    cadrerResultats = true;
+    // Au large, les resultats s'ouvrent a cote de la carte ; sur telephone, la
+    // feuille monte en apercu.
+    vue = 'liste';
+    if (telephone) cran = 'apercu';
+  }
+
+  /** Sortir des historiques : la saisie, s'il y en a une, repart sur les
+   *  titres ; sinon le mode seul change. */
+  function surTitres() {
+    if (terme.trim()) {
+      appliquerRecherche(terme.trim(), 'titres');
+    } else {
+      jetonTexte += 1;
+      retirer('texte');
+      cible = 'titres';
+    }
+  }
+
+  function surVider() {
+    jetonTexte += 1;
+    retirer('recherche');
+    retirer('texte');
+    cible = 'titres';
+  }
 
   // Signature profonde de l'etat : un seul point de declenchement pour tout
   // le cycle de requetes, quel que soit le filtre modifie.
@@ -304,10 +379,13 @@
         if (mien !== jeton) return;
         nuageMoteur = true;
         pointsCarte = pts;
-        if (cadrerLieu) {
-          cadrerLieu = false;
+        if (cadrerLieu || cadrerResultats) {
           const bornes = emprise(pts.features);
-          if (bornes) vueCarte?.cadrer(bornes);
+          // Un lieu choisi se cadre ou qu'il soit ; une recherche par mot,
+          // seulement si ses resultats tiennent en metropole.
+          if (bornes && (cadrerLieu || dansMetropole(bornes))) vueCarte?.cadrer(bornes);
+          cadrerLieu = false;
+          cadrerResultats = false;
         }
       })
       .catch(echec(() => mien === jeton));
@@ -476,6 +554,9 @@
     acrVisible = etat.acr;
     cible = etat.filtres.texte ? 'historiques' : 'titres';
     terme = etat.filtres.texte || etat.filtres.recherche;
+    // Sans cela, le predicat plein texte restait celui de l'etat quitte le
+    // temps d'un aller-retour (ANO-12).
+    if (etat.filtres.texte) appliquerRecherche(etat.filtres.texte, 'historiques');
   }
 
   // Le presse-papier peut etre refuse (contexte non securise, permission) :
@@ -509,7 +590,10 @@
 
   function toutEffacer() {
     reset();
+    jetonTexte += 1;
     terme = '';
+    // Le mode de recherche revient aux titres avec le reste (ANO-19).
+    cible = 'titres';
     suivreVue = false;
   }
 
@@ -915,43 +999,11 @@
               <strong>Mérimée</strong>
               <span class="sous">Monuments historiques · 1840 — 2026</span>
             </h1>
-            <div class="champ">
-              <input
-                class="recherche"
-                type="search"
-                aria-label={cible === 'historiques'
-                  ? 'Rechercher dans le texte des historiques'
-                  : 'Rechercher un édifice, une commune ou un département'}
-                placeholder={cible === 'historiques'
-                  ? 'Chercher dans les historiques…'
-                  : 'Rechercher un édifice, une commune…'}
-                bind:value={terme}
-              />
-              <!-- Le bouton annonce ce qu'il engage : l'index pese 3,8 Mo. -->
-              <button
-                class="cible"
-                class:actif={cible === 'historiques'}
-                aria-pressed={cible === 'historiques'}
-                aria-busy={indexTexte.etat === 'chargement'}
-                disabled={indexTexte.etat === 'indisponible'}
-                title={indexTexte.etat === 'indisponible'
-                  ? 'Index plein texte absent de ce déploiement'
-                  : 'Chercher dans le texte des historiques — 3,8 Mo au premier usage'}
-                onclick={() => (cible = cible === 'historiques' ? 'titres' : 'historiques')}
-              >Historiques</button>
-              <!-- « Au hasard » est un de, comme le bouton qui fait voyager les
-                   globes en ligne. Le nom accessible porte les mots. -->
-              <button class="hasard" aria-label="Au hasard" title="Voler vers un monument au hasard" onclick={hasard}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
-                     stroke-linejoin="round" aria-hidden="true">
-                  <rect x="4" y="4" width="16" height="16" rx="3.5" />
-                  <circle cx="9" cy="9" r="1.1" fill="currentColor" stroke="none" />
-                  <circle cx="15" cy="15" r="1.1" fill="currentColor" stroke="none" />
-                  <circle cx="15" cy="9" r="1.1" fill="currentColor" stroke="none" />
-                  <circle cx="9" cy="15" r="1.1" fill="currentColor" stroke="none" />
-                </svg>
-              </button>
-            </div>
+            <Recherche bind:terme historiques={cible === 'historiques'}
+                       indexDisponible={indexTexte.etat !== 'indisponible'}
+                       onlieu={surLieu} onedifice={surEdifice} oncategorie={surCategorie}
+                       onraccourci={surRaccourci} ontexte={surTexte} ontitres={surTitres} onvider={surVider}
+                       onhasard={hasard} />
           </div>
 
           <div class="outils">
@@ -1222,6 +1274,8 @@
   /* La carte de recherche : une surface posee, comme tout ce qui flotte sur la
      carte — fond plein, filet plus sombre que les terres, ombre. */
   .barre {
+    /* Contre elle se positionne la liste des suggestions (`Recherche`). */
+    position: relative;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -1251,129 +1305,6 @@
 
   .marque .sous {
     display: none;
-  }
-
-  .champ {
-    display: flex;
-    flex: 1 1 auto;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-  }
-
-  /* 44 px et non 40 : un `<input>` n'accepte pas de pseudo-element, donc la
-     zone de frappe etendue lui est interdite — sa hauteur reelle est la seule
-     cible qu'il ait. Ses deux voisins suivent, sinon la rangee se desaligne. */
-  .recherche {
-    flex: 1 1 auto;
-    min-width: 0;
-    height: 44px;
-    padding: 0 12px 0 34px;
-    background:
-      var(--icone-recherche) no-repeat 12px 50% / 15px 15px,
-      var(--fond-creux);
-    border: 1px solid transparent;
-    border-radius: var(--r-m);
-    color: var(--texte);
-    font-size: 13px;
-    text-overflow: ellipsis;
-    transition:
-      border-color var(--t-rapide),
-      background-color var(--t-rapide);
-  }
-
-  /* Sous 16 px, Safari iOS zoome toute la page a la mise au point du champ et
-     ne la dezoome pas en sortant. Au doigt seulement. */
-  @media (pointer: coarse) {
-    .recherche {
-      font-size: 16px;
-    }
-  }
-
-  .recherche::placeholder {
-    color: var(--texte-tenu);
-  }
-
-  .recherche:focus {
-    outline: 2px solid var(--inscrit);
-    outline-offset: -2px;
-    background-color: var(--fond-carte);
-  }
-
-  .recherche::-webkit-search-cancel-button {
-    filter: grayscale(1);
-    opacity: 0.5;
-  }
-
-  .cible {
-    flex: 0 0 auto;
-    height: 44px;
-    padding: 0 11px;
-    background: transparent;
-    border: 1px solid var(--bord);
-    border-radius: var(--r-m);
-    color: var(--texte-tenu);
-    font-size: 11.5px;
-    white-space: nowrap;
-    cursor: pointer;
-    transition:
-      border-color var(--t-rapide),
-      color var(--t-rapide);
-  }
-
-  /* `:not(.actif)` n'est pas une precaution de style, c'est ce qui rend le
-     bouton lisible une fois active : sans lui la `color` du survol l'emporte
-     sur celle de l'etat actif, et comme `--texte` vaut exactement
-     `--plein-fond`, le libelle disparait dans son propre fond. */
-  @media (hover: hover) and (pointer: fine) {
-    .cible:hover:not(:disabled):not(.actif) {
-      color: var(--texte);
-      border-color: var(--inscrit);
-    }
-  }
-
-  .cible.actif {
-    background: var(--plein-fond);
-    border-color: var(--plein-fond);
-    color: var(--plein-texte);
-  }
-
-  .cible[aria-busy='true'] {
-    opacity: 0.6;
-    cursor: progress;
-  }
-
-  .cible:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-
-  .hasard {
-    display: inline-flex;
-    flex: 0 0 auto;
-    align-items: center;
-    justify-content: center;
-    width: 44px;
-    height: 44px;
-    padding: 0;
-    border: 1px solid var(--bord-appuye);
-    border-radius: var(--r-m);
-    background: var(--fond-carte);
-    color: var(--inscrit-texte);
-    cursor: pointer;
-    transition: all var(--t-rapide);
-  }
-
-  .hasard svg {
-    width: 20px;
-    height: 20px;
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .hasard:hover {
-      border-color: var(--inscrit);
-      background: color-mix(in srgb, var(--inscrit) 10%, var(--fond-carte));
-    }
   }
 
   /* La rangee d'outils : des pastilles posees sur la carte, pas une barre. */

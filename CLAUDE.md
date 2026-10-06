@@ -57,14 +57,15 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `web/src/lib/carte/semiologie.ts` | `Mode` et `TRANCHES` d'époque, partagés par la carte, la légende et les calques |
 | `web/scripts/vignettes-calques.mjs` | produit `static/calques/*.jpg`, aperçus figés des fonds — aucun octet IGN avant choix |
 | `web/src/lib/carte/camera.ts` | cadrage, calculs purs : emprise de départ, part visible sous les panneaux, décalage de visée, et quand taire la vue dans un lien copié |
+| `web/src/lib/recherche.ts` / `web/src/lib/db/suggestions.ts` | raccourcis d'exploration, surlignage, emprise métropolitaine / suggestions en une requête `UNION ALL` |
 | `web/src/lib/statuts.ts` | libellé, glose et définition de chaque niveau de protection — source unique de la légende |
 | `web/src/lib/photo.ts` | cadrage des photographies de fiche, calculs purs — extrait de `DetailPanel.svelte` |
 | `web/src/lib/format.ts` | `romain`, `nf`, formats de nombres — étaient recopiés dans plusieurs composants |
 | `web/src/service-worker.ts` | cache des actifs hachés uniquement |
 | `web/scripts/precharger.mjs` | injecte le préchargement du wasm dans le shell HTML après build, chaîné à `build` et `build:pages` |
-| `web/src/lib/components/` | `MonumentMap` (rendu seul), `Calques`, `Legende`, `ListeResultats`, `PucesFiltres`, `FacetPanel` (aussi par section : `seules`), `Jetons`, `Timeline`, `DetailPanel` |
-| `web/tests/e2e/` | 351 vérifications en Chromium réel : 16 fichiers `NN-domaine.spec.ts` + `_soutien.ts` (`verifier()` adossé à `expect.soft`), `playwright.config.ts` en `workers: 1` / `retries: 0` |
-| `web/tests/unit/` | 79 tests Vitest sur la logique pure : `buildWhere`, `permalien`, `shards`, `teinte`, `points`, `acr`, `camera`, distances |
+| `web/src/lib/components/` | `MonumentMap` (rendu seul), `Recherche`, `Calques`, `Legende`, `ListeResultats`, `PucesFiltres`, `FacetPanel` (aussi par section : `seules`), `Jetons`, `Timeline`, `DetailPanel` |
+| `web/tests/e2e/` | 370 vérifications en Chromium réel : 17 fichiers `NN-domaine.spec.ts` + `_soutien.ts` (`verifier()` adossé à `expect.soft`), `playwright.config.ts` en `workers: 1` / `retries: 0` |
+| `web/tests/unit/` | 86 tests Vitest sur la logique pure : `buildWhere`, `permalien`, `shards`, `teinte`, `points`, `acr`, `camera`, `recherche`, distances |
 | `web/tests/apercu-social.mjs` | régénère la vignette Open Graph depuis l'application |
 | `web/tests/audit-visuel.mjs` | 120 captures + relevés WCAG chiffrés, **hors** `npm run test` |
 
@@ -80,8 +81,8 @@ cd etl  && python -m merimee_etl.memoire   # compte les illustrations POP, 1,36 
 cd etl  && python -m pytest tests -q    # 103 tests (79 + 24 dans test_annexes.py)
 cd web  && npm run dev                  # http://localhost:5173
 cd web  && npm run check                # svelte-check, doit rester à 0/0
-cd web  && npm run test:unit            # Vitest, 79 tests, logique pure
-cd web  && npm run build && npm run test # build statique + 351 vérifications en Chromium (tests/e2e/)
+cd web  && npm run test:unit            # Vitest, 86 tests, logique pure
+cd web  && npm run build && npm run test # build statique + 370 vérifications en Chromium (tests/e2e/)
 cd web  && npm run apercu               # régénère static/apercu-social.png
 cd web  && npm run audit                # 120 captures + relevés dans .audit-screenshots/
 cd web  && npm run deploy               # predeploy (check + test:unit) puis build /Merimee + push sur gh-pages
@@ -165,6 +166,7 @@ avant de toucher à ce domaine** : cet index oriente, il ne remplace pas la lect
 - colonnes `LIST` plutôt que tables de liaison (sauf `protections`, 4 215 notices à plusieurs actes)
 - colonnes mortes retirées des Parquet, jamais lues côté navigateur : **−10 % sur `monuments.parquet`**
 - une facette annonce ce qu'elle cache, sans son propre filtre ; sa recherche descend en SQL (40 valeurs affichées, tout le reste cherchable)
+- la saisie propose (suggestions), un geste applique : commune → cadrage, région/département/catégorie → facette, édifice → fiche, Entrée → filtre de titre + liste ; historiques = dernière ligne ; `replier` plie « œ » et « ’ »
 - plein texte précalculé par l'ETL, résolu **une fois par cycle** dans une table temporaire (LRU 8), pas réinjecté à chaque requête
 - `USING SAMPLE` ignore le filtre — « Au hasard » veut `ORDER BY random()` ; `has_historique` et `has_photo` y sont des ordres, pas des filtres
 - le retour arrière lit `location` sur `popstate`, jamais `page.url` — SvelteKit y garde l'adresse du chargement sous `pushState`/`replaceState`

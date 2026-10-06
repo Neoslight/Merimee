@@ -134,6 +134,8 @@ async function raz(page) {
     await page.locator('.fiche .fermer').click();
     await page.waitForTimeout(250);
   }
+  const effacer = page.getByRole('button', { name: 'Effacer la recherche' });
+  if ((await effacer.count()) === 1) await effacer.click();
   const champ = page.locator('.recherche');
   if ((await champ.count()) === 1 && (await champ.inputValue()) !== '') {
     await champ.fill('');
@@ -327,8 +329,8 @@ const ETATS = [
     vue: 'liste',
     poser: async (page) => {
       await ouvrirListe(page);
-      await page.locator('button.cible').click();
       await page.fill('.recherche', 'jubé');
+      await page.locator('#suggestions .ligne', { hasText: 'Chercher dans les historiques' }).click();
       await page.waitForTimeout(3500);
     }
   }

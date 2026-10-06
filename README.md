@@ -22,7 +22,10 @@ cartes de Cassini et de l'état-major, couleur des points, densité, architectur
 contemporaine ; à côté, la légende dit ce que les couleurs signifient — niveau de
 protection, glose, définition et effectif sur demande — et filtre d'un toucher ; et
 « limiter à la zone visible », qui restreint le corpus, est passé parmi les filtres.
-« Au hasard » vole jusqu'à un édifice, à la manière d'Earth.
+« Au hasard » vole jusqu'à un édifice, à la manière d'Earth. La recherche propose avant de filtrer :
+une commune cadre la carte, une région ou un architecte posent leur filtre, un édifice
+ouvre sa fiche, et le champ vide suggère des pistes — Vauban, Guimard, les mégalithes,
+les phares.
 
 Les deux frises répondent aux mêmes gestes : un clic pose une valeur, un glissement une
 plage, un second clic au même endroit l'efface. Elles se replient d'un geste, comme le

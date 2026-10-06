@@ -7,6 +7,7 @@
  */
 import { test, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import {
+  chercherHistoriques,
   attendre,
   demarrer,
   effacerTout,
@@ -76,8 +77,7 @@ test('chaîne des points', async () => {
   await test.step('filtre plein texte (machicoulis)', async () => {
     await effacerTout(page);
     await page.waitForTimeout(600);
-    await page.locator('button.cible').click();
-    await page.fill('.recherche', 'machicoulis');
+    await chercherHistoriques(page, 'machicoulis');
     await page.waitForTimeout(1600);
     const texte = await releve(page, 'plein texte');
     mesuresRelevees.push(texte);
@@ -86,8 +86,9 @@ test('chaîne des points', async () => {
       texte.total < 1000 && texte.n > 400,
       `${texte.n} points en ${texte.total.toFixed(0)} ms`
     );
-    await page.locator('button.cible').click();
-    await page.fill('.recherche', '');
+    // Vider le champ quitte aussi le mode historiques.
+    await page.getByRole('button', { name: 'Effacer la recherche' }).click();
+    await page.keyboard.press('Escape');
     await page.waitForTimeout(600);
   });
 

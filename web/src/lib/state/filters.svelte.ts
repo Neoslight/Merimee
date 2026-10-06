@@ -46,14 +46,28 @@ export interface Filters {
   bbox: [number, number, number, number] | null;
 }
 
-/** Minuscules sans accents : la forme sous laquelle `search_key` est stockee,
- *  et celle que `strip_accents(lower(...))` produit cote DuckDB. */
-export function replier(texte: string): string {
+/**
+ * Repliage caractere par caractere, sans rognage : minuscules, sans accents,
+ * ligatures et apostrophes typographiques ramenees a leur forme simple.
+ *
+ * L'ETL ecrit `search_key` et le lexique plein texte avec des apostrophes
+ * droites, et la quasi-totalite du corpus ecrit \u00ab oe \u00bb ; \u00ab ch\u0153ur \u00bb saisi tel
+ * quel se decoupait sinon en \u00ab ch \u00bb + \u00ab ur \u00bb et ne trouvait rien.
+ */
+export function plier(texte: string): string {
   return texte
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
-    .trim();
+    .replace(/\u0153/g, 'oe')
+    .replace(/\u00e6/g, 'ae')
+    .replace(/[\u2018\u2019\u02bc]/g, "'");
+}
+
+/** Minuscules sans accents : la forme sous laquelle `search_key` est stockee,
+ *  et celle que `strip_accents(lower(...))` produit cote DuckDB. */
+export function replier(texte: string): string {
+  return plier(texte).trim();
 }
 
 export const ANNEE_MIN = 1840;

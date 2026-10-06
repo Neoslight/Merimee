@@ -5,6 +5,8 @@
  */
 import { test, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import {
+  chercher,
+  chercherHistoriques,
   attendre,
   attendreTotal,
   demarrer,
@@ -147,7 +149,7 @@ test('facettes et filtres', async () => {
   });
 
   await test.step('recherche sans accents ni casse', async () => {
-    await page.fill('.recherche', 'chateau bordeaux');
+    await chercher(page, 'chateau bordeaux');
     await page.waitForFunction(
       () => {
         const el = document.querySelector('.chiffres span b');
@@ -175,7 +177,9 @@ test('facettes et filtres', async () => {
 
     const nomAccessibleTitres = await page.getAttribute('.recherche', 'aria-label');
     await page.locator('.bascule button', { hasText: 'Liste' }).click();
-    await page.locator('button.cible').click();
+    // La recherche dans les historiques est une ligne des suggestions, plus un
+    // bouton a cote du champ : elle se propose quand on tape.
+    await chercherHistoriques(page, 'jubé');
     const nomAccessibleHistoriques = await page.getAttribute('.recherche', 'aria-label');
     verifier(
       'le nom accessible du champ de recherche change avec sa cible',
@@ -185,7 +189,6 @@ test('facettes et filtres', async () => {
         /historique/i.test(nomAccessibleHistoriques ?? ''),
       `${nomAccessibleTitres} -> ${nomAccessibleHistoriques}`
     );
-    await page.fill('.recherche', 'jubé');
     // 34 est l'oracle : `historique LIKE '%jube%'` sur les fragments en
     // compte 34, le 35e est dans `precision_protection`, non indexe.
     await attendreTotal(page, 34);
@@ -205,14 +208,14 @@ test('facettes et filtres', async () => {
       page.url().split('?')[1] ?? ''
     );
 
-    await page.fill('.recherche', 'mascarons');
+    await chercher(page, 'mascarons');
     await attendreTotal(page, 118);
     const pluriel = await total(page);
-    await page.fill('.recherche', 'mascaron');
+    await chercher(page, 'mascaron');
     await attendreTotal(page, 118);
     verifier('singulier et pluriel donnent le meme corpus', pluriel === (await total(page)), `${pluriel} notices`);
 
-    await page.fill('.recherche', 'zzzintrouvable');
+    await chercher(page, 'zzzintrouvable');
     await attendreTotal(page, 0);
     const portee = ((await page.textContent('.portee')) ?? '').replace(/\s+/g, ' ');
     verifier(
@@ -224,6 +227,7 @@ test('facettes et filtres', async () => {
     // Retour a l'etat neutre : mode titres, champ vide, vue carte.
     await page.locator('.jetons button:not(.raz)').first().click();
     await page.locator('button.cible').click();
+    verifier('le mode historiques se quitte champ vide', (await page.locator('button.cible').count()) === 0);
     await page.locator('.bascule button', { hasText: 'Carte' }).click();
     await attendreTotal(page, 46760);
   });

@@ -11,7 +11,8 @@ ligne :
 
 - **le bloc du haut** (`.haut`), en haut à gauche, large de `--largeur-volet` (440 px,
   400 sous 1 100 px, toute la largeur sur téléphone) : la carte de recherche (`.barre` —
-  le titre `Mérimée`, le champ, « Historiques », le dé « Au hasard »), puis la rangée
+  le titre `Mérimée`, le champ à suggestions `Recherche`, le dé « Au hasard » ; cf.
+  `docs/conception-donnees.md`), puis la rangée
   d'outils (`.outils` — le compteur, la bascule Carte / Liste, Filtres, Frises), puis
   les puces des filtres posés. La rangée d'outils doit tenir sur une ligne : c'est ce
   qui fixe la largeur ;
