@@ -351,9 +351,28 @@
   {:else if !fiche}
     <div class="attente"><p>Chargement de la notice {reference}…</p></div>
   {:else}
+    <!-- La croix reste a portee pendant toute la lecture : une tenue collante
+         de hauteur nulle, en tete de ce qui defile, la garde au coin du
+         panneau quel que soit le defilement. Posee sur l'image tant qu'on est
+         en haut, sur le texte ensuite. -->
+    <div class="tenue-fermer" class:nu={!courante}>
+      <button class="pastille fermer frappe-44" onclick={onclose}
+              aria-label={retour ? 'Retour à la liste' : 'Fermer la fiche'}>
+        {#if retour}
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <polyline points="8.5,2.5 4,7 8.5,11.5" stroke="currentColor" stroke-width="1.5"
+                      stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        {:else}
+          <svg width="12" height="12" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+          </svg>
+        {/if}
+      </button>
+    </div>
+
     <!-- L'image passe en tete de fiche : c'est elle qui identifie l'edifice
-         avant son nom. Les deux commandes s'y posent en pastilles, faute de
-         place au-dessus. -->
+         avant son nom. -->
     <div class="hero" class:nu={!courante}>
       {#if courante}
         <figure class="photo">
@@ -402,19 +421,6 @@
         </figure>
       {/if}
 
-      <button class="pastille fermer frappe-44" onclick={onclose}
-              aria-label={retour ? 'Retour à la liste' : 'Fermer la fiche'}>
-        {#if retour}
-          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-            <polyline points="8.5,2.5 4,7 8.5,11.5" stroke="currentColor" stroke-width="1.5"
-                      stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-        {:else}
-          <svg width="12" height="12" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-            <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-          </svg>
-        {/if}
-      </button>
     </div>
 
     <header>
@@ -689,7 +695,14 @@
     height: 62px;
   }
 
-  .hero.nu .pastille {
+  .tenue-fermer {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    height: 0;
+  }
+
+  .tenue-fermer.nu .pastille {
     border: 1px solid var(--bord);
     box-shadow: none;
   }

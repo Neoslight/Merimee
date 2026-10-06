@@ -362,7 +362,7 @@ hauteur indéfinie. `09-mobile.spec.ts` vérifie que la dernière section est at
 la poignée et « Liste des notices »), aperçu, dépliée. Poignée en tête, 44 px réels : un
 toucher bascule — repliée, il montre la liste —, un glissement suit le doigt, tirer d'un
 quart sous l'aperçu referme le contenu ; au clavier, Entrée bascule (`click` de `detail`
-nul). Cinq points à ne pas défaire :
+nul). Six points à ne pas défaire :
 
 - **les crans passent par `transform`, jamais par la hauteur** : la hauteur définie est
   ce qui fait défiler la fiche, et la translater ne provoque aucun reflow.
@@ -373,6 +373,13 @@ nul). Cinq points à ne pas défaire :
   voisin sans refermer. Déplié, le volet couvre l'écran et redevient modal (`inert`) ;
 - **un défilement en aperçu déplie** (`ondefile` de `DetailPanel` et de
   `ListeResultats`) : on ne lit pas un historique dans 45 % d'écran ;
+- **la feuille se tire aussi depuis son contenu** : vers le bas, quand ce qui défile
+  sous le doigt est déjà en haut, la feuille suit le doigt et se pose avec les mêmes
+  seuils que la poignée (`poserFeuille`). Tout autre geste — remonter, lire, balayer
+  les photos, régler un curseur, cadrer une photo hors bornes — reste au contenu.
+  Événements **tactiles**, pas pointeur : un `pointermove` cesse dès que le navigateur
+  commence à défiler, et c'est le moment où il faut pouvoir refuser le défilement — le
+  premier `touchmove` vers le bas est donc annulé tant que le geste est indécis ;
 - **la photographie est bornée à 20dvh en aperçu**, sinon elle remplit toute la part
   visible et le titre reste sous le bord ;
 - **la carte ramène le point choisi au-dessus de la feuille** (`marges.bottom`),
@@ -427,12 +434,16 @@ sur téléphone la feuille redescend en aperçu), « Itinéraire » (OpenStreetM
 de carte en vient déjà, et le lien n'emporte rien de l'utilisateur), « Partager » (la
 feuille de partage du système, **seulement au doigt et là où elle existe**), « Copier le
 lien » — sorti de l'image où il était une pastille sans libellé —, puis les renvois
-POP. Quatre autres points :
+POP. Cinq autres points :
 
 - **le statut se dit en mots** : le libellé et la glose de la légende (`lib/statuts.ts`),
   la définition en `title`. « classé+inscrit » brut ne disait rien ;
 - **fermer, c'est revenir** quand la fiche vient de la liste : la croix devient une
   flèche nommée « Retour à la liste », et la liste réapparaît dessous ;
+- **la croix reste à portée pendant toute la lecture** : elle vit dans une tenue
+  collante (`.tenue-fermer`, `position: sticky`, hauteur nulle) en tête de ce qui
+  défile, plus dans l'image. Sur l'image tant qu'on est en haut, au coin du texte
+  ensuite ;
 - **des flèches et un balayage au doigt parcourent les photographies** (ANO-49) — sauf
   sur une image recadrée, où le même geste la fait glisser dans son cadre ;
 - **« À proximité »** : les cinq notices les plus proches, sans les filtres posés (la

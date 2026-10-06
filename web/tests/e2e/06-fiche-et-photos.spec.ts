@@ -159,13 +159,13 @@ test('fiche et photographies', async () => {
         nu: hero?.classList.contains('nu') ?? false,
         hauteur: hero?.getBoundingClientRect().height ?? 0,
         titre: titre?.getBoundingClientRect().top ?? 0,
-        pastilles: document.querySelectorAll('.fiche .hero .pastille').length
+        pastilles: document.querySelectorAll('.fiche .pastille').length
       };
     });
     verifier(
       'la fiche sans photo s ouvre sur son titre',
-      // Une seule pastille sur la bande : fermer. Copier le lien a rejoint la
-      // rangee d'actions, sous le titre.
+      // Une seule pastille : fermer, dans sa tenue collante. Copier le lien a
+      // rejoint la rangee d'actions, sous le titre.
       nu.nu && nu.hauteur < 80 && nu.pastilles === 1,
       `bande de ${Math.round(nu.hauteur)} px, ${nu.pastilles} pastilles, titre a ${Math.round(nu.titre)} px`
     );

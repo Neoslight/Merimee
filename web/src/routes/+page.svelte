@@ -191,7 +191,7 @@
   let vueCarte = $state<
     | {
         vueCourante: () => VueCarte | null;
-        approcher: (reference: string, anime: boolean) => void;
+        approcher: (reference: string, anime: boolean, jusquAuBatiment?: boolean) => void;
         survoler: (lon: number, lat: number, reserve: Marges) => Promise<void>;
         cadrer: (bornes: Bornes) => void;
         centrer: (reference: string) => void;
@@ -280,7 +280,7 @@
   }
 
   function surEdifice(s: Suggestion) {
-    if (s.reference) ouvrirFiche(s.reference, 'liste');
+    if (s.reference) ouvrirFiche(s.reference, 'recherche');
   }
 
   function surCategorie(s: Suggestion) {
@@ -655,8 +655,9 @@
   // `origine` dit d'ou vient le geste. Depuis la carte, on voit deja ou est le
   // point : rien ne bouge, sauf s'il tombe sous un panneau. Depuis la liste,
   // la carte se rapproche de l'edifice — sinon ouvrir une fiche a l'echelle
-  // nationale ne disait pas ou il se trouve.
-  function ouvrirFiche(ref: string, origine: 'carte' | 'liste' = 'carte') {
+  // nationale ne disait pas ou il se trouve. Depuis la recherche, elle descend
+  // jusqu'au batiment : on l'a nomme, on veut le voir.
+  function ouvrirFiche(ref: string, origine: 'carte' | 'liste' | 'recherche' = 'carte') {
     // Toute ouverture annule l'arrivee d'un vol en cours : sa fiche ne doit
     // pas remplacer celle qu'un geste vient de demander.
     jetonVol += 1;
@@ -670,7 +671,7 @@
     // lui-meme, toujours present, pas son titre qui arrive plus tard.
     tick().then(() => {
       detailPanel?.focaliser();
-      if (origine === 'liste') vueCarte?.approcher(ref, vue === 'carte');
+      if (origine !== 'carte') vueCarte?.approcher(ref, vue === 'carte', origine === 'recherche');
     });
   }
 
@@ -864,10 +865,13 @@
       basculerCran();
       return;
     }
-    const part = fin / s.hauteur;
-    // Un quart de la part encore visible en apercu, tire vers le bas, referme
-    // ce que montre la feuille ; tiree vers le haut depuis le repli, elle
-    // montre la liste.
+    poserFeuille(fin / s.hauteur);
+  }
+
+  /** Pose la feuille lachee a `part` de sa hauteur sous le bord. Un quart de
+   *  la part encore visible en apercu, tire vers le bas, referme ce que montre
+   *  la feuille ; tiree vers le haut depuis le repli, elle montre la liste. */
+  function poserFeuille(part: number) {
     if (part > PART_CACHEE + (1 - PART_CACHEE) * 0.25) {
       if (contenu !== null) fermerContenu();
     } else {
@@ -875,6 +879,103 @@
       cran = part < PART_CACHEE / 2 ? 'plein' : 'apercu';
     }
   }
+
+  // Tirer la feuille vers le bas **depuis son contenu**, pas seulement par la
+  // poignee : une bande de 44 px en haut d'une fiche etait le seul endroit qui
+  // repondait, et le geste naturel — tirer la photo, le titre — ne faisait
+  // rien. Le contenu garde son defilement : la feuille ne prend le geste que
+  // s'il part vers le bas **et** que ce qui defile sous le doigt est deja en
+  // haut. Tout le reste — remonter, lire, balayer les photos — lui revient.
+  //
+  // Evenements tactiles et non pointeur : un `pointermove` cesse des que le
+  // navigateur commence a defiler (`pointercancel`), et c'est justement le
+  // moment ou il faut pouvoir dire non au defilement.
+  let voletNoeud: HTMLElement | undefined = $state();
+
+  $effect(() => {
+    const noeud = voletNoeud;
+    if (!noeud || !telephone) return;
+    let geste: {
+      x: number;
+      y: number;
+      defileur: HTMLElement | null;
+      etat: 'attente' | 'feuille' | 'contenu';
+      depart: number;
+      hauteur: number;
+    } | null = null;
+
+    /** Le conteneur qui defilerait sous le doigt, s'il y en a un. */
+    const defileurSous = (cible: HTMLElement): HTMLElement | null => {
+      for (let el: HTMLElement | null = cible; el && el !== noeud; el = el.parentElement) {
+        const debord = getComputedStyle(el).overflowY;
+        if ((debord === 'auto' || debord === 'scroll') && el.scrollHeight > el.clientHeight + 1) return el;
+      }
+      return null;
+    };
+
+    const debut = (event: TouchEvent) => {
+      geste = null;
+      if (event.touches.length !== 1 || contenu === null) return;
+      const cible = event.target as HTMLElement;
+      // La poignee a ses propres gestes ; une photo hors bornes se fait
+      // glisser dans son cadre ; un curseur se regle a l'horizontale.
+      if (cible.closest('.poignee, .cadre.glissable, input[type="range"]')) return;
+      const t = event.touches[0];
+      geste = { x: t.clientX, y: t.clientY, defileur: defileurSous(cible), etat: 'attente', depart: 0, hauteur: 0 };
+    };
+
+    const mouvement = (event: TouchEvent) => {
+      const g = geste;
+      if (!g || g.etat === 'contenu') return;
+      const t = event.touches[0];
+      const dy = t.clientY - g.y;
+      const dx = t.clientX - g.x;
+      if (g.etat === 'attente') {
+        const enHaut = !g.defileur || g.defileur.scrollTop <= 0;
+        // Vers le bas, en haut du contenu : rien a defiler. Le refuser des le
+        // premier mouvement garde le geste annulable — un navigateur qui a
+        // commence un defilement n'ecoute plus `preventDefault`.
+        if (dy > 0 && enHaut && event.cancelable) event.preventDefault();
+        if (Math.abs(dy) < 8 && Math.abs(dx) < 8) return;
+        if (dy > 0 && enHaut && Math.abs(dy) > Math.abs(dx)) {
+          g.etat = 'feuille';
+          g.hauteur = noeud.getBoundingClientRect().height;
+          g.depart = cran === 'plein' ? 0 : g.hauteur * PART_CACHEE;
+          g.y = t.clientY;
+        } else {
+          g.etat = 'contenu';
+          return;
+        }
+      }
+      if (event.cancelable) event.preventDefault();
+      decalage = Math.min(g.hauteur, Math.max(0, g.depart + (t.clientY - g.y)));
+    };
+
+    const fin = () => {
+      const g = geste;
+      geste = null;
+      if (!g || g.etat !== 'feuille') return;
+      const lache = decalage;
+      decalage = null;
+      if (lache !== null) poserFeuille(lache / g.hauteur);
+    };
+
+    const annuler = () => {
+      if (geste?.etat === 'feuille') decalage = null;
+      geste = null;
+    };
+
+    noeud.addEventListener('touchstart', debut, { passive: true });
+    noeud.addEventListener('touchmove', mouvement, { passive: false });
+    noeud.addEventListener('touchend', fin);
+    noeud.addEventListener('touchcancel', annuler);
+    return () => {
+      noeud.removeEventListener('touchstart', debut);
+      noeud.removeEventListener('touchmove', mouvement);
+      noeud.removeEventListener('touchend', fin);
+      noeud.removeEventListener('touchcancel', annuler);
+    };
+  });
 
   function annulerPoignee() {
     saisiePoignee = null;
@@ -1112,7 +1213,7 @@
              Ce qu'il ne montre pas porte `hidden` : ni visible, ni atteignable
              au clavier — le tiroir ferme gardait douze arrets de tabulation. -->
         <div class="volet" class:ouvert={contenu !== null} class:plein={cran === 'plein'}
-             class:glisse={decalage !== null} bind:clientWidth={largeurPanneau}
+             class:glisse={decalage !== null} bind:clientWidth={largeurPanneau} bind:this={voletNoeud}
              role="region" aria-label={contenu === 'fiche' ? 'Fiche' : contenu === 'filtres' ? 'Filtres' : 'Notices'}
              style:transform={decalage !== null ? `translateY(${decalage}px)` : undefined}>
           <!-- Poignee de la feuille, telephone seulement. Un toucher bascule le

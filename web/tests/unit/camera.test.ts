@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  adoucir,
   decalage,
   devoilePosition,
+  DUREE_APPROCHE,
+  dureeApproche,
   estVisible,
   margesDepart,
   METROPOLE,
@@ -96,5 +99,38 @@ describe('decalage', () => {
     expect(decalage({ ...SANS_MARGE, bottom: 304 })).toEqual([0, -152]);
     // Tiroir a gauche et fiche a droite se compensent.
     expect(decalage({ ...SANS_MARGE, left: 296, right: 296 })).toEqual([0, 0]);
+  });
+});
+
+describe('adoucir', () => {
+  it('part de 0, arrive a 1, et ne recule jamais', () => {
+    expect(adoucir(0)).toBe(0);
+    expect(adoucir(1)).toBe(1);
+    let avant = 0;
+    for (let i = 1; i <= 200; i++) {
+      const v = adoucir(i / 200);
+      expect(v).toBeGreaterThanOrEqual(avant);
+      avant = v;
+    }
+  });
+
+  it('se raccorde sans a-coup : pente continue au changement de regime', () => {
+    const pente = (t: number) => (adoucir(t + 1e-6) - adoucir(t - 1e-6)) / 2e-6;
+    expect(pente(0.3 - 1e-3)).toBeCloseTo(pente(0.3 + 1e-3), 1);
+  });
+
+  it('passe plus de temps a se poser qu’a partir', () => {
+    // A mi-course du temps, plus de la moitie du trajet est faite : la fin
+    // est lente.
+    expect(adoucir(0.5)).toBeGreaterThan(0.6);
+    // Et l'arrivee se pose : derniere pente quasi nulle.
+    expect((1 - adoucir(0.98)) / 0.02).toBeLessThan(0.01);
+  });
+});
+
+describe('dureeApproche', () => {
+  it('croit avec le saut d’echelle, plafonnee', () => {
+    expect(dureeApproche(15, 17)).toBeLessThan(dureeApproche(9, 17));
+    expect(dureeApproche(5, 17)).toBe(DUREE_APPROCHE);
   });
 });

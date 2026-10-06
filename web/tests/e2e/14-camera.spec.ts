@@ -95,12 +95,12 @@ test('un lien vers une notice s’ouvre sur elle', async () => {
   const p = await ouvrir(contexte, `?ref=${NOHANT}`);
   await attendre(p, '.fiche .fermer');
   await p.waitForFunction(
-    () => (window as unknown as { __carteOutils: { zoom: () => number } }).__carteOutils.zoom() > 14,
+    () => (window as unknown as { __carteOutils: { zoom: () => number } }).__carteOutils.zoom() > 16.5,
     undefined,
     { timeout: 15_000 }
   ).catch(() => {});
   const zoom = await outil(p, 'zoom');
-  verifier('ref= sans c= cadre la notice, pas la France', Math.abs(zoom - 14.5) < 0.05, `zoom ${zoom.toFixed(2)}`);
+  verifier('ref= sans c= cadre la notice, pas la France', Math.abs(zoom - 17) < 0.05, `zoom ${zoom.toFixed(2)}`);
 
   await attendre(p, '.epingle');
   const ou = (await pied(p))!;
@@ -130,7 +130,7 @@ test('au hasard : un vol, puis la fiche', async () => {
 
   await attendre(p, '.fiche .fermer');
   const zoom = await outil(p, 'zoom');
-  verifier('arrivee au zoom d’un edifice', Math.abs(zoom - 14.5) < 0.05, `zoom ${zoom.toFixed(2)}`);
+  verifier('arrivee au zoom d’un edifice', Math.abs(zoom - 17) < 0.05, `zoom ${zoom.toFixed(2)}`);
   verifier('la carte s’est posee', !(await outil(p, 'enMouvement')));
   const premiere = new URL(p.url()).searchParams.get('ref');
   verifier('la notice est dans l’URL', Boolean(premiere), p.url().slice(-40));
@@ -168,11 +168,11 @@ test('au hasard, mouvement réduit : un saut', async ({ browser }: { browser: Br
   const calme = await browser.newContext({ ...BUREAU, reducedMotion: 'reduce' });
   const p = await ouvrir(calme);
   await p.getByRole('button', { name: 'Au hasard' }).click();
-  // Pas de vol : la fiche doit etre la bien avant la duree d'un vol (3,8 s).
+  // Pas de vol : la fiche doit etre la bien avant la duree d'un vol (8 s).
   await p.waitForSelector('.fiche .fermer', { timeout: 2000 }).catch(() => {});
   verifier('la fiche s’ouvre sans attendre un vol', (await p.locator('.fiche .fermer').count()) === 1);
   const zoom = await outil(p, 'zoom');
-  verifier('la carte est quand meme sur l’edifice', Math.abs(zoom - 14.5) < 0.05, `zoom ${zoom.toFixed(2)}`);
+  verifier('la carte est quand meme sur l’edifice', Math.abs(zoom - 17) < 0.05, `zoom ${zoom.toFixed(2)}`);
   await calme.close();
 });
 
@@ -193,7 +193,7 @@ test('depuis la liste, la carte se rapproche de la notice', async () => {
   await p.locator('.bascule button', { hasText: 'Carte' }).click();
   await p.waitForTimeout(600);
   const zoom = await outil(p, 'zoom');
-  verifier('la carte a quitte l’echelle nationale', depart < 7 && Math.abs(zoom - 14.5) < 0.05, `${depart.toFixed(1)} -> ${zoom.toFixed(2)}`);
+  verifier('la carte a quitte l’echelle nationale', depart < 7 && Math.abs(zoom - 17) < 0.05, `${depart.toFixed(1)} -> ${zoom.toFixed(2)}`);
   verifier('l’epingle est sur la notice choisie', (await p.locator('.epingle').count()) === 1);
   await p.close();
 });

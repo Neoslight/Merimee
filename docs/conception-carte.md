@@ -94,18 +94,25 @@ règles :
   un panneau : la carte glisse alors (`easeTo`), sans changer de zoom. Le même effet
   rejoue quand les marges changent ;
 - **choisir une notice ailleurs que sur la carte la rapproche** (`approcher`) : sous
-  z11, vol jusqu'à z14,5 ; au-delà, vol à zoom constant seulement si elle est hors
-  champ. `flyTo` et non `easeTo` : la ligne suivante d'une liste peut être à l'autre
-  bout du pays. Carte masquée par la liste, le vol devient un saut ;
+  z11, vol jusqu'à z17 (`ZOOM_EDIFICE`, l'échelle du bâtiment) ; au-delà, vol à zoom
+  constant seulement si elle est hors champ. Un édifice choisi **dans la recherche**
+  descend toujours jusqu'à z17 : on l'a nommé, on veut le voir. `flyTo` et non
+  `easeTo` : la ligne suivante d'une liste peut être à l'autre bout du pays. Durée
+  selon le saut d'échelle (`dureeApproche`, 1,6 à 5 s). Carte masquée par la liste, le
+  vol devient un saut ;
 - **un lien `?ref=` sans `c=` s'ouvre sur sa notice**, une seule fois, sans animation,
   dès que le nuage la porte. Avec `c=`, la vue de l'expéditeur l'emporte ;
 - **« Au hasard » vole** (`survoler`), à la manière d'Earth : `flyTo` avec `minZoom` au
   zoom qui cadre la métropole, ce qui donne le recul puis la descente, et une durée
-  **fixe** de 3,8 s. Pas `maxDuration` : MapLibre ne plafonne pas un vol trop long, il
+  **fixe** de 8 s — à 3,8 s, douze niveaux de zoom passaient d'un trait. Pas
+  `maxDuration` : MapLibre ne plafonne pas un vol trop long, il
   le **remplace par un saut** (`duration = 0`, lu dans sa source 4.7.1). La fiche
   s'ouvre à l'arrivée ; celle qui était ouverte se ferme au décollage. Un fond
   historique est suspendu le temps du vol — une dizaine de niveaux de zoom traversés,
   à ~170 Ko la tuile Cassini ;
+- **les vols suivent `adoucir`** (`camera.ts`), pas la courbe symétrique de MapLibre :
+  30 % du temps à accélérer, 70 % à freiner (cubique), raccordés en valeur et en pente.
+  La descente finale, la plus belle part du vol, se pose au lieu de passer d'un trait ;
 - **`offset`, jamais l'option `padding`** pour viser le centre de la part visible :
   `padding` reste posé sur la carte après le mouvement et décale tout ce qui suit,
   `getCenter` compris, donc la vue copiée dans un lien.

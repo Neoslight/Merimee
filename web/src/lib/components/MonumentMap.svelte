@@ -13,8 +13,10 @@
   import { SUPERPOSITIONS, tuiles } from '$lib/carte/fonds';
   import { TRANCHES, type Mode } from '$lib/carte/semiologie';
   import {
+    adoucir,
     decalage,
     devoilePosition,
+    dureeApproche,
     DUREE_VOL,
     estVisible,
     margesDepart,
@@ -774,8 +776,11 @@
    *
    * `anime` est faux quand la carte est masquee par une autre vue : un vol que
    * personne ne regarde ne vaut pas ses images.
+   *
+   * `jusquAuBatiment` : un edifice cherche par son nom. On l'a nomme, on veut
+   * le voir — la carte descend a son echelle meme si elle etait deja proche.
    */
-  export function approcher(reference: string, anime: boolean): void {
+  export function approcher(reference: string, anime: boolean, jusquAuBatiment = false): void {
     const map = carte;
     if (!map || !pret) return;
     const ou = coordonnees(reference);
@@ -784,13 +789,15 @@
     // l'edifice est hors champ. `flyTo` plutot qu'`easeTo` — la notice
     // suivante d'une liste peut etre a l'autre bout du pays, et un glissement
     // en ligne droite a z12 chargerait toutes les tuiles du trajet.
-    const proche = map.getZoom() >= ZOOM_PROCHE;
+    const depart = map.getZoom();
+    const proche = !jusquAuBatiment && depart >= ZOOM_PROCHE;
     if (proche && estVisible(map.project(ou), conteneur.clientWidth, conteneur.clientHeight, marges)) return;
+    const arrivee = proche ? depart : Math.max(depart, ZOOM_EDIFICE);
     map.flyTo({
       center: ou,
-      zoom: proche ? map.getZoom() : ZOOM_EDIFICE,
+      zoom: arrivee,
       offset: decalage(marges),
-      ...(anime ? {} : { duration: 0 })
+      ...(anime ? { duration: dureeApproche(depart, arrivee), easing: adoucir } : { duration: 0 })
     });
   }
 
@@ -801,7 +808,14 @@
     if (!map || !pret) return;
     const ou = coordonnees(reference);
     if (!ou) return;
-    map.flyTo({ center: ou, zoom: Math.max(map.getZoom(), ZOOM_EDIFICE), offset: decalage(marges) });
+    const arrivee = Math.max(map.getZoom(), ZOOM_EDIFICE);
+    map.flyTo({
+      center: ou,
+      zoom: arrivee,
+      offset: decalage(marges),
+      duration: dureeApproche(map.getZoom(), arrivee),
+      easing: adoucir
+    });
   }
 
   /**
@@ -853,7 +867,8 @@
       zoom: ZOOM_EDIFICE,
       minZoom: recul,
       offset: decalage(reserve),
-      duration: DUREE_VOL
+      duration: DUREE_VOL,
+      easing: adoucir
     });
     return new Promise((resoudre) => {
       const arrivee = () => {
