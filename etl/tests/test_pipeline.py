@@ -636,7 +636,7 @@ def test_memoire_coupure_en_plein_flux_meme_message_qu_une_panne_reseau(monkeypa
         def __enter__(self):
             raise http.client.IncompleteRead(b"")
 
-        def __exit__(self, *exc):
+        def __exit__(self, *_):
             return False
 
     monkeypatch.setattr(memoire, "references_du_corpus", lambda artefacts: {"PA00000000"})

@@ -9,7 +9,6 @@ import {
   attendreTotal,
   demarrer,
   fermerServeur,
-  ouvrirFiltres,
   ouvrirFrises,
   verifier,
   type InfosServeur

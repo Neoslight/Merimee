@@ -45,17 +45,18 @@ de la refonte (`PLAN_REFONTE_INTERFACE.md`) a fini le travail :
   qui était sa valeur par défaut ; une pastille blanche au-dessus d'une pastille ardoise
   ne tenait pas. Ses icônes sont des SVG noirs posés en **image de fond** — on ne peut
   pas leur donner un jeton, d'où l'inversion en thème sombre, seul levier disponible ;
-- **« limiter à la zone visible » a rejoint le tiroir des filtres.** C'en est un : il
-  restreint le corpus, comme une facette, et n'avait rien à faire parmi des commandes
-  d'affichage. Conséquence sur l'état, cf. `docs/conception-donnees.md` : `suivreVue` a
+- **« limiter à la zone visible » est devenu une puce de filtre** (« Zone visible »,
+  `aria-pressed`). C'en est un : il restreint le corpus, comme une facette, et n'avait
+  rien à faire parmi des commandes d'affichage. Conséquence sur l'état, cf. `docs/conception-donnees.md` : `suivreVue` a
   quitté `MonumentMap` pour la page.
 
 **La vue de départ est une emprise, pas un centre et un zoom.** `2.6, 46.6, z4.7`
 était réglé sur un écran large : sur un téléphone en portrait le même couple montrait
 l'Espagne et la Méditerranée, la moitié nord du pays hors champ. Sans `c=` dans le
 lien, la carte cadre `METROPOLE` (`lib/carte/camera.ts`) par l'option `bounds` du
-constructeur, avec les marges de `margesDepart()` — la colonne d'outils à droite, la
-légende en bas, plus haute sous 900 px où elle prend toute la largeur. `camera.ts` est
+constructeur, avec les marges de `margesDepart()` — les commandes de zoom à droite, la
+légende et la vignette des calques en bas, plus hautes sous 900 px où elles prennent
+toute la largeur. `camera.ts` est
 pur : il dit où cadrer, `MonumentMap` reste le seul à déplacer la caméra.
 
 **La légende dit de quoi parlent les couleurs.** `classé · inscrit · les deux`, sans
@@ -72,7 +73,7 @@ gloses cèdent et les clés reviennent à plat. Quatre comportements :
   art. L621-1 et L621-25) et l'**effectif** de chacun, plus une ligne « Non précisé »
   quand la sélection en contient. Les effectifs viennent de `facette(filters, 'statut')`,
   **sans le filtre de statut** comme toute facette, et ne partent que légende dépliée :
-  le démarrage reste à trois requêtes ;
+  le démarrage reste à deux requêtes ;
 - **toucher une ligne filtre** sur ce niveau (`toggle('statut', …)`) ; les autres
   reculent. La légende sert à lire et à trier ;
 - **première visite sur écran large** (≥ 901 px) : elle s'ouvre dépliée une fois, puis
@@ -85,7 +86,7 @@ gloses cèdent et les clés reviennent à plat. Quatre comportements :
 **Caméra.** Tout ce qui déplace la vue vers une notice passe par `MonumentMap` ; les
 calculs — ce qui est visible, où viser — sont dans `lib/carte/camera.ts`, pur et testé
 en Vitest. La page fournit `marges` : ce que chaque panneau ouvert masque sur chaque
-bord (fiche à droite, tiroir posé à gauche, feuille du téléphone en bas), largeurs
+bord (volet à gauche au large, bloc du haut et feuille sur téléphone), largeurs
 **mesurées** par `bind:clientWidth`, jamais recopiées de la feuille de style. Cinq
 règles :
 

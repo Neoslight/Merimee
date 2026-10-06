@@ -4,7 +4,7 @@
  * produit par « Copier le lien », jamais dans l'URL vivante.
  */
 import { test, type Browser, type BrowserContext, type Page } from '@playwright/test';
-import { attendre, attendreTotal, demarrer, fermerServeur, total, verifier, type InfosServeur } from './_soutien';
+import { attendre, demarrer, fermerServeur, total, verifier, type InfosServeur } from './_soutien';
 
 let infos: InfosServeur;
 let contexte: BrowserContext;

@@ -115,8 +115,6 @@ class Protection:
     jour: int | None
     libelle: str
     statut: str
-    partiel: bool
-    brut: str
 
 
 _DATE_HEAD = re.compile(
@@ -179,12 +177,8 @@ def parse_protections(
             libelle = cleaned.strip(" :./-")
         if annee is None or not libelle or hors_bornes:
             rejects.append(segment)
-        statut, partiel = classify_statut(libelle)
-        events.append(
-            Protection(
-                reference, annee, mois, jour, libelle.lower(), statut, partiel, segment
-            )
-        )
+        statut, _ = classify_statut(libelle)
+        events.append(Protection(reference, annee, mois, jour, libelle.lower(), statut))
     return events, rejects
 
 

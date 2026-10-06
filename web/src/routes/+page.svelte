@@ -639,15 +639,15 @@
   }
 
   // --- Focus des calques -----------------------------------------------------
-  // Un tiroir ou une fiche ouverts par un geste deplacent le focus dedans ; le
+  // Les filtres ou une fiche ouverts par un geste deplacent le focus dedans ; le
   // refermer le rend a ce qui l'avait avant. Seul un geste utilisateur le
   // fait : un permalien pose `selection` sans jamais passer par ces fonctions,
   // et l'effet de lecture d'URL (retour arriere compris) non plus.
   //
-  // Le tiroir n'a qu'un seul point d'entree — son bouton flottant, qui
-  // reapparait a l'identique des la fermeture — inutile de le capturer. La
-  // fiche, elle, s'ouvre depuis trois endroits (carte, liste, « au hasard »),
-  // d'ou la capture du foyer courant.
+  // Les filtres rendent le focus au bouton « Filtres », toujours visible dans la
+  // rangee d'outils — inutile de capturer. La fiche, elle, s'ouvre depuis
+  // plusieurs endroits (carte, liste, recherche, voisins, « au hasard »), d'ou
+  // la capture du foyer courant.
   let foyerFiche: HTMLElement | null = null;
   let titreTiroir: HTMLElement | undefined = $state();
   let boutonFiltres: HTMLElement | undefined = $state();
@@ -691,7 +691,7 @@
     });
   }
 
-  // `preventScroll` : au moment du focus le tiroir est encore translate hors
+  // `preventScroll` : au moment du focus la feuille est encore translatee hors
   // de la scene, et le navigateur ferait defiler `.scene` pour l'y amener —
   // `overflow: hidden` masque la barre de defilement, pas le defilement.
   function ouvrirTiroir() {

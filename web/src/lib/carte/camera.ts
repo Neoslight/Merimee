@@ -29,8 +29,8 @@ export interface Marges {
 
 /**
  * Marges de la vue de depart, en pixels : ce que les commandes posees sur la
- * carte recouvrent. A droite la colonne d'outils, en bas la legende — pleine
- * largeur sous 900 px, d'ou la reserve plus haute.
+ * carte recouvrent. A droite les commandes de zoom, en bas la legende et la
+ * vignette des calques — pleine largeur sous 900 px, d'ou la reserve plus haute.
  */
 export function margesDepart(largeur: number): Marges {
   return largeur <= 900

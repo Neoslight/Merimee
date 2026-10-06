@@ -1,7 +1,8 @@
 # Règles de conception — interface
 
 Déplacé de `CLAUDE.md`. Couvre `+page.svelte`, `app.css`, `app.html`, et les
-composants `FacetPanel`, `Jetons`, `Timeline`, `DetailPanel`. Lire
+composants `Recherche`, `PucesFiltres`, `FacetPanel`, `Jetons`, `ListeResultats`,
+`Timeline`, `DetailPanel` (`Calques` et `Legende` : `docs/conception-carte.md`). Lire
 cette page avant de toucher à la mise en page, au focus, au clavier ou à
 l'accessibilité.
 
@@ -28,20 +29,16 @@ ligne :
 - **les commandes de MapLibre descendent en bas à droite** au-dessus de l'attribution,
   sur téléphone sous le bloc du haut (cf. `docs/conception-carte.md`).
 
-**Les deux panneaux repliables sont fermés au chargement, à toutes les largeurs.** Le
-tiroir des filtres s'ouvrait dès qu'il y avait la place de le poser à côté de la carte,
-et la frise dès 900 px : il fallait donc refermer deux calques avant de voir ce qu'on
-vient voir. Ils ne répondent plus qu'au geste, et le seuil de 900 px ne commande plus
-que `etroit` — le voile et la fiche qui referme le tiroir derrière elle. Deux
-conséquences :
+**Le volet et la frise sont fermés au chargement, à toutes les largeurs.** Le tiroir
+des filtres s'ouvrait dès qu'il y avait la place de le poser à côté de la carte, et la
+frise dès 900 px : il fallait donc refermer deux calques avant de voir ce qu'on vient
+voir. Ils ne répondent plus qu'au geste. Deux conséquences :
 
-- **le démarrage n'émet plus que trois requêtes au lieu de quatorze.** Les effets qui
-  portent facettes, cardinalités et histogrammes dépendent de ces deux drapeaux ; fermés,
-  ils ne partent pas, et l'ouverture les rejoue ;
-- **le franchissement du seuil ne referme plus rien non plus.** Rétrécir une fenêtre
-  laisse le tiroir ouvert sur la carte, voile compris. C'est un état que le geste
-  dénoue, pas une panne — mais la suite e2e, elle, doit le refermer avant d'éprouver le
-  bouton flottant, qui s'efface tant que le tiroir est ouvert.
+- **le démarrage n'émet plus que deux requêtes au lieu de quatorze** — le nuage et les
+  totaux. Les effets qui portent facettes, cardinalités, histogrammes et liste dépendent
+  de drapeaux d'ouverture ; fermés, ils ne partent pas, et l'ouverture les rejoue ;
+- **le franchissement d'un seuil de largeur ne referme rien.** Rétrécir une fenêtre
+  laisse le volet ouvert : c'est un état que le geste dénoue, pas une panne.
 
 **Le bouton « Filtres » vit dans la rangée d'outils** et reste visible tiroir
 ouvert : `aria-expanded` dit son état, un second appui referme. Il porte le nombre de
@@ -151,9 +148,9 @@ WebGL se paie à chaque image.
 **Le focus suit les calques qu'un geste ouvre, jamais ceux qu'un permalien pose.**
 `ouvrirFiche`/`fermerFiche`/`ouvrirTiroir`/`fermerTiroir` (`+page.svelte`) déplacent le
 focus dans le calque qu'ils ouvrent et le restituent à sa fermeture — la fiche capture
-le foyer courant avant de s'ouvrir (elle a trois points d'entrée : carte, liste, « au
-hasard » ; le tiroir n'en a qu'un, son bouton flottant, inutile à capturer puisqu'il
-réapparaît à l'identique). Seul un geste utilisateur appelle ces fonctions : un
+le foyer courant avant de s'ouvrir (elle a plusieurs points d'entrée : carte, liste,
+recherche, voisins, « au hasard ») ; les filtres rendent le focus au bouton « Filtres »
+de la rangée d'outils, toujours visible. Seul un geste utilisateur appelle ces fonctions : un
 permalien qui pose `selection` directement, ou l'effet de lecture d'URL (retour arrière
 compris), ne déplace jamais le focus — rouvrir un lien ne doit pas voler le focus d'un
 lecteur d'écran qui n'a rien demandé. Si le foyer d'origine a disparu (un filtre qui
@@ -182,16 +179,12 @@ comportement natif des `<input type="search">` du produit — la fermeture d'un 
 n'intervient qu'au passage suivant.
 
 **`inert` est posé depuis `+page.svelte`, jamais par les composants qu'il couvre.** Seul
-calque modal désormais : le volet **déplié sur téléphone**. Le texte qui suit décrit
-l'ancien tiroir ; le principe tient. Sur
-gabarit étroit, quand un calque devient modal (fiche ouverte, ou tiroir ouvert), tout ce
-qui n'est pas ce calque — la carte, la frise, appartenant chacune à un autre
-composant — reçoit `inert` depuis l'extérieur, par sélection DOM sur les enfants de
-`.scene` et quelques éléments hors scène. Le voile bloque déjà le pointeur ; `inert`
-bloque le clavier, que le voile ne couvre pas, sans qu'aucun composant n'ait à savoir
-qu'il peut être rendu inerte. Le même effet rend inerte **le tiroir fermé, à toutes
-les largeurs** : translaté hors de la scène, il gardait douze arrêts de tabulation
-invisibles, annoncés par un lecteur d'écran.
+calque modal : le volet **déplié sur téléphone** (`calqueModal`). Tout ce qui n'est pas
+lui — la carte, la frise, appartenant chacune à un autre composant — reçoit `inert`
+depuis l'extérieur, par sélection DOM sur les enfants de `.scene` et sur `.frise`, sans
+qu'aucun composant n'ait à savoir qu'il peut être rendu inerte. Le volet couvre déjà
+l'écran au pointeur ; `inert` couvre le clavier. Ce que le volet ne montre pas, lui,
+porte `hidden` (cf. plus haut).
 
 **`<title>` est dynamique**, posé par `<svelte:head>` dans `+page.svelte` :
 `{titre} — Mérimée` quand une fiche est ouverte, `Mérimée — monuments historiques`
@@ -230,7 +223,7 @@ n'est qu'une copie de la barre d'adresse.
 
 **Le thème n'est pas dans l'URL.** C'est une préférence de lecture, pas un état
 d'exploration : elle vit dans `localStorage` et un lien partagé s'ouvre dans le thème
-de celui qui le reçoit. Même règle que les tiroirs du gabarit téléphone. Un script
+de celui qui le reçoit. Même règle que l'ouverture du volet et de la frise. Un script
 inline en tête d'`app.html` pose `data-theme` avant le premier paint — sans lui le
 site est prérendu en sombre puis bascule à l'hydratation.
 
@@ -241,8 +234,8 @@ garde sa taille, son fond et son filet ; seule la surface qui répond au doigt s
 Quatre points à ne pas défaire :
 
 - **`-v` étend la hauteur seule, et ce n'est pas un raffinement.** Sur des boutons en
-  rang — la bascule Carte / Liste, les puces de filtres,
-  les deux fonds historiques — deux zones de 44 px se recouvriraient latéralement, et le
+  rang — la bascule Carte / Liste, les puces de filtres, les ordres de la liste, les
+  pastilles d'auteur — deux zones de 44 px se recouvriraient latéralement, et le
   dernier dans l'ordre du DOM prendrait le clic de son voisin ;
 - **trois éléments n'ont pas pu la recevoir.** Un `<input>` n'accepte pas de
   pseudo-élément : le champ de recherche monte donc à **44 px réels**, et `.cible` et
@@ -251,7 +244,7 @@ Quatre points à ne pas défaire :
   boutons de **44 px réels**, et la conséquence ci-dessous ;
 - **les pilules d'options des facettes restent à 30 px**, délibérément. Ce sont des
   cibles en grille, elles passent le seuil AA de WCAG 2.2 (24 px), et les porter à 44
-  changerait la densité du tiroir. L'attribution MapLibre reste à 11 px pour une autre
+  changerait la densité du volet. L'attribution MapLibre reste à 11 px pour une autre
   raison : l'agrandir la ferait monter vers la légende, dont un test garde la
   **disjonction géométrique**.
 
@@ -326,8 +319,9 @@ corrigent ensemble :
 - **`height: 100dvh`, avec `100vh` en repli.** `vh` compte la bande que la barre
   d'adresse recouvre : à son repli pendant un défilement, la scène changeait de hauteur,
   ce qui redimensionnait le canevas WebGL **et** reconstruisait les graphiques Plot ;
-- **`overscroll-behavior: contain`** sur les quatre conteneurs défilants — liste, tiroir
-  de facettes, sa liste d'options imbriquée, fiche. Sans lui, tirer vers le bas en haut
+- **`overscroll-behavior: contain`** sur tout conteneur défilant — liste, facettes et
+  leurs listes d'options, fiche, suggestions, rangée de puces et ses menus, panneau des
+  calques, légende dépliée. Sans lui, tirer vers le bas en haut
   de l'un d'eux remonte au navigateur et déclenche le pull-to-refresh : **rechargement
   complet du wasm et perte de l'exploration en cours** ;
 - **le `ResizeObserver` de la frise ne retient qu'une mesure par image.** Chaque mesure retenue reconstruit intégralement le graphique
@@ -402,9 +396,9 @@ quitté la légende — plus de pastille « réglages » à déplier.
 **Les jetons `--sa-*` (`--sa-haut`, `--sa-bas`, `--sa-gauche`, `--sa-droite`) portent les
 bordures physiques de l'écran sur iOS** — encoche, coins arrondis, barre d'accueil du
 bas — lues depuis `env(safe-area-inset-*, 0px)`. Ils valent 0 partout ailleurs, donc ne
-changent rien hors iOS ni sur les éléments qui ne touchent aucun bord physique : la
-barre (haut et côtés), le tiroir des filtres (gauche et bas), la fiche en feuille pleine
-largeur (bas), le pied de page (bas). `viewport-fit=cover` dans `app.html` est la
+changent rien hors iOS ni sur les éléments qui ne touchent aucun bord physique : le
+bloc du haut (haut et côtés), le volet au large (haut et gauche), le thème au coin (haut
+et droite), la feuille du téléphone, sa fiche et le panneau des calques (bas). `viewport-fit=cover` dans `app.html` est la
 condition pour que ces `env()` rendent autre chose que 0 : sans lui, la page ne
 s'étend pas sous les zones physiques et `safe-area-inset-*` reste nul.
 

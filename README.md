@@ -19,7 +19,7 @@ la manière des cartes en ligne : une vignette en bas à gauche ouvre les calque
 cartes de Cassini et de l'état-major, couleur des points, densité, architecture
 contemporaine ; à côté, la légende dit ce que les couleurs signifient — niveau de
 protection, glose, définition et effectif sur demande — et filtre d'un toucher ; et
-« limiter à la zone visible », qui restreint le corpus, est passé parmi les filtres.
+« Zone visible », qui restreint le corpus, est une puce de filtre comme les autres.
 « Au hasard » vole jusqu'à un édifice, à la manière d'Earth. La recherche propose avant de filtrer :
 une commune cadre la carte, une région ou un architecte posent leur filtre, un édifice
 ouvre sa fiche, et le champ vide suggère des pistes — Vauban, Guimard, les mégalithes,
@@ -67,7 +67,7 @@ protégés » de [POP](https://www.pop.culture.gouv.fr/).
 cd etl
 pip install -r requirements.txt
 python -m merimee_etl          # ~12 s, écrit dans web/static/data/
-pytest                         # 94 tests
+pytest                         # 103 tests
 ```
 
 Le rapport affiché doit annoncer 46 760 notices, 44 484 géolocalisées,
@@ -80,14 +80,15 @@ rencontrés sont listés dans `etl/out/rejets.csv`.
 cd web
 npm install
 npm run dev                    # http://localhost:5173
-npm run test:unit              # Vitest, 52 tests sur la logique pure
-npm run build && npm run test  # build statique + 181 vérifications en Chromium
+npm run test:unit              # Vitest, 86 tests sur la logique pure
+npm run build && npm run test  # build statique + 385 vérifications en Chromium
 ```
 
-`npm run test` lance Chromium sur le build, réparti en 15 fichiers
+`npm run test` lance Chromium sur le build, réparti en 18 fichiers
 (`tests/e2e/*.spec.ts`) qui couvrent le démarrage de DuckDB-Wasm, le filtrage croisé,
-la recherche dans une facette au-delà des 40 valeurs affichées, les
-permaliens, le chemin clavier des deux frises, le gabarit téléphone, les deux
+la recherche dans une facette au-delà des 40 valeurs affichées, les suggestions de la
+recherche, la caméra (vol « Au hasard », rapprochement, cadrage d'un lieu), la légende,
+les permaliens, le chemin clavier des deux frises, le gabarit téléphone, les deux
 thèmes — contraste calculé dans chacun, polices réellement servies, aucune couleur en
 dur hors d'`app.css` —, les puces de filtres actifs, le brossage des siècles, et le
 fait qu'ouvrir une fiche ne télécharge qu'un fragment de ~320 Ko. Une mesure en pixels
