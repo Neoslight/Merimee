@@ -104,9 +104,9 @@ test('un lien vers une notice s’ouvre sur elle', async () => {
 
   await attendre(p, '.epingle');
   const ou = (await pied(p))!;
-  const fiche = (await p.locator('.fiche-hote').boundingBox())!;
+  const volet = (await p.locator('.volet').boundingBox())!;
   verifier('l’epingle est posee', Boolean(ou));
-  verifier('et la fiche ne la recouvre pas', ou.x < fiche.x - 20, `epingle x ${ou.x.toFixed(0)}, fiche x ${fiche.x.toFixed(0)}`);
+  verifier('et le volet ne la recouvre pas', ou.x > volet.x + volet.width + 20, `epingle x ${ou.x.toFixed(0)}, volet jusqu’a ${(volet.x + volet.width).toFixed(0)}`);
   await p.close();
 
   // La vue portee par le lien l'emporte : c'est celle que l'expediteur regardait.
@@ -138,12 +138,13 @@ test('au hasard : un vol, puis la fiche', async () => {
 
   await attendre(p, '.epingle');
   const ou = (await pied(p))!;
-  const fiche = (await p.locator('.fiche-hote').boundingBox())!;
+  const volet = (await p.locator('.volet').boundingBox())!;
   const scene = (await p.locator('.scene').boundingBox())!;
+  const bordVolet = volet.x + volet.width;
   verifier(
-    'l’edifice arrive au milieu de la part visible, pas sous la fiche',
-    Math.abs(ou.x - (scene.x + fiche.x) / 2) < 40 && ou.x < fiche.x - 20,
-    `epingle x ${ou.x.toFixed(0)}, part visible ${scene.x.toFixed(0)}–${fiche.x.toFixed(0)}`
+    'l’edifice arrive au milieu de la part visible, pas sous le volet',
+    Math.abs(ou.x - (bordVolet + scene.x + scene.width) / 2) < 40 && ou.x > bordVolet + 20,
+    `epingle x ${ou.x.toFixed(0)}, part visible ${bordVolet.toFixed(0)}–${(scene.x + scene.width).toFixed(0)}`
   );
   const points = await outil(p, 'rendus');
   const sous = points.find((q) => q.reference === premiere);
@@ -198,26 +199,26 @@ test('depuis la liste, la carte se rapproche de la notice', async () => {
 });
 
 test('un point choisi sous la fiche est ramené à côté d’elle', async () => {
-  // Paris, zoom 14,5 : des points partout, dont sous l'emplacement de la fiche.
+  // Paris, zoom 14,5 : des points partout, dont sous l'emplacement du volet.
   const p = await ouvrir(contexte, '?c=2.3499,48.853,14.5');
   await p.waitForTimeout(800);
   const points = await outil(p, 'rendus');
-  // Largeur de la fiche fermee : elle est translatee hors champ, pas absente.
-  const largeur = (await p.locator('.fiche-hote').boundingBox())!.width;
+  // Largeur du volet ferme : il est translate hors champ, pas absent.
+  const largeur = (await p.locator('.volet').boundingBox())!.width;
   const cible = points.find(
     (q) =>
-      q.x > 1400 - largeur + 30 && q.x < 1400 - 90 && q.y > 350 && q.y < 700 &&
+      q.x > 60 && q.x < largeur - 30 && q.y > 350 && q.y < 700 &&
       points.every((r) => r.reference === q.reference || Math.hypot(q.x - r.x, q.y - r.y) > 20)
   );
-  verifier('un point isole existe sous la future fiche', Boolean(cible), `${points.length} points`);
+  verifier('un point isole existe sous le futur volet', Boolean(cible), `${points.length} points`);
   if (cible) {
     const zoomAvant = await outil(p, 'zoom');
     await p.mouse.click(cible.x, cible.y);
     await attendre(p, '.fiche .fermer');
     await p.waitForTimeout(1200);
     const ou = (await pied(p))!;
-    const fiche = (await p.locator('.fiche-hote').boundingBox())!;
-    verifier('la carte a glisse : le point est a gauche de la fiche', ou.x < fiche.x - 20, `epingle x ${ou.x.toFixed(0)}, fiche x ${fiche.x.toFixed(0)}`);
+    const volet = (await p.locator('.volet').boundingBox())!;
+    verifier('la carte a glisse : le point est a droite du volet', ou.x > volet.x + volet.width + 20, `epingle x ${ou.x.toFixed(0)}, volet jusqu’a ${(volet.x + volet.width).toFixed(0)}`);
     verifier('sans changer de zoom', Math.abs((await outil(p, 'zoom')) - zoomAvant) < 0.01);
   }
 
@@ -227,7 +228,7 @@ test('un point choisi sous la fiche est ramené à côté d’elle', async () =>
   const visibles = await outil(p, 'rendus');
   const centre = visibles.find(
     (q) =>
-      q.x > 300 && q.x < 700 && q.y > 300 && q.y < 600 &&
+      q.x > 600 && q.x < 1000 && q.y > 300 && q.y < 600 &&
       visibles.every((r) => r.reference === q.reference || Math.hypot(q.x - r.x, q.y - r.y) > 20)
   );
   if (centre) {
@@ -290,15 +291,15 @@ test('téléphone : la feuille ouverte laisse la carte dessinée', async ({ brow
     // sur le calque hote, pas sur ce qui defile.
     const fonds = await p.evaluate(() => ({
       fiche: getComputedStyle(document.querySelector('.fiche')!).backgroundColor,
-      hote: getComputedStyle(document.querySelector('.fiche-hote')!).backgroundColor
+      volet: getComputedStyle(document.querySelector('.volet')!).backgroundColor
     }));
     verifier('la fiche qui defile n’a pas de fond opaque', fonds.fiche === 'rgba(0, 0, 0, 0)', fonds.fiche);
-    verifier('le calque hote porte le fond', fonds.hote !== 'rgba(0, 0, 0, 0)', fonds.hote);
+    verifier('le volet hote porte le fond', fonds.volet !== 'rgba(0, 0, 0, 0)', fonds.volet);
 
     verifier('legende effacee sous la feuille', !(await p.locator('.legende').isVisible()));
     verifier('pas d’infobulle au doigt', (await p.locator('.infobulle').count()) === 0);
     const ou = (await pied(p))!;
-    const feuille = (await p.locator('.fiche-hote').boundingBox())!;
+    const feuille = (await p.locator('.volet').boundingBox())!;
     verifier('l’epingle est au-dessus de la feuille', ou.y < feuille.y, `epingle y ${ou.y.toFixed(0)}, feuille y ${feuille.y.toFixed(0)}`);
 
     await p.goBack();

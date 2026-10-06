@@ -4,6 +4,7 @@
   import Jetons from '$lib/components/Jetons.svelte';
   import Calques from '$lib/components/Calques.svelte';
   import Legende from '$lib/components/Legende.svelte';
+  import ListeResultats from '$lib/components/ListeResultats.svelte';
   import { SUPERPOSITIONS } from '$lib/carte/fonds';
   import type { Mode } from '$lib/carte/semiologie';
   import MonumentMap from '$lib/components/MonumentMap.svelte';
@@ -48,7 +49,7 @@
   import { charger, indexTexte, preparer } from '$lib/state/texte.svelte';
   import { appliquer, basculer, theme } from '$lib/state/theme.svelte';
   import { amorcage, LIBELLES } from '$lib/state/amorcage.svelte';
-  import { formaterDistance, nf } from '$lib/format';
+  import { nf } from '$lib/format';
   import { browser } from '$app/environment';
   import { pushState, replaceState } from '$app/navigation';
   import { tick, untrack } from 'svelte';
@@ -502,9 +503,9 @@
     jetonVol += 1;
     const actif = document.activeElement;
     foyerFiche = actif instanceof HTMLElement && actif !== document.body ? actif : null;
-    // Une feuille fermee s'ouvre en apercu ; une feuille deja ouverte garde son
+    // Une feuille repliee s'ouvre en apercu ; une feuille deja ouverte garde son
     // cran — passer d'un voisin a l'autre ne doit pas la faire sauter.
-    if (selection === null) cran = 'apercu';
+    if (contenu === null) cran = 'apercu';
     selection = ref;
     // La fiche affiche d'abord « Chargement… » : `focaliser()` vise l'aside
     // lui-meme, toujours present, pas son titre qui arrive plus tard.
@@ -518,19 +519,30 @@
     selection = null;
     // Le foyer peut avoir disparu (filtre qui retire la ligne de liste) : un
     // clic sur la carte replie alors sur le canevas, le repli le plus sense.
-    const repli =
-      foyerFiche && document.contains(foyerFiche)
-        ? foyerFiche
-        : document.querySelector<HTMLElement>('.maplibregl-canvas');
+    // Apres `tick` : la ligne de liste etait masquee (`hidden`) sous la fiche,
+    // et un element masque ne prend pas le focus.
+    const foyer = foyerFiche;
     foyerFiche = null;
-    repli?.focus({ preventScroll: true });
+    tick().then(() => {
+      const repli =
+        foyer && document.contains(foyer) && foyer.offsetParent !== null
+          ? foyer
+          : document.querySelector<HTMLElement>('.maplibregl-canvas');
+      repli?.focus({ preventScroll: true });
+    });
   }
 
   // `preventScroll` : au moment du focus le tiroir est encore translate hors
   // de la scene, et le navigateur ferait defiler `.scene` pour l'y amener —
   // `overflow: hidden` masque la barre de defilement, pas le defilement.
   function ouvrirTiroir() {
+    // Les filtres prennent la place de la fiche dans le panneau : on ne lit
+    // pas une notice en reglant la selection qui la contient peut-etre plus.
+    if (selection !== null) selection = null;
     facettesOuvertes = true;
+    // Sur telephone, la feuille se deplie : huit facettes ne tiennent pas dans
+    // un apercu.
+    if (telephone) cran = 'plein';
     tick().then(() => titreTiroir?.focus({ preventScroll: true }));
   }
 
@@ -565,18 +577,14 @@
       fermerFiche();
     } else if (facettesOuvertes) {
       fermerTiroir();
+    } else if (vue === 'liste') {
+      vue = 'carte';
     }
   }
 
-  // Le seuil telephone (768 px) est purement graphique — la fiche remonte du
-  // bas au lieu de glisser du cote — et vit donc dans la feuille de style.
-  // Celui-ci commande de l'etat : voile pose sur la scene, et fiche qui
-  // referme le tiroir derriere elle.
-  const ETROIT = '(max-width: 900px)';
-  let etroit = $state(false);
-  // Le seuil telephone commande desormais de l'etat lui aussi : la feuille a
-  // crans, qui n'est modale qu'une fois depliee, et la reserve qu'elle impose
-  // a la carte. Il reste ecrit a l'identique dans la feuille de style.
+  // Le seuil telephone commande de l'etat : la feuille a crans, qui n'est
+  // modale qu'une fois depliee, et la reserve qu'elle impose a la carte. Il
+  // reste ecrit a l'identique dans la feuille de style.
   const TELEPHONE = '(max-width: 768px)';
   let telephone = $state(false);
 
@@ -592,53 +600,55 @@
 
   $effect(() => {
     if (!browser) return;
-    const moyen = window.matchMedia(ETROIT);
     const petit = window.matchMedia(TELEPHONE);
     const appliquerGabarit = () => {
-      etroit = moyen.matches;
       telephone = petit.matches;
     };
     appliquerGabarit();
-    moyen.addEventListener('change', appliquerGabarit);
     petit.addEventListener('change', appliquerGabarit);
-    return () => {
-      moyen.removeEventListener('change', appliquerGabarit);
-      petit.removeEventListener('change', appliquerGabarit);
-    };
+    return () => petit.removeEventListener('change', appliquerGabarit);
   });
 
-  // Ouvrir une fiche sur un ecran etroit doit refermer le tiroir des filtres,
-  // sinon la fiche s'ouvre derriere lui. Au large les deux calques cohabitent.
-  // Sur telephone, le panneau des calques part aussi : la feuille le
-  // recouvrirait.
+  // Sur telephone, le panneau des calques part quand la feuille monte : elle
+  // le recouvrirait.
   $effect(() => {
-    if (selection && etroit) facettesOuvertes = false;
-    if (selection && telephone) calquesOuverts = false;
+    if (contenu !== null && telephone) calquesOuverts = false;
   });
 
-  // Calque actuellement modal : seulement sur gabarit etroit, et seulement
-  // celui qui a effectivement un voile ou une feuille pleine largeur derriere
-  // lui. Sur ecran etroit, ouvrir la fiche referme deja le tiroir (effet
-  // ci-dessus) : les deux ne sont jamais modaux en meme temps.
-  //
-  // Exception : la feuille de fiche en **apercu** sur telephone n'est pas
-  // modale. Elle laisse 55 % de carte au-dessus d'elle, et c'est tout son
-  // interet — toucher le monument voisin sans refermer. Depliee, elle couvre
-  // l'ecran et redevient modale.
-  const calqueModal = $derived(
-    !etroit
-      ? null
-      : selection !== null
-        ? telephone && cran === 'apercu'
-          ? null
-          : 'fiche'
-        : facettesOuvertes
-          ? 'tiroir'
-          : null
+  // --- Panneau ----------------------------------------------------------------
+  // Un seul emplacement pour ce qu'on lit : la liste, la fiche, les filtres.
+  // Au large c'est une colonne a gauche, sous la recherche ; sur telephone,
+  // la feuille du bas. La fiche passe devant les filtres, qui passent devant la
+  // liste — et refermer l'un decouvre le suivant : c'est le « retour » des
+  // cartes en ligne, sans pile a tenir.
+  type Contenu = 'fiche' | 'filtres' | 'liste';
+  const contenu = $derived<Contenu | null>(
+    selection !== null ? 'fiche' : facettesOuvertes ? 'filtres' : vue === 'liste' ? 'liste' : null
   );
 
+  /** Referme ce que montre le panneau, avec le geste propre a chaque contenu. */
+  function fermerContenu() {
+    if (contenu === 'fiche') fermerFiche();
+    else if (contenu === 'filtres') fermerTiroir();
+    else if (contenu === 'liste') vue = 'carte';
+  }
+
+  /** Sur telephone, toucher l'en-tete de la feuille repliee montre la liste. */
+  function ouvrirListe() {
+    vue = 'liste';
+    cran = 'apercu';
+  }
+
+  // Calque actuellement modal. Le panneau ne l'est jamais au large : c'est une
+  // colonne a cote de la carte, qu'on lit en la regardant. Sur telephone, la
+  // feuille en **apercu** ne l'est pas non plus — elle laisse 55 % de carte
+  // au-dessus d'elle, et c'est tout son interet : toucher le monument voisin
+  // sans refermer. Depliee, elle couvre l'ecran et le devient.
+  const calqueModal = $derived(telephone && contenu !== null && cran === 'plein' ? 'volet' : null);
+
   // --- Feuille a crans (telephone) -----------------------------------------
-  // Deux crans et une fermeture, commandes par une poignee. Le glissement
+  // Trois positions : repliee (l'en-tete seul, qui donne le compte), apercu,
+  // depliee — commandees par une poignee. Le glissement
   // suit le doigt par `transform`, jamais par la hauteur : la feuille a une
   // hauteur definie — c'est ce qui la fait defiler, cf. le style — et la
   // translater ne provoque aucun reflow de la notice.
@@ -648,8 +658,13 @@
   let decalage = $state<number | null>(null);
   let saisiePoignee: { y: number; depart: number; hauteur: number; bouge: boolean } | null = null;
 
+  /** Hauteur de la feuille repliee, en pixels : poignee et en-tete. A garder
+   *  egale a `--feuille-repliee` dans le style. */
+  const REPLIEE = 68;
+
   function basculerCran() {
-    cran = cran === 'plein' ? 'apercu' : 'plein';
+    if (contenu === null) ouvrirListe();
+    else cran = cran === 'plein' ? 'apercu' : 'plein';
   }
 
   function saisirPoignee(event: PointerEvent) {
@@ -660,7 +675,7 @@
     const hauteur = hote.getBoundingClientRect().height;
     saisiePoignee = {
       y: event.clientY,
-      depart: cran === 'plein' ? 0 : hauteur * PART_CACHEE,
+      depart: contenu === null ? hauteur - REPLIEE : cran === 'plein' ? 0 : hauteur * PART_CACHEE,
       hauteur,
       bouge: false
     };
@@ -688,9 +703,15 @@
       return;
     }
     const part = fin / s.hauteur;
-    // Un quart de la part encore visible en apercu, tire vers le bas, ferme.
-    if (part > PART_CACHEE + (1 - PART_CACHEE) * 0.25) fermerFiche();
-    else cran = part < PART_CACHEE / 2 ? 'plein' : 'apercu';
+    // Un quart de la part encore visible en apercu, tire vers le bas, referme
+    // ce que montre la feuille ; tiree vers le haut depuis le repli, elle
+    // montre la liste.
+    if (part > PART_CACHEE + (1 - PART_CACHEE) * 0.25) {
+      if (contenu !== null) fermerContenu();
+    } else {
+      if (contenu === null) vue = 'liste';
+      cran = part < PART_CACHEE / 2 ? 'plein' : 'apercu';
+    }
   }
 
   function annulerPoignee() {
@@ -705,67 +726,53 @@
   }
 
   // Ce que les panneaux masquent de la carte, bord par bord : elle y ramene un
-  // point choisi qui tomberait dessous, et y centre ses vols. Les largeurs sont
+  // point choisi qui tomberait dessous, et y centre ses vols. Les tailles sont
   // mesurees, pas recopiees de la feuille de style — elles changent de gabarit
   // en gabarit.
   //
   // `ficheOuverte` est un parametre et non la lecture de `selection` : « Au
   // hasard » vise la place que la fiche prendra **a l'arrivee**, alors qu'elle
   // n'est pas encore ouverte au decollage.
-  let largeurFiche = $state(0);
-  let largeurTiroir = $state(0);
+  let largeurPanneau = $state(0);
+  let hauteurHaut = $state(0);
 
   function margesCarte(ficheOuverte: boolean): Marges {
-    // Une feuille fermee s'ouvre en apercu, cf. `ouvrirFiche`. Depliee, elle
-    // couvre tout : il n'y a plus rien a ramener.
-    const apercu = selection === null || cran === 'apercu';
-    return {
-      top: 0,
-      bottom:
-        telephone && ficheOuverte && vue === 'carte' && apercu
-          ? Math.round((hauteurScene - 8) * (1 - PART_CACHEE))
-          : 0,
-      left: tiroirPose ? largeurTiroir : 0,
-      // La fiche flotte a 12 px du bord droit, et on lui laisse autant d'air
-      // de l'autre cote.
-      right: ficheOuverte && !telephone ? largeurFiche + 24 : 0
-    };
+    const ouvert = ficheOuverte || contenu !== null;
+    if (telephone) {
+      // Une feuille repliee s'ouvre en apercu, cf. `ouvrirFiche`. Depliee,
+      // elle couvre tout : il n'y a plus rien a ramener.
+      const position = contenu === null ? 'apercu' : cran;
+      return {
+        top: hauteurHaut + 12,
+        bottom: !ouvert
+          ? REPLIEE
+          : position === 'plein'
+            ? 0
+            : Math.round((hauteurScene - 8) * (1 - PART_CACHEE)),
+        left: 0,
+        right: 0
+      };
+    }
+    // Le panneau flotte a 12 px du bord gauche ; on lui laisse autant d'air de
+    // l'autre cote.
+    return { top: 0, bottom: 0, left: ouvert ? largeurPanneau + 24 : 0, right: 0 };
   }
 
   const marges = $derived(margesCarte(selection !== null));
 
   // Pose `inert` sur tout ce qui n'est pas le calque modal courant, depuis
-  // l'exterieur : la carte et la frise appartiennent a d'autres
-  // composants, `inert` se pose donc sur leurs racines sans qu'ils aient
-  // besoin de le connaitre. Le voile bloque deja le pointeur ; ceci bloque le
-  // clavier, que le voile ne couvre pas.
-  //
-  // Le tiroir ferme est inerte lui aussi, a toutes les largeurs : translate
-  // hors de la scene, il gardait une douzaine d'arrets de tabulation
-  // invisibles, annonces par un lecteur d'ecran.
+  // l'exterieur : la carte et la frise appartiennent a d'autres composants,
+  // `inert` se pose donc sur leurs racines sans qu'ils aient besoin de le
+  // connaitre. Ce qui n'est pas affiche dans le panneau porte `hidden` : ni
+  // visible, ni atteignable au clavier.
   $effect(() => {
     if (!browser) return;
     const modal = calqueModal;
-    const tiroirFerme = !facettesOuvertes;
     const scene = document.querySelector('.scene');
-    const dehors = [
-      document.querySelector('.barre'),
-      document.querySelector('.jetons'),
-      document.querySelector('.frise'),
-      document.querySelector('.replier'),
-      document.querySelector('.onglets')
-    ];
-    const cibles = [...(scene ? Array.from(scene.children) : []), ...dehors].filter(
+    const cibles = [...(scene ? Array.from(scene.children) : []), document.querySelector('.frise')].filter(
       (el): el is HTMLElement => el instanceof HTMLElement
     );
-    for (const el of cibles) {
-      const estCalque =
-        (modal === 'tiroir' && el.classList.contains('facettes')) ||
-        (modal === 'fiche' && el.classList.contains('fiche-hote')) ||
-        el.classList.contains('voile');
-      el.inert =
-        (modal !== null && !estCalque) || (tiroirFerme && el.classList.contains('facettes'));
-    }
+    for (const el of cibles) el.inert = modal !== null && !el.classList.contains('volet');
   });
 
   const VUES: { cle: Vue; titre: string }[] = [
@@ -815,11 +822,6 @@
 
   const actifs = $derived(countActive(filters));
   const puces = $derived(jetonsActifs(filters));
-  // Le tiroir ne se pose a cote de la carte qu'au large : c'est le seul cas ou
-  // la legende et l'attribution, ancrees en bas a gauche, doivent s'ecarter
-  // pour ne pas passer dessous. Une classe plutot qu'une chaine de pixels : la
-  // largeur n'est ecrite qu'une fois, dans `--largeur-tiroir`.
-  const tiroirPose = $derived(facettesOuvertes && !etroit);
 </script>
 
 <svelte:window onkeydown={surEchap} onpopstate={relireUrl} />
@@ -829,119 +831,16 @@
 </svelte:head>
 
 <div class="app">
-  <header class="barre">
-    <!-- La marque tient sur deux lignes : le filet vertical separait deux
-         blocs poses cote a cote, il n'a plus rien a separer une fois la
-         signature empilee sous le titre. -->
-    <div class="marque">
-      <strong>Mérimée</strong>
-      <span class="sous">
-        <span>Monuments historiques</span>
-        <i class="filet" aria-hidden="true"></i>
-        <span class="dates">1840 — 2026</span>
-      </span>
-    </div>
-
-    <!-- Selecteur de vue, recherche et « Au hasard » forment un seul groupe
-         centre. Les deux flancs portent `flex: 1 1 0` : a largeurs egales, le
-         groupe tombe au milieu de la barre sans que rien ne le mesure. -->
-    <div class="centre-barre">
-      <nav class="bascule">
-        {#each VUES as choix (choix.cle)}
-          <!-- Deux boutons en rang : la zone de frappe ne s'etend qu'en
-               hauteur, sinon celle de « Liste » recouvrirait « Carte ». -->
-          <button
-            class="frappe-44-v"
-            class:actif={vue === choix.cle}
-            aria-pressed={vue === choix.cle}
-            onclick={() => (vue = choix.cle)}
-          >{choix.titre}</button>
-        {/each}
-      </nav>
-
-      <div class="champ">
-        <input
-          class="recherche"
-          type="search"
-          aria-label={cible === 'historiques'
-            ? 'Rechercher dans le texte des historiques'
-            : 'Rechercher un édifice, une commune ou un département'}
-          placeholder={cible === 'historiques'
-            ? 'Chercher dans les historiques : jubé, machicoulis…'
-            : 'Rechercher un édifice, une commune, un département…'}
-          bind:value={terme}
-        />
-        <!-- Le bouton annonce ce qu'il engage, comme ceux des fonds historiques
-             annoncent le poids de leurs tuiles : l'index pèse 3,8 Mo. -->
-        <button
-          class="cible"
-          class:actif={cible === 'historiques'}
-          aria-pressed={cible === 'historiques'}
-          aria-busy={indexTexte.etat === 'chargement'}
-          disabled={indexTexte.etat === 'indisponible'}
-          title={indexTexte.etat === 'indisponible'
-            ? 'Index plein texte absent de ce déploiement'
-            : 'Chercher dans le texte des historiques — 3,8 Mo au premier usage'}
-          onclick={() => (cible = cible === 'historiques' ? 'titres' : 'historiques')}
-        >Historiques</button>
-        <!-- Sur telephone le libelle cede la place a un de : la rangee du champ
-             n'a pas la largeur des deux mots. Le nom accessible ne change pas. -->
-        <button class="hasard" aria-label="Au hasard" title="Ouvrir une notice au hasard" onclick={hasard}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
-               stroke-linejoin="round" aria-hidden="true">
-            <rect x="4" y="4" width="16" height="16" rx="3.5" />
-            <circle cx="9" cy="9" r="1.1" fill="currentColor" stroke="none" />
-            <circle cx="15" cy="15" r="1.1" fill="currentColor" stroke="none" />
-            <circle cx="15" cy="9" r="1.1" fill="currentColor" stroke="none" />
-            <circle cx="9" cy="15" r="1.1" fill="currentColor" stroke="none" />
-          </svg>
-          <span class="libelle-hasard">Au hasard</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Un seul compteur : le total suit les filtres et c'est le seul qui
-         reponde a « combien en reste-t-il ». Classes, inscrites et objets se
-         relisent dans le tiroir, ou la facette « statut » les donne deja
-         croises — les repeter ici etait une triple lecture du meme etat. -->
-    <!-- Region live : seul le compte doit etre relu au changement, pas toute
-         la barre. `aria-atomic` fait relire le nombre entier plutot que le
-         seul chiffre modifie. -->
-    <div class="chiffres" aria-live="polite" aria-atomic="true">
-      {#if compteurs}
-        <span><b>{nf.format(compteurs.total)}</b> notices</span>
-      {/if}
-      <!-- Le libelle est porte par `aria-label` et non par le texte : l'icone
-           dit la destination (lune vers le sombre, soleil vers le clair), le
-           nom accessible la nomme. -->
-      <button class="theme frappe-44" onclick={basculer}
-              aria-label={theme.courant === 'clair' ? 'Sombre' : 'Clair'}
-              title={theme.courant === 'clair'
-                ? 'Passer au thème sombre'
-                : 'Passer au thème clair'}>
-        {#if theme.courant === 'clair'}
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
-               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M20.4 14.8A8.7 8.7 0 0 1 9.2 3.6 8.7 8.7 0 1 0 20.4 14.8Z" />
-          </svg>
-        {:else}
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
-               stroke-linecap="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="4.1" />
-            <path d="M12 2.4v2.3M12 19.3v2.3M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.4 12h2.3M19.3 12h2.3M4.6 19.4 6.2 17.8M17.8 6.2l1.6-1.6" />
-          </svg>
-        {/if}
-      </button>
-    </div>
-  </header>
-
-  {#if puces.length > 0}
-    <Jetons jetons={puces} {actifs} onretirer={retirerJeton} onreset={toutEffacer} />
-  {/if}
-
-  <main class:fiche-ouverte={selection !== null} class:tiroir-pose={tiroirPose}>
+  <!-- Plus de barre d'en-tete : la carte prend tout l'ecran, et ce qu'on y
+       pose flotte dessus, a la maniere des cartes en ligne. `--marge-gauche`
+       ecarte legende et calques du volet ouvert ; `--reserve-bas`, sur
+       telephone, les pose au-dessus de la feuille repliee. -->
+  <main class:volet-ouvert={contenu !== null}
+        style:--hauteur-haut="{hauteurHaut}px"
+        style:--marge-gauche={!telephone && contenu !== null ? `${largeurPanneau + 12}px` : '0px'}
+        style:--reserve-bas={telephone ? `${REPLIEE}px` : '0px'}>
     <div class="centre">
-      <div class="scene" class:tiroir-ouvert={facettesOuvertes} bind:clientHeight={hauteurScene}>
+      <div class="scene" bind:clientHeight={hauteurScene}>
         <MonumentMap
           bind:this={vueCarte}
           points={pointsCarte}
@@ -960,8 +859,6 @@
           onbbox={(bbox) => (filters.bbox = bbox)}
         />
 
-        <!-- Avant la liste dans le document : elle les recouvre, a meme
-             z-index, quand elle occupe la scene. -->
         <Calques bind:ouvert={calquesOuverts} bind:fond bind:opacite={opaciteFond}
                  bind:mode bind:densite bind:acr={acrVisible}
                  nbAcr={pointsAcrCarte?.features.length ?? null} />
@@ -969,97 +866,205 @@
                  bind:depliee={legendeDepliee} comptes={comptesStatut}
                  statutsActifs={filters.statut} onstatut={(valeur) => toggle('statut', valeur)} />
 
-        {#if vue === 'liste'}
-          <div class="liste">
-            <header>
-              <h3>
-                {compteurs ? nf.format(compteurs.total) : '—'} notices
-                {#if compteurs && compteurs.total > resultats.length}
-                  <em>
-                    (200 premières, {proche
-                      ? 'les plus proches'
-                      : filters.texte
-                        ? 'les plus pertinentes'
-                        : 'les plus riches en mobilier'})
-                  </em>
-                {/if}
-              </h3>
-              {#if compteurs}
-                <p>
-                  {nf.format(compteurs.total - compteurs.geolocalises)} sans coordonnées,
-                  absentes de la carte{proche ? ' et de ce tri' : ''}
-                </p>
-              {/if}
-              <!-- La bascule n'existe qu'une fois la position connue : proposer
-                   un tri par distance sans position serait un bouton mort. -->
-              {#if position.courante}
-                <div class="tri" role="group" aria-label="Ordre de la liste">
-                  <button class="frappe-44-v" class:actif={tri === 'pertinence'}
-                          aria-pressed={tri === 'pertinence'}
-                          onclick={() => (tri = 'pertinence')}>
-                    {filters.texte ? 'Pertinence' : 'Mobilier'}
-                  </button>
-                  <button class="frappe-44-v" class:actif={tri === 'proximite'}
-                          aria-pressed={tri === 'proximite'}
-                          onclick={() => (tri = 'proximite')}>À proximité</button>
-                </div>
-              {/if}
-              <!-- Le plafond de la recherche plein texte se dit : une notice sur
-                   deux ne porte aucun historique, et un résultat vide serait
-                   autrement indiscernable d'un filtre trop serré. -->
-              {#if cible === 'historiques' && indexTexte.stats}
-                <p class="portee">
-                  Recherche dans les {nf.format(indexTexte.stats.n)} notices qui portent
-                  un historique.
-                  {#if indexTexte.inconnus.length}
-                    <b>
-                      {indexTexte.inconnus.map((mot) => `« ${mot} »`).join(', ')}
-                      n'apparaî{indexTexte.inconnus.length > 1 ? 'ssent' : 't'} dans aucun.
-                    </b>
-                  {/if}
-                </p>
-              {/if}
-            </header>
-            <ul>
-              {#each resultats as ligne (ligne.reference)}
-                <li>
-                  <button
-                    class:choisi={selection === ligne.reference}
-                    onclick={() => ouvrirFiche(ligne.reference, 'liste')}
-                  >
-                    <span class="nom">{ligne.titre}</span>
-                    <span class="meta">
-                      {#if ligne.distance_m != null}<b class="distance">à {formaterDistance(ligne.distance_m)}</b> · {/if}
-                      {ligne.commune} · {ligne.departement_nom}
-                      {#if ligne.nb_palissy > 0}· {nf.format(ligne.nb_palissy)} objets{/if}
-                    </span>
-                  </button>
-                </li>
-              {/each}
-            </ul>
-            {#if compteurs && compteurs.total === 0}
-              <!-- En mode historiques, `.portee` dit deja pourquoi — le
-                   plafond structurel et les mots inconnus — pas de doublon,
-                   seul le bouton s'ajoute. -->
-              <div class="vide-liste">
-                {#if cible !== 'historiques'}
-                  <p>Aucune notice ne correspond à ces filtres.</p>
-                {/if}
-                <button onclick={toutEffacer}>Effacer les filtres</button>
-              </div>
-            {/if}
+        <!-- Le bloc du haut : la recherche, puis ce qui la prolonge — le compte,
+             la vue, les filtres, les frises. Une colonne au large, la largeur
+             de l'ecran sur telephone. -->
+        <div class="haut" bind:clientHeight={hauteurHaut}>
+          <div class="barre">
+            <!-- Le titre du document. Visible au large, en tete de la carte de
+                 recherche ; reserve aux lecteurs d'ecran sur telephone, ou la
+                 largeur va au champ. -->
+            <h1 class="marque">
+              <strong>Mérimée</strong>
+              <span class="sous">Monuments historiques · 1840 — 2026</span>
+            </h1>
+            <div class="champ">
+              <input
+                class="recherche"
+                type="search"
+                aria-label={cible === 'historiques'
+                  ? 'Rechercher dans le texte des historiques'
+                  : 'Rechercher un édifice, une commune ou un département'}
+                placeholder={cible === 'historiques'
+                  ? 'Chercher dans les historiques…'
+                  : 'Rechercher un édifice, une commune…'}
+                bind:value={terme}
+              />
+              <!-- Le bouton annonce ce qu'il engage : l'index pese 3,8 Mo. -->
+              <button
+                class="cible"
+                class:actif={cible === 'historiques'}
+                aria-pressed={cible === 'historiques'}
+                aria-busy={indexTexte.etat === 'chargement'}
+                disabled={indexTexte.etat === 'indisponible'}
+                title={indexTexte.etat === 'indisponible'
+                  ? 'Index plein texte absent de ce déploiement'
+                  : 'Chercher dans le texte des historiques — 3,8 Mo au premier usage'}
+                onclick={() => (cible = cible === 'historiques' ? 'titres' : 'historiques')}
+              >Historiques</button>
+              <!-- « Au hasard » est un de, comme le bouton qui fait voyager les
+                   globes en ligne. Le nom accessible porte les mots. -->
+              <button class="hasard" aria-label="Au hasard" title="Voler vers un monument au hasard" onclick={hasard}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+                     stroke-linejoin="round" aria-hidden="true">
+                  <rect x="4" y="4" width="16" height="16" rx="3.5" />
+                  <circle cx="9" cy="9" r="1.1" fill="currentColor" stroke="none" />
+                  <circle cx="15" cy="15" r="1.1" fill="currentColor" stroke="none" />
+                  <circle cx="15" cy="9" r="1.1" fill="currentColor" stroke="none" />
+                  <circle cx="9" cy="15" r="1.1" fill="currentColor" stroke="none" />
+                </svg>
+              </button>
+            </div>
           </div>
-        {/if}
+
+          <div class="outils">
+            <!-- Un seul compteur : le total suit les filtres et c'est le seul qui
+                 reponde a « combien en reste-t-il ». Region live : seul le
+                 compte doit etre relu au changement ; `aria-atomic` fait relire
+                 le nombre entier plutot que le seul chiffre modifie. -->
+            <div class="chiffres" aria-live="polite" aria-atomic="true">
+              {#if compteurs}
+                <span><b>{nf.format(compteurs.total)}</b> notices</span>
+              {/if}
+            </div>
+            <!-- La liste s'ouvre a cote de la carte au large ; sur telephone,
+                 c'est la feuille du bas qui la porte. -->
+            <nav class="bascule" aria-label="Vue">
+              {#each VUES as choix (choix.cle)}
+                <!-- Deux boutons en rang : la zone de frappe ne s'etend qu'en
+                     hauteur, sinon celle de « Liste » recouvrirait « Carte ». -->
+                <button class="frappe-44-v" class:actif={vue === choix.cle} aria-pressed={vue === choix.cle}
+                        onclick={() => (vue = choix.cle)}>{choix.titre}</button>
+              {/each}
+            </nav>
+            <button class="outil filtres frappe-44" aria-expanded={facettesOuvertes}
+                    bind:this={boutonFiltres}
+                    onclick={() => (facettesOuvertes ? fermerTiroir() : ouvrirTiroir())}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+                   stroke-linecap="round" aria-hidden="true">
+                <path d="M4 7h9M17 7h3M4 17h3M11 17h9" />
+                <circle cx="15" cy="7" r="2" />
+                <circle cx="9" cy="17" r="2" />
+              </svg>
+              Filtres{#if actifs > 0} <em>{actifs}</em>{/if}
+            </button>
+            <!-- Le nom est le libelle : « Frises », l'etat dit par
+                 `aria-expanded`. La croix du panneau garde « Masquer les
+                 frises » ; deux boutons de meme nom seraient indiscernables. -->
+            <button class="outil frises frappe-44" aria-expanded={friseOuverte}
+                    onclick={() => (friseOuverte = !friseOuverte)}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+                   stroke-linecap="round" aria-hidden="true">
+                <path d="M4 20h16M7 20v-6M11 20V8M15 20v-9M19 20v-4" />
+              </svg>
+              Frises
+            </button>
+            <!-- Le theme, sur telephone : au large il tient le coin haut droit
+                 de la carte. Un seul des deux est jamais visible. -->
+            <button class="theme theme-etroit frappe-44" onclick={basculer}
+                    aria-label={theme.courant === 'clair' ? 'Sombre' : 'Clair'}
+                    title={theme.courant === 'clair' ? 'Passer au thème sombre' : 'Passer au thème clair'}>
+              {@render iconeTheme()}
+            </button>
+          </div>
+
+          {#if puces.length > 0}
+            <Jetons jetons={puces} {actifs} onretirer={retirerJeton} onreset={toutEffacer} />
+          {/if}
+        </div>
+
+        <!-- Le thème est une pastille sans libellé : l'icone dit la destination
+             (lune vers le sombre, soleil vers le clair), le nom accessible la
+             nomme. -->
+        <button class="theme theme-large frappe-44" onclick={basculer}
+                aria-label={theme.courant === 'clair' ? 'Sombre' : 'Clair'}
+                title={theme.courant === 'clair' ? 'Passer au thème sombre' : 'Passer au thème clair'}>
+          {@render iconeTheme()}
+        </button>
+
+        <!-- Le volet : la liste, la fiche, les filtres, un seul a la fois.
+             Colonne sous la recherche au large, feuille a crans sur telephone.
+             Ce qu'il ne montre pas porte `hidden` : ni visible, ni atteignable
+             au clavier — le tiroir ferme gardait douze arrets de tabulation. -->
+        <div class="volet" class:ouvert={contenu !== null} class:plein={cran === 'plein'}
+             class:glisse={decalage !== null} bind:clientWidth={largeurPanneau}
+             role="region" aria-label={contenu === 'fiche' ? 'Fiche' : contenu === 'filtres' ? 'Filtres' : 'Notices'}
+             style:transform={decalage !== null ? `translateY(${decalage}px)` : undefined}>
+          <!-- Poignee de la feuille, telephone seulement. Un toucher bascule le
+               cran, un glissement le deplace, tirer vers le bas referme ; au
+               clavier, Entree bascule. -->
+          <button class="poignee" aria-expanded={contenu !== null && cran === 'plein'}
+                  aria-label={contenu === null
+                    ? 'Afficher la liste'
+                    : cran === 'plein'
+                      ? `Réduire ${contenu === 'fiche' ? 'la fiche' : contenu === 'filtres' ? 'les filtres' : 'la liste'}`
+                      : `Agrandir ${contenu === 'fiche' ? 'la fiche' : contenu === 'filtres' ? 'les filtres' : 'la liste'}`}
+                  onpointerdown={saisirPoignee} onpointermove={glisserPoignee}
+                  onpointerup={lacherPoignee} onpointercancel={annulerPoignee}
+                  onclick={clavierPoignee}>
+            <span aria-hidden="true"></span>
+          </button>
+          {#if contenu === null}
+            <!-- La feuille repliee : ce qu'elle cache, et le geste pour le voir. -->
+            <button class="entete-feuille" onclick={ouvrirListe}>
+              Liste des notices
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m6 15 6-6 6 6" />
+              </svg>
+            </button>
+          {/if}
+
+          <div class="colonne facettes" class:ouvert={contenu === 'filtres'} hidden={contenu !== 'filtres'}>
+            <div class="entete-tiroir">
+              <h2 tabindex="-1" bind:this={titreTiroir}>Filtres</h2>
+              <button class="fermer-tiroir frappe-44" aria-label="Fermer les filtres"
+                      onclick={fermerTiroir}>×</button>
+            </div>
+            <!-- La zone visible est un critere comme un autre : elle rejoint les
+                 facettes plutot que les commandes d'affichage de la carte. -->
+            <label class="zone">
+              <input type="checkbox" bind:checked={suivreVue} />
+              <span>Limiter à la zone visible sur la carte</span>
+            </label>
+            <FacetPanel {facettes} {cardinaux} {chargement} />
+          </div>
+
+          <div class="colonne fiche-hote" class:ouvert={contenu === 'fiche'} hidden={contenu !== 'fiche'}>
+            <DetailPanel reference={selection} {copie} oncopier={copierLien}
+                         bind:this={detailPanel} onclose={fermerFiche}
+                         ontitre={(t) => (titreFiche = t)}
+                         ondefile={() => {
+                           if (telephone && cran === 'apercu' && decalage === null) cran = 'plein';
+                         }} />
+          </div>
+
+          {#if vue === 'liste'}
+            <div class="colonne contenu-liste" hidden={contenu !== 'liste'}>
+              <ListeResultats {resultats} {compteurs} {selection} bind:tri
+                              proposerProximite={position.courante !== null}
+                              pertinence={Boolean(filters.texte)}
+                              portee={cible === 'historiques' && indexTexte.stats
+                                ? { notices: indexTexte.stats.n, inconnus: indexTexte.inconnus }
+                                : null}
+                              onouvrir={(ref) => ouvrirFiche(ref, 'liste')}
+                              oneffacer={toutEffacer}
+                              ondefile={() => {
+                                if (telephone && cran === 'apercu' && decalage === null) cran = 'plein';
+                              }} />
+            </div>
+          {/if}
+        </div>
 
         {#if erreur}
-          <div class="erreur"><b>Erreur DuckDB</b><p>{erreur}</p></div>
+          <div class="erreur" role="alert"><b>Erreur DuckDB</b><p>{erreur}</p></div>
         {:else if chargement && !compteurs}
           <div class="amorce">{LIBELLES[amorcage.phase]}</div>
-        {:else if vue === 'carte' && compteurs && compteurs.total === 0}
+        {:else if compteurs && compteurs.total === 0 && contenu !== 'liste'}
           <!-- Meme famille visuelle que `.amorce` / `.erreur` : une surface
                posee au centre de la scene, qui ne recouvre aucun coin — les
                commandes de la carte y vivent toutes. -->
-          <div class="vide-carte">
+          <div class="vide-carte" role="status">
             <p>Aucune notice ne correspond à ces filtres.</p>
             <button onclick={toutEffacer}>Effacer les filtres</button>
           </div>
@@ -1083,76 +1088,11 @@
                     onclick={() => (position.erreur = null)}>×</button>
           </div>
         {/if}
-
-        <!-- Le tiroir se commande depuis le coin de la carte, la ou il
-             s'ouvre, et non plus depuis la barre. Il s'efface tant qu'il est
-             ouvert : la croix de l'en-tete du tiroir est alors le seul geste
-             de fermeture, et le bouton revient avec elle. -->
-        {#if !facettesOuvertes}
-          <button class="filtres frappe-44" aria-expanded="false"
-                  bind:this={boutonFiltres} onclick={ouvrirTiroir}>
-            Filtres{#if actifs > 0} <em>{actifs}</em>{/if}
-          </button>
-        {/if}
-
-        <!-- Les deux panneaux sont des calques : la carte garde sa pleine
-             largeur et les ouvrir ne provoque aucun redimensionnement du
-             canevas WebGL. Ils vivent dans la scene, pas dans `main`, pour
-             laisser la frise entierement visible sous eux. -->
-        <div class="colonne facettes" class:ouvert={facettesOuvertes} bind:clientWidth={largeurTiroir}>
-          <div class="entete-tiroir">
-            <h2 tabindex="-1" bind:this={titreTiroir}>Filtres</h2>
-            <button class="fermer-tiroir frappe-44" aria-label="Fermer les filtres"
-                    onclick={fermerTiroir}>×</button>
-          </div>
-          <!-- La zone visible est un critere comme un autre : elle rejoint
-               les facettes plutot que la legende de la carte, ou elle voisinait
-               des commandes d'affichage qui ne filtrent rien. -->
-          <label class="zone">
-            <input type="checkbox" bind:checked={suivreVue} />
-            <span>Limiter à la zone visible sur la carte</span>
-          </label>
-          <FacetPanel {facettes} {cardinaux} {chargement} />
-        </div>
-
-        {#if etroit && facettesOuvertes}
-          <!-- Fermer en touchant a cote : le geste attendu sur un tiroir. Au
-               large le tiroir ne recouvre rien, il n'y a rien a voiler. -->
-          <button class="voile" aria-label="Fermer les filtres"
-                  onclick={fermerTiroir}></button>
-        {/if}
-
-        <div class="colonne fiche-hote" class:ouvert={selection !== null}
-             bind:clientWidth={largeurFiche}
-             class:plein={cran === 'plein'} class:glisse={decalage !== null}
-             style:transform={decalage !== null ? `translateY(${decalage}px)` : undefined}>
-          <!-- Poignee de la feuille, telephone seulement. Un toucher bascule le
-               cran, un glissement le deplace, tirer vers le bas ferme ; au
-               clavier, Entree bascule. Rendue **seulement fiche ouverte** :
-               feuille fermee, elle restait un bouton focusable sous le bord de
-               l'ecran, invisible au clavier comme au lecteur d'ecran. -->
-          {#if selection !== null}
-            <button class="poignee" aria-expanded={cran === 'plein'}
-                    aria-label={cran === 'plein' ? 'Réduire la fiche' : 'Agrandir la fiche'}
-                    onpointerdown={saisirPoignee} onpointermove={glisserPoignee}
-                    onpointerup={lacherPoignee} onpointercancel={annulerPoignee}
-                    onclick={clavierPoignee}>
-              <span aria-hidden="true"></span>
-            </button>
-          {/if}
-          <DetailPanel reference={selection} {copie} oncopier={copierLien}
-                       bind:this={detailPanel} onclose={fermerFiche}
-                       ontitre={(t) => (titreFiche = t)}
-                       ondefile={() => {
-                         if (telephone && cran === 'apercu' && decalage === null) cran = 'plein';
-                       }} />
-        </div>
       </div>
 
-      <!-- La frise se replie a toutes les largeurs, plus seulement sur
-           telephone : c'est le tiers bas de l'ecran qu'elle rend a la carte.
-           Meme dispositif que le tiroir des filtres — la croix est dans le
-           panneau, le bouton qui le rouvre prend sa place. -->
+      <!-- La frise reste un panneau du bas, sous la carte : c'est le tiers bas
+           de l'ecran qu'elle rend en se repliant. Elle s'ouvre depuis le bloc
+           du haut, et se referme par sa croix. -->
       {#if friseOuverte}
         {#if TimelineComp}
           <TimelineComp
@@ -1166,49 +1106,29 @@
             onfermer={() => (friseOuverte = false)}
           />
         {:else}
-          <!-- Hauteur mesuree du panneau reel (deux graphiques de 104px, ses
-               paddings et son entete) : sans elle, l'arrivee du chunk Plot
-               ferait bondir la carte au moment ou <Timeline> apparait. -->
+          <!-- Hauteur mesuree du panneau reel : sans elle, l'arrivee du chunk
+               Plot ferait bondir la carte au moment ou <Timeline> apparait. -->
           <div class="frise-attente" aria-hidden="true"></div>
         {/if}
-      {:else}
-        <button class="replier frappe-44-v" aria-expanded="false"
-                onclick={() => (friseOuverte = true)}>
-          Afficher les frises
-        </button>
       {/if}
     </div>
   </main>
-
-  <!-- Onglets du pied, telephone seulement : les vues sous le pouce, et la
-       barre du haut rendue a la marque et a la recherche. Ils remplacent le
-       selecteur de la barre et le bandeau « Afficher les frises », masques a
-       cette largeur ; tablette et ordinateur n'en voient rien. -->
-  <nav class="onglets" aria-label="Vues">
-    {#each VUES as choix (choix.cle)}
-      <button class:actif={vue === choix.cle} aria-pressed={vue === choix.cle}
-              onclick={() => (vue = choix.cle)}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
-             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          {#if choix.cle === 'carte'}
-            <path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6z" /><path d="M9 4v14M15 6v14" />
-          {:else}
-            <path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" />
-          {/if}
-        </svg>
-        <span>{choix.titre}</span>
-      </button>
-    {/each}
-    <button class:actif={friseOuverte} aria-expanded={friseOuverte}
-            onclick={() => (friseOuverte = !friseOuverte)}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
-           stroke-linecap="round" aria-hidden="true">
-        <path d="M4 20h16M7 20v-6M11 20V8M15 20v-9M19 20v-4" />
-      </svg>
-      <span>Frises</span>
-    </button>
-  </nav>
 </div>
+
+{#snippet iconeTheme()}
+  {#if theme.courant === 'clair'}
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M20.4 14.8A8.7 8.7 0 0 1 9.2 3.6 8.7 8.7 0 1 0 20.4 14.8Z" />
+    </svg>
+  {:else}
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+         stroke-linecap="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="4.1" />
+      <path d="M12 2.4v2.3M12 19.3v2.3M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.4 12h2.3M19.3 12h2.3M4.6 19.4 6.2 17.8M17.8 6.2l1.6-1.6" />
+    </svg>
+  {/if}
+{/snippet}
 
 <style>
   .app {
@@ -1217,95 +1137,91 @@
     /* `100vh` compte la bande que la barre d'adresse mobile recouvre : au
        repli de celle-ci pendant un defilement, la scene changeait de hauteur,
        ce qui redimensionnait le canevas et reconstruisait les deux frises.
-       `dvh` suit la hauteur reellement visible ; `vh` reste en repli pour les
-       navigateurs qui ne la connaissent pas. */
+       `dvh` suit la hauteur reellement visible ; `vh` reste en repli. */
     height: 100vh;
     height: 100dvh;
   }
 
-  /* Une rangee qui s'enroule, pas une grille a colonnes fixes : les compteurs
-     et les actions occupent une largeur qui depend des donnees, et une piste
-     `1fr` leur cedait tout — le champ de recherche tombait a trois
-     caracteres. Le centrage du groupe median vient des deux flancs, qui
-     portent la meme base souple : ils se partagent le reste a parts egales,
-     donc ce qui est entre eux tombe au milieu sans qu'aucune largeur soit
-     ecrite. */
-  .barre {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 12px 20px;
-    /* Seuls le haut et les cotes touchent un bord physique de l'ecran :
-       `--sa-*` vaut 0 hors iOS, aucun changement ailleurs. */
-    padding: calc(12px + var(--sa-haut)) calc(24px + var(--sa-droite)) 12px calc(24px + var(--sa-gauche));
-    min-height: 72px;
-    background: var(--fond-carte);
-    border-bottom: 1px solid var(--bord);
+  main {
+    display: grid;
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    /* Largeur du bloc du haut et du volet, au large : la rangee d'outils —
+       compte, vue, filtres, frises — doit y tenir sur une ligne. */
+    --largeur-volet: 440px;
   }
 
-  /* La marque passe en serif editorial et en casse normale : les capitales
-     espacees la faisaient lire comme une etiquette, pas comme un titre. Elle
-     tient sur deux lignes : le titre seul, puis sa signature dessous. */
+  .centre {
+    display: grid;
+    grid-template-rows: 1fr auto;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  /* La scene porte `--carte-terre` : la couleur que le fond de carte va
+     peindre. C'est ce qui supprime le flash entre le montage — ou une bascule
+     de theme, qui recharge la feuille de style — et le premier rendu WebGL. */
+  .scene {
+    position: relative;
+    min-height: 0;
+    /* `clip` et non `hidden` : `hidden` masque la barre de defilement mais
+       laisse la scene defilable par programme — un `focus()` ou un
+       `scrollIntoView` vers un calque translate la decalait de 354 px, carte
+       comprise. `clip` n'en fait pas un conteneur de defilement du tout.
+       `hidden` reste en repli pour les navigateurs qui ne le connaissent pas. */
+    overflow: hidden;
+    overflow: clip;
+    background: var(--carte-terre);
+  }
+
+  /* --- Bloc du haut ----------------------------------------------------- */
+  .haut {
+    position: absolute;
+    top: calc(12px + var(--sa-haut));
+    left: calc(12px + var(--sa-gauche));
+    z-index: 4;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: var(--largeur-volet);
+    max-width: calc(100% - 24px);
+  }
+
+  /* La carte de recherche : une surface posee, comme tout ce qui flotte sur la
+     carte — fond plein, filet plus sombre que les terres, ombre. */
+  .barre {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 6px 6px 14px;
+    border: 1px solid var(--bord-flottant);
+    border-radius: var(--r-l);
+    background: var(--fond-carte);
+    box-shadow: var(--ombre-carte);
+  }
+
   .marque {
     display: flex;
-    flex: 1 1 0;
     flex-direction: column;
-    align-items: flex-start;
-    gap: 5px;
-    min-width: 0;
+    gap: 2px;
+    margin: 0;
+    flex: 0 0 auto;
   }
 
   .marque strong {
     font-family: var(--police-titre);
-    font-size: 25px;
+    font-size: 21px;
     font-weight: 500;
     letter-spacing: -0.005em;
     line-height: 1;
     color: var(--texte);
   }
 
-  /* Le filet est desormais horizontal : il ponctue la signature au lieu de
-     separer deux blocs poses cote a cote. */
-  .filet {
-    width: 12px;
-    height: 1px;
-    background: var(--bord-appuye);
+  .marque .sous {
+    display: none;
   }
 
-  /* Une base declaree et non `auto` : la contribution max-content d'un
-     conteneur flex imbrique ne reprend pas la base de ses enfants, et le champ
-     retombait a une vingtaine de caracteres entre ses deux boutons. Les deux
-     flancs se partagent ce qui reste, ce qui centre le groupe. */
-  .centre-barre {
-    display: flex;
-    flex: 0 1 700px;
-    align-items: center;
-    justify-content: center;
-    gap: 14px;
-    min-width: 0;
-  }
-
-  .sous {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 9px;
-    font-weight: 600;
-    letter-spacing: 0.2em;
-    line-height: 1.2;
-    text-transform: uppercase;
-    color: var(--texte-tenu);
-    white-space: nowrap;
-  }
-
-  .dates {
-    color: var(--inscrit-texte);
-    font-variant-numeric: tabular-nums;
-  }
-
-  /* Le champ, sa bascule de cible et « Au hasard » tiennent ensemble dans la
-     rangee qui s'enroule : separes, les boutons partaient a la ligne des
-     compteurs. */
   .champ {
     display: flex;
     flex: 1 1 auto;
@@ -1314,15 +1230,59 @@
     min-width: 0;
   }
 
+  /* 44 px et non 40 : un `<input>` n'accepte pas de pseudo-element, donc la
+     zone de frappe etendue lui est interdite — sa hauteur reelle est la seule
+     cible qu'il ait. Ses deux voisins suivent, sinon la rangee se desaligne. */
+  .recherche {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 44px;
+    padding: 0 12px 0 34px;
+    background:
+      var(--icone-recherche) no-repeat 12px 50% / 15px 15px,
+      var(--fond-creux);
+    border: 1px solid transparent;
+    border-radius: var(--r-m);
+    color: var(--texte);
+    font-size: 13px;
+    text-overflow: ellipsis;
+    transition:
+      border-color var(--t-rapide),
+      background-color var(--t-rapide);
+  }
+
+  /* Sous 16 px, Safari iOS zoome toute la page a la mise au point du champ et
+     ne la dezoome pas en sortant. Au doigt seulement. */
+  @media (pointer: coarse) {
+    .recherche {
+      font-size: 16px;
+    }
+  }
+
+  .recherche::placeholder {
+    color: var(--texte-tenu);
+  }
+
+  .recherche:focus {
+    outline: 2px solid var(--inscrit);
+    outline-offset: -2px;
+    background-color: var(--fond-carte);
+  }
+
+  .recherche::-webkit-search-cancel-button {
+    filter: grayscale(1);
+    opacity: 0.5;
+  }
+
   .cible {
     flex: 0 0 auto;
     height: 44px;
-    padding: 0 14px;
+    padding: 0 11px;
     background: transparent;
     border: 1px solid var(--bord);
-    border-radius: var(--r-pilule);
+    border-radius: var(--r-m);
     color: var(--texte-tenu);
-    font-size: 12px;
+    font-size: 11.5px;
     white-space: nowrap;
     cursor: pointer;
     transition:
@@ -1331,13 +1291,9 @@
   }
 
   /* `:not(.actif)` n'est pas une precaution de style, c'est ce qui rend le
-     bouton lisible une fois active. Sans lui, ce selecteur pese (0,4,0) contre
-     (0,3,0) pour `.cible.actif` : sa `color` gagne, le `background` de l'etat
-     actif reste, et comme `--texte` **vaut exactement** `--plein-fond` dans les
-     deux themes, le libelle disparait dans son propre fond — mesure a 1,00:1.
-     Au pointeur fin le texte revient des que la souris s'ecarte ; au tactile
-     le `:hover` reste colle jusqu'au geste suivant, et la pastille reste
-     vide. */
+     bouton lisible une fois active : sans lui la `color` du survol l'emporte
+     sur celle de l'etat actif, et comme `--texte` vaut exactement
+     `--plein-fond`, le libelle disparait dans son propre fond. */
   @media (hover: hover) and (pointer: fine) {
     .cible:hover:not(:disabled):not(.actif) {
       color: var(--texte);
@@ -1361,101 +1317,25 @@
     cursor: not-allowed;
   }
 
-  /* 44 px et non 40 : un `<input>` n'accepte pas de pseudo-element, donc la
-     zone de frappe etendue lui est interdite — sa hauteur reelle est la seule
-     cible qu'il ait. Ses deux voisins de la barre suivent, sinon le groupe
-     median se desaligne. */
-  .recherche {
-    flex: 1 1 auto;
-    min-width: 0;
-    height: 44px;
-    padding: 0 16px 0 38px;
-    background:
-      var(--icone-recherche) no-repeat 14px 50% / 15px 15px,
-      var(--fond-creux);
-    border: 1px solid var(--bord);
-    border-radius: var(--r-pilule);
-    color: var(--texte);
-    font-size: 13px;
-    /* Le texte de substitution est plus long que le champ, meme a 1920 px ou le
-       groupe median est borne a 700 px : sans cela il se coupe en plein mot,
-       sans rien qui signale qu'il manque quelque chose. */
-    text-overflow: ellipsis;
-    transition:
-      border-color var(--t-rapide),
-      background-color var(--t-rapide);
-  }
-
-  /* Sous 16 px, Safari iOS zoome toute la page a la mise au point du champ et
-     ne la dezoome pas en sortant. Au doigt seulement : a la souris, le 13 px
-     garde la barre a sa densite. */
-  @media (pointer: coarse) {
-    .recherche {
-      font-size: 16px;
-    }
-  }
-
-  .recherche::placeholder {
-    color: var(--texte-tenu);
-  }
-
-  /* Le creux est plein, non fondu a 72 % : la barre est posee sur
-     `--fond-carte`, la surface la plus claire du produit, et un champ presque
-     transparent s'y confondait. Au focus il remonte au niveau de la barre, ce
-     qui inverse le rapport et signale la saisie. */
-  .recherche:focus {
-    outline: none;
-    border-color: var(--inscrit);
-    background-color: var(--fond-carte);
-  }
-
-  .recherche::-webkit-search-cancel-button {
-    filter: grayscale(1);
-    opacity: 0.5;
-  }
-
-  .chiffres {
-    display: flex;
-    flex: 1 1 0;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 10px 14px;
-    min-width: 0;
-    font-size: 11.5px;
-    color: var(--texte-tenu);
-  }
-
-  .chiffres b {
-    font-family: var(--police-titre);
-    font-size: 16px;
-    font-weight: 500;
-    color: var(--texte);
-    font-variant-numeric: tabular-nums;
-  }
-
-  /* « Au hasard » se pose au bout du champ : c'est l'autre facon d'entrer dans
-     le corpus quand on ne sait pas quoi y chercher. Meme hauteur que le champ
-     et que la bascule de cible, sinon la rangee se decale d'un pixel. */
-  .hasard svg {
-    display: none;
-    width: 19px;
-    height: 19px;
-  }
-
   .hasard {
+    display: inline-flex;
     flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
     height: 44px;
-    padding: 0 15px;
+    padding: 0;
     border: 1px solid var(--bord-appuye);
-    border-radius: var(--r-pilule);
+    border-radius: var(--r-m);
     background: var(--fond-carte);
     color: var(--inscrit-texte);
-    font-size: 12px;
-    font-weight: 600;
-    white-space: nowrap;
     cursor: pointer;
     transition: all var(--t-rapide);
+  }
+
+  .hasard svg {
+    width: 20px;
+    height: 20px;
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -1465,28 +1345,150 @@
     }
   }
 
-  /* Une pastille sans libelle : le theme est un confort de lecture, il n'a pas
-     a peser autant qu'une action d'exploration. Le trait de l'icone est
-     `currentColor`, il suit donc le jeton de couleur comme le reste. */
-  .theme {
-    display: inline-flex;
-    flex: 0 0 auto;
+  /* La rangee d'outils : des pastilles posees sur la carte, pas une barre. */
+  .outils {
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    justify-content: center;
-    width: 34px;
+    gap: 8px;
+  }
+
+  .chiffres,
+  .bascule,
+  .outil,
+  .theme {
+    border: 1px solid var(--bord-flottant);
+    background: var(--fond-carte);
+    box-shadow: var(--ombre-carte);
+  }
+
+  .chiffres {
+    display: flex;
+    align-items: center;
     height: 34px;
-    border: 1px solid var(--bord);
-    border-radius: 50%;
+    padding: 0 12px;
+    border-radius: var(--r-pilule);
+    font-size: 11.5px;
+    color: var(--texte-tenu);
+    white-space: nowrap;
+  }
+
+  .chiffres b {
+    margin-right: 3px;
+    font-family: var(--police-titre);
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--texte);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Selecteur de vue : un rail, la vue active est une pastille posee. */
+  .bascule {
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: var(--r-pilule);
+  }
+
+  .bascule button {
+    padding: 4px 13px;
+    border: none;
+    border-radius: var(--r-pilule);
     background: transparent;
     color: var(--texte-faible);
+    font-size: 12px;
+    font-weight: 500;
     cursor: pointer;
     transition: all var(--t-rapide);
   }
 
   @media (hover: hover) and (pointer: fine) {
+    .bascule button:hover {
+      color: var(--texte);
+    }
+  }
+
+  .bascule button.actif {
+    background: var(--fond-creux);
+    color: var(--texte);
+    font-weight: 600;
+  }
+
+  .outil {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    padding: 0 12px;
+    border-radius: var(--r-pilule);
+    color: var(--texte);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all var(--t-rapide);
+  }
+
+  .outil svg {
+    width: 15px;
+    height: 15px;
+    color: var(--texte-faible);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .outil:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+  }
+
+  .outil[aria-expanded='true'] {
+    border-color: var(--inscrit);
+    color: var(--inscrit-texte);
+  }
+
+  .outil em {
+    min-width: 17px;
+    padding: 1px 5px;
+    border-radius: var(--r-pilule);
+    background: var(--accent-plein);
+    color: var(--texte-sur-plein);
+    font-size: 10.5px;
+    font-style: normal;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+  }
+
+  /* Le theme : une pastille sans libelle, au coin haut droit de la carte au
+     large — un confort de lecture n'a pas a peser autant qu'une action. Le
+     trait de l'icone est `currentColor`, il suit donc le jeton de couleur. */
+  .theme {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 50%;
+    color: var(--texte-faible);
+    cursor: pointer;
+  }
+
+  .theme-large {
+    position: absolute;
+    top: calc(12px + var(--sa-haut));
+    right: calc(12px + var(--sa-droite));
+    z-index: 4;
+  }
+
+  .theme-etroit {
+    display: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
     .theme:hover {
       color: var(--texte);
-      border-color: var(--bord-appuye);
     }
   }
 
@@ -1495,407 +1497,77 @@
     height: 16px;
   }
 
-  /* Le tiroir se commande depuis le coin ou il s'ouvre, avec le compte des
-     criteres poses : c'est tout ce qui en reste visible une fois referme.
-     z-index 4 : au-dessus de la liste (3), qui recouvre la scene et pour
-     laquelle les filtres comptent autant, mais sous le voile
-     (5) et le tiroir (6), qu'il n'a pas a percer.
-
-     C'est une surface posee, pas un aplat plein. Le fond de carte suit
-     desormais le theme, mais cela ne change rien ici : le bouton appartient a
-     l'interface et suit le theme comme la legende — calcaire en clair, ardoise
-     en sombre, detache de la carte par son filet et son ombre. En aplat
-     inverse il etait presque noir sur une carte noire en sombre, et il serait
-     ardoise sur du grege en clair : dans les deux cas un trou, jamais une
-     commande. Son filet est `--bord-flottant` et non `--bord-appuye` : sur les
-     terres gregees, tous les filets d'interface sont plus clairs que le sol et
-     disparaissent. */
-  .filtres {
+  /* --- Volet ------------------------------------------------------------
+     Au large : une colonne sous le bloc du haut, de la meme largeur, qui
+     flotte sur la carte sans la comprimer — l'ouvrir ne redimensionne pas le
+     canevas WebGL. Ferme, il sort a gauche ; `visibility` le retire de
+     l'ordre de tabulation une fois la transition finie. Pas de
+     `backdrop-filter` : un flou au-dessus d'un canevas se paie a chaque image. */
+  .volet {
     position: absolute;
-    top: 12px;
-    left: 12px;
-    z-index: 4;
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    border: 1px solid var(--bord-flottant);
-    background: var(--fond-carte);
-    color: var(--texte);
-    border-radius: var(--r-pilule);
-    padding: 9px 16px;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    white-space: nowrap;
-    box-shadow: var(--ombre-carte);
-    transition: all var(--t-rapide);
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .filtres:hover {
-      border-color: var(--accent);
-      color: var(--accent);
-    }
-  }
-
-  .filtres em {
-    font-style: normal;
-    font-variant-numeric: tabular-nums;
-    min-width: 17px;
-    padding: 1px 5px;
-    border-radius: var(--r-pilule);
-    background: var(--accent-plein);
-    color: var(--texte-sur-plein);
-    font-size: 10.5px;
-    text-align: center;
-  }
-
-  /* La case de zone visible se pose sous l'en-tete du tiroir, hors de la
-     partie qui defile : c'est un critere de cadrage, pas une facette de plus. */
-  /* La case elle-meme fait 15 px, mais c'est le label qui recoit le clic : sa
-     hauteur est donc la vraie cible, portee ici a 44 px. Agrandir la case
-     aurait donne une coche disproportionnee dans un tiroir dense. */
-  .zone {
-    display: flex;
-    align-items: center;
-    min-height: 44px;
-    gap: 9px;
-    padding: 0 22px 14px;
-    background: var(--fond-carte);
-    font-size: 12px;
-    color: var(--texte-moyen);
-    cursor: pointer;
-  }
-
-  .zone input {
-    flex: 0 0 auto;
-    width: 15px;
-    height: 15px;
-    accent-color: var(--accent-plein);
-    cursor: pointer;
-  }
-
-  /* Selecteur de vue : un rail creux, la vue active est une pastille posee. */
-  .bascule {
-    display: flex;
-    gap: 2px;
-    padding: 3px;
-    background: var(--fond-creux);
-    border-radius: var(--r-pilule);
-  }
-
-  .bascule button {
-    border: none;
-    background: transparent;
-    color: var(--texte-faible);
-    border-radius: var(--r-pilule);
-    padding: 7px 16px;
-    font-size: 12.5px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all var(--t-rapide);
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .bascule button:hover {
-      background: color-mix(in srgb, var(--bord) 60%, transparent);
-      color: var(--texte);
-    }
-  }
-
-  .bascule button.actif {
-    background: var(--fond-carte);
-    color: var(--texte);
-    font-weight: 600;
-    box-shadow: 0 2px 6px -2px rgb(var(--voile) / 18%);
-  }
-
-  main {
-    display: grid;
-    flex: 1;
-    min-height: 0;
-    position: relative;
-    --largeur-fiche: 392px;
-  }
-
-  /* Les commandes MapLibre s'ecartent des deux calques. Les largeurs vivent
-     dans des variables pour que les marges les suivent sans que la page ait a
-     connaitre le point de rupture — et la fiche flottant a 12 px du bord, sa
-     marge les compte. */
-  main.fiche-ouverte {
-    --marge-droite: calc(var(--largeur-fiche) + 12px);
-  }
-
-  main.tiroir-pose {
-    --marge-gauche: var(--largeur-tiroir);
-  }
-
-  .centre {
-    display: grid;
-    grid-template-rows: 1fr auto;
-    min-width: 0;
-    min-height: 0;
-  }
-
-  /* La scene porte `--carte-terre` : la couleur que le fond de carte va peindre.
-     C'est ce qui supprime le flash entre le montage — ou une bascule de theme,
-     qui recharge la feuille de style — et le premier rendu WebGL. En sombre le
-     jeton vaut l'ardoise : pixel identique a ce qui etait ecrit ici avant. */
-  .scene {
-    position: relative;
-    min-height: 0;
-    /* `clip` et non `hidden` : `hidden` masque la barre de defilement mais
-       laisse la scene defilable par programme — un `focus()` ou un
-       `scrollIntoView` vers un calque translate la decalait de 354 px, carte
-       comprise. `clip` n'en fait pas un conteneur de defilement du tout.
-       `hidden` reste en repli pour les navigateurs qui ne le connaissent pas. */
-    overflow: hidden;
-    overflow: clip;
-    background: var(--carte-terre);
-    /* Empreinte du bouton flottant. La liste recouvre la scene : sans cette
-       reserve son titre passerait dessous. Meme procede que
-       `--marge-gauche` pour les commandes MapLibre — le composant ne connait
-       pas le bouton, il lit une variable heritee. */
-    --reserve-filtres: 126px;
-  }
-
-  .scene.tiroir-ouvert {
-    --reserve-filtres: 0px;
-  }
-
-  /* Les controles MapLibre sont a z-index 2 et la carte reste montee sous les
-     autres vues : sans cela le zoom et l'attribution traversent le calque. */
-  .liste {
-    position: absolute;
-    inset: 0;
-    z-index: 3;
-    overflow-y: auto;
-    /* Sans cela, tirer vers le bas en haut de la liste remonte au navigateur
-       et declenche le pull-to-refresh : rechargement complet du wasm et perte
-       de l'exploration en cours. */
-    overscroll-behavior: contain;
-    background: var(--fond);
-  }
-
-  /* Le selecteur de vue est monte dans la barre : la reserve de 200 px qu'il
-     imposait ici n'a plus lieu d'etre. */
-  .liste header {
-    position: sticky;
-    top: 0;
-    padding: 14px 20px 12px calc(20px + var(--reserve-filtres, 0px));
-    transition: padding-left var(--t-tiroir);
-    border-bottom: 1px solid var(--bord);
-    background: var(--fond-carte);
-  }
-
-  .liste h3 {
-    margin: 0;
-    font-family: var(--police-titre);
-    font-size: 17px;
-    font-weight: 500;
-    color: var(--texte);
-  }
-
-  .liste h3 em {
-    font-style: normal;
-    font-weight: 400;
-    color: var(--texte-faible);
-  }
-
-  .liste header p {
-    margin: 3px 0 0;
-    font-size: 11px;
-    color: var(--texte-faible);
-  }
-
-  /* Le mot introuvable est la seule chose que l'utilisateur doit lire ici :
-     il porte l'encre pleine, le reste de la ligne reste tenu. */
-  .portee b {
-    color: var(--texte);
-    font-weight: 500;
-  }
-
-  .liste ul {
-    list-style: none;
-    margin: 0;
-    padding: 8px;
-  }
-
-  .liste button {
+    top: calc(12px + var(--sa-haut) + var(--hauteur-haut) + 8px);
+    bottom: 12px;
+    left: calc(12px + var(--sa-gauche));
+    z-index: 6;
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    width: 100%;
-    padding: 8px 12px;
-    background: none;
-    border: none;
-    border-radius: var(--r-s);
-    text-align: left;
-    cursor: pointer;
-    transition: background var(--t-rapide);
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .liste button:hover {
-      background: var(--fond-creux);
-    }
-  }
-
-  .liste button.choisi {
-    background: var(--accent-doux);
-  }
-
-  /* Pose au fil de la liste plutot qu'en surface flottante : elle n'a rien a
-     recouvrir, contrairement a son equivalent sur la vue carte. */
-  .vide-liste {
-    display: grid;
-    gap: 10px;
-    padding: 24px 20px;
-    text-align: center;
-    color: var(--texte-faible);
-    font-size: 12.5px;
-  }
-
-  .vide-liste button {
-    justify-self: center;
-    border: 1px solid var(--bord-appuye);
-    border-radius: var(--r-pilule);
-    background: transparent;
-    color: var(--accent);
-    padding: 7px 16px;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: border-color var(--t-rapide);
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .vide-liste button:hover {
-      border-color: var(--accent);
-    }
-  }
-
-  .nom {
-    font-size: 13.5px;
-    font-weight: 500;
-    color: var(--texte);
-  }
-
-  .meta {
-    font-size: 11px;
-    color: var(--texte-faible);
-  }
-
-  .amorce,
-  .erreur {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 3;
-    padding: 16px 24px;
-    border: none;
-    border-radius: var(--r-m);
+    width: var(--largeur-volet);
+    max-width: calc(100% - 24px);
+    overflow: hidden;
+    border: 1px solid var(--bord-flottant);
+    border-radius: var(--r-l);
+    /* Le fond est porte ici, jamais par ce qui defile dedans : un conteneur
+       defilant opaque sous un parent translate fait croire au compositeur
+       qu'il masque la carte la ou il serait sans la translation. */
     background: var(--fond-carte);
-    box-shadow: var(--ombre-carte);
-    font-size: 12px;
-    color: var(--texte-faible);
-    text-align: center;
-    max-width: 460px;
+    box-shadow: var(--ombre-fiche);
+    transform: translateX(calc(-100% - 24px));
+    visibility: hidden;
+    transition:
+      transform var(--t-tiroir),
+      visibility 0s var(--t-tiroir);
   }
 
-  .erreur b {
-    color: var(--erreur);
-  }
-
-  .erreur p {
-    margin: 6px 0 0;
-    font-family: ui-monospace, monospace;
-    font-size: 11px;
-    word-break: break-word;
-  }
-
-  /* Meme dispositif que `.amorce` / `.erreur` ci-dessus : une surface posee au
-     centre de la scene, qui ne recouvre aucun coin — les commandes de la
-     carte y vivent toutes. */
-  .vide-carte {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 3;
-    display: grid;
-    gap: 10px;
-    padding: 18px 24px;
-    border: none;
-    border-radius: var(--r-m);
-    background: var(--fond-carte);
-    box-shadow: var(--ombre-carte);
-    font-size: 12px;
-    color: var(--texte-faible);
-    text-align: center;
-    max-width: 320px;
-  }
-
-  .vide-carte button {
-    justify-self: center;
-    border: 1px solid var(--bord-appuye);
-    border-radius: var(--r-pilule);
-    background: transparent;
-    color: var(--accent);
-    padding: 7px 16px;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: border-color var(--t-rapide);
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .vide-carte button:hover {
-      border-color: var(--accent);
-    }
-  }
-
-  /* --- Les deux calques ---------------------------------------------------
-     Aucun `backdrop-filter` : un flou plein ecran au-dessus d'un canevas WebGL
-     se paie a chaque image. Fond opaque, ombre portee. */
-  .colonne {
-    position: absolute;
-    display: grid;
-    min-height: 0;
+  .volet.ouvert {
+    transform: translateX(0);
+    visibility: visible;
     transition: transform var(--t-tiroir);
   }
 
-  /* Filet **a droite seulement** : le tiroir occupe toute la hauteur, un cadre
-     complet tracerait une ligne au ras du haut et du bas de la fenetre. Il n'en
-     avait aucun tant que la carte etait ardoise, ou l'ivoire se detachait seul. */
-  .facettes {
-    inset: 0 auto 0 0;
-    z-index: 6;
-    grid-template-rows: auto auto 1fr;
-    width: var(--largeur-tiroir);
-    border-right: 1px solid var(--bord-flottant);
-    transform: translateX(-100%);
-    box-shadow: var(--ombre-tiroir);
-    /* Bord gauche et pied de l'ecran : les deux touchent un bord physique.
-       Applique une fois ici, en tete du calque, plutot que dans chacun de
-       ses trois enfants. */
-    padding-left: var(--sa-gauche);
-    padding-bottom: var(--sa-bas);
+  /* `hidden` cede devant tout `display` ecrit par une classe : il faut le
+     redire. */
+  .volet [hidden] {
+    display: none !important;
   }
 
-  .facettes.ouvert {
-    transform: translateX(0);
+  .colonne {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
   }
 
-  /* En-tete du tiroir : le titre nomme ce qu'on ouvre, la pastille le referme.
-     Un bandeau texte pleine largeur disait la meme chose en moins clair. */
+  .fiche-hote > :global(.fiche),
+  .facettes > :global(.panneau),
+  .contenu-liste > :global(.liste) {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  /* Poignee et en-tete de feuille n'existent que sur telephone. */
+  .poignee,
+  .entete-feuille {
+    display: none;
+  }
+
+  /* En-tete des filtres : le titre nomme ce qu'on regarde, la pastille le
+     referme. */
   .entete-tiroir {
     display: flex;
+    flex: 0 0 auto;
     align-items: center;
     justify-content: space-between;
-    padding: 20px 22px 14px;
-    background: var(--fond-carte);
+    padding: 16px 18px 10px 22px;
   }
 
   .entete-tiroir h2 {
@@ -1929,74 +1601,90 @@
     }
   }
 
-  /* La fiche ne compresse plus la carte : elle flotte par-dessus, et seulement
-     quand une notice est choisie. L'invite « selectionnez un point » n'a donc
-     plus 392 px a occuper en permanence. Le decalage de sortie compte la marge,
-     sinon l'ombre reste visible sur le bord. */
-  .fiche-hote {
-    inset: 12px 12px 12px auto;
-    z-index: 7;
-    width: var(--largeur-fiche);
-    /* `box-sizing: border-box` est global : la largeur reste `--largeur-fiche`,
-       le filet ne decale aucune geometrie mesuree par les tests. */
-    border: 1px solid var(--bord-flottant);
-    border-radius: var(--r-l);
-    /* Le fond de la fiche est ici, pas sur `.fiche` qui defile : cf. le
-       commentaire de `DetailPanel`. */
+  /* La case elle-meme fait 15 px, mais c'est le label qui recoit le clic : sa
+     hauteur est donc la vraie cible, portee ici a 44 px. */
+  .zone {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    min-height: 44px;
+    gap: 9px;
+    padding: 0 22px 10px;
+    font-size: 12px;
+    color: var(--texte-moyen);
+    cursor: pointer;
+  }
+
+  .zone input {
+    flex: 0 0 auto;
+    width: 15px;
+    height: 15px;
+    accent-color: var(--accent-plein);
+    cursor: pointer;
+  }
+
+  /* --- Surfaces centrales ----------------------------------------------- */
+  .amorce,
+  .erreur,
+  .vide-carte {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 3;
+    padding: 16px 24px;
+    border-radius: var(--r-m);
     background: var(--fond-carte);
-    overflow: hidden;
-    transform: translateX(calc(100% + 16px));
-    box-shadow: var(--ombre-fiche);
-  }
-
-  .fiche-hote.ouvert {
-    transform: translateX(0);
-  }
-
-  .voile {
-    display: none;
-  }
-
-  /* Poignee et onglets n'existent que sur telephone, cf. le gabarit plus bas. */
-  .poignee,
-  .onglets {
-    display: none;
-  }
-
-  /* Bascule d'ordre de la liste : meme rail que le selecteur de vue. */
-  .tri {
-    display: inline-flex;
-    gap: 2px;
-    margin-top: 8px;
-    padding: 2px;
-    background: var(--fond-creux);
-    border-radius: var(--r-pilule);
-  }
-
-  .liste .tri button {
-    display: inline-block;
-    width: auto;
-    padding: 5px 13px;
-    border-radius: var(--r-pilule);
+    box-shadow: var(--ombre-carte);
+    font-size: 12px;
     color: var(--texte-faible);
-    font-size: 11.5px;
-    font-weight: 500;
+    text-align: center;
+    max-width: 460px;
   }
 
-  .liste .tri button.actif {
-    background: var(--fond-carte);
-    color: var(--texte);
-    font-weight: 600;
-    box-shadow: 0 2px 6px -2px rgb(var(--voile) / 18%);
+  .erreur b {
+    color: var(--erreur);
   }
 
-  .meta .distance {
+  .erreur p {
+    margin: 6px 0 0;
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+    word-break: break-word;
+  }
+
+  .vide-carte {
+    display: grid;
+    gap: 10px;
+    padding: 18px 24px;
+    max-width: 320px;
+  }
+
+  .vide-carte p {
+    margin: 0;
+  }
+
+  .vide-carte button {
+    justify-self: center;
+    padding: 7px 16px;
+    border: 1px solid var(--bord-appuye);
+    border-radius: var(--r-pilule);
+    background: transparent;
+    color: var(--accent);
+    font-size: 12px;
     font-weight: 600;
-    color: var(--position);
+    cursor: pointer;
+    transition: border-color var(--t-rapide);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .vide-carte button:hover {
+      border-color: var(--accent);
+    }
   }
 
   /* L'attente du moteur quand la carte a deja ses points : une pastille en
-     haut, au centre, sous le bouton des filtres et hors des coins d'outils. */
+     haut, au centre, hors des coins d'outils. */
   .amorce-discrete {
     position: absolute;
     top: 14px;
@@ -2023,7 +1711,7 @@
     top: 64px;
     left: 50%;
     transform: translateX(-50%);
-    z-index: 4;
+    z-index: 5;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -2059,228 +1747,127 @@
     cursor: pointer;
   }
 
-  /* Bandeau plein largeur : il ne coute sa hauteur que lorsque la frise est
-     repliee, et dit ou elle est partie. */
-  .replier {
-    display: block;
-    width: 100%;
-    border: none;
-    border-top: 1px solid var(--bord);
-    background: var(--fond);
-    color: var(--texte-faible);
-    /* Dernier element de la page : son pied touche le bord physique. */
-    padding: 8px 8px calc(8px + var(--sa-bas));
-    font-size: 11px;
-    cursor: pointer;
-    transition: color var(--t-rapide);
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .replier:hover {
-      color: var(--texte);
-    }
-  }
-
   /* Emplacement reserve le temps que le chunk Plot arrive, cf. le commentaire
-     du script. La frise occupe une ligne de grille dimensionnee par son
-     contenu, d'ou la hauteur mesuree en dur ci-dessous — directement sur le
-     panneau reel, aux deux gabarits, pas deduite des paddings. */
-
+     du script : hauteur mesuree du panneau reel, aux deux gabarits. */
   .frise-attente {
     height: 168px;
     border-top: 1px solid var(--bord);
     background: var(--frise-fond);
   }
 
+  /* Entre telephone et ecran large, le volet et le bloc du haut se
+     resserrent ; tout le reste est identique. Les surfaces du haut de la
+     scene descendent sous le bloc, qui occupe davantage de la largeur. */
+  @media (max-width: 1100px) {
+    main {
+      --largeur-volet: 400px;
+    }
+  }
+
   @media (max-width: 900px) {
     .frise-attente {
       height: 317px;
     }
-  }
 
-  /* Au-dela de 1440 px, la liste laissait pres de la moitie de l'ecran vide a
-     droite : chaque entree est une ligne pleine largeur cliquable, donc ce vide
-     n'etait meme pas une colonne de lecture bornee. Le contenu se recentre sur
-     1120 px — titre et entrees ensemble, sans quoi les deux se desaligneraient.
-     Le seuil n'est pas cosmetique : la reserve du bouton flottant est
-     neutralisee ici, et il faut que la marge laissee par le centrage
-     (160 px a 1440) depasse l'empreinte du bouton (108 px avec son badge),
-     sinon le titre repasserait dessous. */
-  @media (min-width: 1440px) {
-    .liste header {
-      padding-left: 20px;
+    .amorce-discrete,
+    .avis,
+    .alerte-position {
+      top: calc(var(--hauteur-haut) + 24px);
     }
-
-    .liste header h3,
-    .liste header p,
-    .liste ul {
-      max-width: 1120px;
-      margin-inline: auto;
-    }
-  }
-
-  @media (max-width: 1320px) {
-    main {
-      --largeur-fiche: 352px;
-    }
-
-    /* Les flancs se partagent ce que le groupe median laisse : sous 1320 px
-       leur part passe sous la largeur de la signature complete. Les dates
-       cedent avant le sous-titre, elles se relisent dans la frise. */
-    .marque .filet,
-    .marque .dates {
-      display: none;
-    }
-  }
-
-  /* Sous 1150 px le groupe median prend sa propre rangee plutot que de se
-     reduire : `flex-basis: 100%` suffit, la barre s'enroulant deja. Les deux
-     flancs restent seuls sur la premiere ligne et s'y repartissent. */
-  @media (max-width: 1150px) {
-    .barre {
-      padding: calc(10px + var(--sa-haut)) calc(16px + var(--sa-droite)) 10px calc(16px + var(--sa-gauche));
-      gap: 10px 16px;
-    }
-
-    .centre-barre {
-      order: 3;
-      flex-basis: 100%;
-      max-width: none;
-    }
-
-    .champ {
-      max-width: none;
-    }
-  }
-
-  /* --- Gabarit moyen ------------------------------------------------------
-     Le tiroir recouvre la carte au lieu de se poser a cote : la place manque.
-     Il se ferme donc en touchant a cote, et la frise se replie. */
-  @media (max-width: 900px) {
-    .barre {
-      padding: calc(10px + var(--sa-haut)) calc(12px + var(--sa-droite)) 10px calc(12px + var(--sa-gauche));
-      gap: 10px 12px;
-    }
-
-    .marque .sous {
-      display: none;
-    }
-
-    .marque strong {
-      font-size: 23px;
-    }
-
-    /* Le groupe median s'enroule a son tour : le selecteur de vue sur une
-       ligne, le champ et ses deux boutons sur la suivante. */
-    .centre-barre {
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-
-    .champ {
-      flex-basis: 100%;
-    }
-
-    .cible,
-    .hasard {
-      padding: 0 11px;
-    }
-
-    .chiffres {
-      gap: 8px;
-      font-size: 11px;
-    }
-
-    /* La liste occupe toute la scene sur un ecran etroit : le bouton flottant
-       se pose au-dessus de son titre, et non plus a cote. */
-    .scene {
-      --reserve-filtres: 0px;
-    }
-
-    .liste header {
-      padding-top: 58px;
-    }
-
-    .voile {
-      display: block;
-      position: absolute;
-      inset: 0;
-      z-index: 5;
-      border: none;
-      padding: 0;
-      background: rgb(var(--voile) / 45%);
-      cursor: pointer;
-    }
-
-    .facettes {
-      width: min(84vw, 320px);
-    }
-
   }
 
   /* --- Gabarit telephone --------------------------------------------------
-     La fiche remonte du bas plutot que de glisser du cote : 340 px de large
-     sur un ecran de 375 ne laisseraient rien voir de la carte derriere. */
+     Le volet devient la feuille du bas, a trois crans : repliee (son en-tete
+     seul), apercu, depliee. Plus d'onglets : la feuille porte la liste. */
   @media (max-width: 768px) {
-    /* La feuille remonte du bas : elle ne masque plus rien a droite. En
-       revanche elle recouvre la legende, ancree au pied de la carte : celle-ci
-       s'efface tant que la feuille est ouverte, sans quoi ses boutons
-       resteraient dans l'ordre de tabulation, invisibles sous la feuille. Meme
-       procede que les marges : la carte lit une variable, elle ne connait pas
-       la fiche. */
-    main.fiche-ouverte {
-      --marge-droite: 0px;
-      --legende-visibilite: hidden;
-    }
-
-    /* Hauteur **definie**, et flex plutot que la grille de `.colonne`. Avec un
-       simple `max-height`, la hauteur restait indefinie : la rangee implicite
-       de la grille prenait toute la hauteur du contenu, `overflow: hidden`
-       rognait le bas, et `.fiche` n'avait jamais rien a faire defiler — la
-       moitie de la notice etait inatteignable. En flex colonne, l'enfant
-       `min-height: 0` se contracte a la boite et son `overflow-y` reprend. */
-    .fiche-hote {
-      inset: auto 0 0 0;
-      display: flex;
-      flex-direction: column;
+    .haut {
+      top: calc(8px + var(--sa-haut));
+      left: calc(8px + var(--sa-gauche));
+      right: calc(8px + var(--sa-droite));
       width: auto;
+      max-width: none;
+      gap: 6px;
+    }
+
+    .barre {
+      padding: 5px 5px 5px 8px;
+      gap: 6px;
+    }
+
+    /* Le titre reste dans le document, pour les lecteurs d'ecran : la largeur
+       va au champ. */
+    .marque {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+
+    .bascule,
+    .theme-large {
+      display: none;
+    }
+
+    .theme-etroit {
+      display: inline-flex;
+      width: 34px;
+      height: 34px;
+      margin-left: auto;
+    }
+
+    .outils {
+      flex-wrap: nowrap;
+      gap: 6px;
+    }
+
+    .volet {
+      top: auto;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      width: auto;
+      max-width: none;
+      /* Hauteur **definie** : c'est ce qui fait defiler la fiche. Avec un
+         simple `max-height`, la hauteur restait indefinie et la moitie de la
+         notice etait inatteignable. Les crans passent par `transform`, jamais
+         par la hauteur : translater ne provoque aucun reflow. */
       height: calc(100% - 8px);
+      padding-bottom: var(--sa-bas);
       border-radius: var(--r-l) var(--r-l) 0 0;
-      transform: translateY(101%);
+      visibility: visible;
+      /* Repliee : seul l'en-tete depasse. `--feuille-repliee` vaut `REPLIEE`
+         dans le script. */
+      --feuille-repliee: 68px;
+      transform: translateY(calc(100% - var(--feuille-repliee)));
+      transition: transform var(--t-tiroir);
     }
 
-    .fiche-hote > :global(.fiche) {
-      flex: 1 1 auto;
-      min-height: 0;
-    }
-
-    /* Deux crans. L'apercu cache 55 % de la feuille sous le bord (`PART_CACHEE`
-       dans le script, a garder egal) ; depliee, elle monte entiere. */
-    .fiche-hote.ouvert {
+    /* Apercu : 55 % de la feuille sous le bord (`PART_CACHEE` dans le
+       script, a garder egal) ; depliee, elle monte entiere. */
+    .volet.ouvert {
       transform: translateY(55%);
     }
 
-    .fiche-hote.ouvert.plein {
+    .volet.ouvert.plein {
       transform: translateY(0);
     }
 
     /* Pendant le glissement le `transform` en ligne suit le doigt : une
        transition le ferait trainer derriere lui. */
-    .fiche-hote.glisse {
+    .volet.glisse {
       transition: none;
     }
 
     /* En apercu, la photographie est bornee plus bas : a 48dvh elle occupait
-       toute la part visible, et le titre — ce qui dit sur quoi on a touche —
-       restait sous le bord. Depliee, la fiche retrouve la borne de
-       `DetailPanel`. */
-    .fiche-hote:not(.plein) :global(.cadre) {
+       toute la part visible, et le titre restait sous le bord. */
+    .volet:not(.plein) :global(.cadre) {
       max-height: 20dvh;
     }
 
     /* 44 px **reels** plutot qu'une zone etendue : la feuille porte
-       `overflow: hidden`, qui rognerait un `::after` au-dessus d'elle. L'audit
-       l'a relevee a 32 px, sous le seuil que le produit s'impose. */
+       `overflow: hidden`, qui rognerait un `::after` au-dessus d'elle. */
     .poignee {
       display: flex;
       flex: 0 0 auto;
@@ -2303,69 +1890,33 @@
       background: var(--bord-appuye);
     }
 
-    /* --- Barre et onglets ------------------------------------------------ */
-    .barre {
-      min-height: 0;
-      padding: calc(8px + var(--sa-haut)) calc(12px + var(--sa-droite)) 8px calc(12px + var(--sa-gauche));
-      gap: 8px 12px;
-    }
-
-    .marque strong {
-      font-size: 21px;
-    }
-
-    .bascule,
-    .replier {
-      display: none;
-    }
-
-    .hasard {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 44px;
-      padding: 0;
-    }
-
-    .hasard svg {
-      display: block;
-    }
-
-    .libelle-hasard {
-      display: none;
-    }
-
-    .onglets {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      padding: 0 var(--sa-droite) var(--sa-bas) var(--sa-gauche);
-      border-top: 1px solid var(--bord);
-      background: var(--fond-carte);
-    }
-
-    .onglets button {
+    .entete-feuille {
       display: flex;
-      flex-direction: column;
+      flex: 0 0 auto;
       align-items: center;
       justify-content: center;
-      gap: 3px;
-      min-height: 56px;
+      gap: 6px;
+      height: 32px;
+      margin-top: -8px;
+      padding: 0 16px;
       border: none;
       background: transparent;
-      color: var(--texte-faible);
-      font-size: 11px;
-      font-weight: 500;
+      color: var(--texte-moyen);
+      font-size: 13px;
+      font-weight: 600;
       cursor: pointer;
     }
 
-    .onglets svg {
-      width: 22px;
-      height: 22px;
+    .entete-feuille svg {
+      width: 16px;
+      height: 16px;
     }
 
-    .onglets button.actif {
-      color: var(--accent);
-      font-weight: 600;
+    /* Les surfaces flottantes du pied s'effacent tant que la feuille monte :
+       elles seraient dessous, et garderaient leurs boutons dans l'ordre de
+       tabulation. Meme procede que les marges : une variable heritee. */
+    main.volet-ouvert {
+      --legende-visibilite: hidden;
     }
   }
 </style>

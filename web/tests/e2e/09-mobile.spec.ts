@@ -1,5 +1,6 @@
 /**
- * Gabarit telephone : onglets du pied, feuille de fiche a crans, tolerance du
+ * Gabarit telephone : bloc de recherche en haut, feuille a trois crans (liste,
+ * fiche, filtres) au pied, plus d'onglets, tolerance du
  * toucher, geolocalisation et points precalcules du premier ecran.
  *
  * Contexte `isMobile` + `hasTouch` : c'est ce qui fait repondre
@@ -67,23 +68,27 @@ test('gabarit téléphone', async () => {
     verifier('aucun debordement horizontal', debordement <= 0, `${debordement} px`);
   });
 
-  await test.step('onglets au pied, barre du haut compacte', async () => {
-    verifier('onglets visibles sur telephone', await page.locator('.onglets').isVisible());
-    verifier('selecteur de vue de la barre masque', !(await page.locator('.bascule').isVisible()));
-    verifier('bandeau des frises masque', !(await page.locator('.replier').isVisible()));
+  await test.step('recherche en haut, feuille repliee au pied, plus d’onglets', async () => {
+    verifier('plus d’onglets', (await page.locator('.onglets').count()) === 0);
+    verifier('selecteur de vue masque : la feuille porte la liste', !(await page.locator('.bascule').isVisible()));
     const barre = (await page.locator('.barre').boundingBox())!;
-    verifier('barre du haut <= 120 px', barre.height <= 120, `${barre.height} px`);
-    const onglets = (await page.locator('.onglets').boundingBox())!;
-    verifier('onglets colles au bas de l ecran', Math.abs(onglets.y + onglets.height - 812) <= 1, `${onglets.y + onglets.height}`);
+    verifier('carte de recherche <= 64 px', barre.height <= 64, `${barre.height} px`);
+    const feuille = (await page.locator('.volet').boundingBox())!;
+    const scene = (await page.locator('.scene').boundingBox())!;
+    verifier(
+      'la feuille repliee ne laisse depasser que son en-tete',
+      Math.abs(scene.y + scene.height - feuille.y - 68) <= 2,
+      `${Math.round(scene.y + scene.height - feuille.y)} px visibles`
+    );
     const taille = await page.locator('.recherche').evaluate((el) => getComputedStyle(el).fontSize);
     verifier('champ de recherche a 16 px au doigt (pas de zoom iOS)', taille === '16px', taille);
 
-    await page.locator('.onglets button', { hasText: 'Frises' }).click();
+    await page.getByRole('button', { name: 'Frises', exact: true }).click();
     await attendre(page, '.frise');
-    verifier('onglet Frises ouvre la frise', (await page.locator('.onglets button', { hasText: 'Frises' }).getAttribute('aria-expanded')) === 'true');
-    await page.locator('.onglets button', { hasText: 'Frises' }).click();
+    verifier('Frises ouvre la frise', (await page.getByRole('button', { name: 'Frises', exact: true }).getAttribute('aria-expanded')) === 'true');
+    await page.getByRole('button', { name: 'Frises', exact: true }).click();
     await page.waitForTimeout(300);
-    verifier('onglet Frises la referme', (await page.locator('.frise').count()) === 0);
+    verifier('Frises la referme', (await page.locator('.frise').count()) === 0);
   });
 
   await test.step('legende et vignette des calques au pied de la carte', async () => {
@@ -115,12 +120,20 @@ test('gabarit téléphone', async () => {
     verifier('la croix la referme', (await page.locator('.panneau-calques').count()) === 0);
   });
 
-  await test.step('zoom et geolocalisation ne se chevauchent pas', async () => {
+  await test.step('commandes de la carte sous la recherche, sans chevauchement', async () => {
+    // Zoom, France entiere, geolocalisation : trois groupes, sous le bloc de
+    // recherche — le pied de l'ecran appartient a la feuille.
     const groupes = await page.locator('.maplibregl-ctrl-top-right .maplibregl-ctrl-group').evaluateAll((els) =>
       els.map((el) => el.getBoundingClientRect().toJSON())
     );
-    verifier('deux groupes en haut a droite (zoom, geolocalisation)', groupes.length === 2, String(groupes.length));
-    verifier('disjoints', groupes.length === 2 && groupes[0].bottom <= groupes[1].top, JSON.stringify(groupes));
+    const haut = (await page.locator('.haut').boundingBox())!;
+    verifier('trois groupes de commandes', groupes.length === 3, String(groupes.length));
+    verifier(
+      'empiles sans se toucher',
+      groupes.every((g, i) => i === 0 || groupes[i - 1].bottom <= g.top),
+      JSON.stringify(groupes.map((g) => [Math.round(g.top), Math.round(g.bottom)]))
+    );
+    verifier('sous le bloc de recherche', groupes[0].top >= haut.y + haut.height, `${groupes[0].top} / ${haut.y + haut.height}`);
   });
 
   await test.step('le tiroir des filtres ne s’ouvre qu’au geste', async () => {
@@ -130,13 +143,12 @@ test('gabarit téléphone', async () => {
     verifier('tiroir des filtres ouvert', (await page.locator('.facettes.ouvert').count()) === 1);
 
     const etatTiroir = await page.evaluate(() => ({
-      barre: (document.querySelector('.barre') as HTMLElement | null)?.inert,
-      facettes: (document.querySelector('.facettes') as HTMLElement | null)?.inert,
-      onglets: (document.querySelector('.onglets') as HTMLElement | null)?.inert
+      haut: (document.querySelector('.haut') as HTMLElement | null)?.inert,
+      volet: (document.querySelector('.volet') as HTMLElement | null)?.inert
     }));
     verifier(
-      'tiroir ouvert sur telephone : barre et onglets inert, le tiroir ne l’est pas',
-      etatTiroir.barre === true && etatTiroir.onglets === true && etatTiroir.facettes === false,
+      'filtres ouverts sur telephone : feuille depliee et modale',
+      etatTiroir.haut === true && etatTiroir.volet === false && (await page.locator('.volet.plein').count()) === 1,
       JSON.stringify(etatTiroir)
     );
     const taille = await page.locator('.filtre').first().evaluate((el) => getComputedStyle(el).fontSize).catch(() => '16px');
@@ -147,13 +159,15 @@ test('gabarit téléphone', async () => {
     verifier('tiroir des filtres referme', (await page.locator('.facettes.ouvert').count()) === 0);
   });
 
-  await test.step('la fiche s’ouvre en apercu, non modale, et se deplie a la poignee', async () => {
-    await page.locator('.onglets button', { hasText: 'Liste' }).click();
+  await test.step('la feuille repliee montre la liste, puis la fiche en apercu', async () => {
+    await page.locator('.entete-feuille').click();
     await attendre(page, '.liste li button');
+    verifier('la liste monte en apercu', (await page.locator('.volet.ouvert:not(.plein)').count()) === 1);
+    await page.waitForTimeout(400);
     await page.locator('.liste li button').first().click();
     await attendre(page, '.fiche .fermer');
-    verifier('fiche en feuille remontante', (await page.locator('.fiche-hote.ouvert').count()) === 1);
-    verifier('ouverte en apercu', (await page.locator('.fiche-hote.plein').count()) === 0);
+    verifier('la fiche prend la place de la liste', (await page.locator('.fiche-hote.ouvert').count()) === 1);
+    verifier('toujours en apercu', (await page.locator('.volet.plein').count()) === 0);
 
     // La position, pas seulement les classes : le focus pose par le geste
     // faisait defiler `.scene` vers la feuille translatee, qui couvrait alors
@@ -162,31 +176,40 @@ test('gabarit téléphone', async () => {
     const pose = await page.evaluate(() => {
       const scene = document.querySelector('.scene')!;
       const s = scene.getBoundingClientRect();
-      const hote = document.querySelector('.fiche-hote')!.getBoundingClientRect();
-      return { defile: scene.scrollTop, part: (hote.top - s.top) / s.height };
+      const volet = document.querySelector('.volet')!.getBoundingClientRect();
+      return { defile: scene.scrollTop, part: (volet.top - s.top) / s.height };
     });
     verifier('ouvrir la fiche au doigt ne fait pas defiler la scene', pose.defile === 0, JSON.stringify(pose));
     verifier('l’apercu laisse plus de la moitie de la scene au-dessus de lui', pose.part > 0.5, JSON.stringify(pose));
 
     const apercu = await page.evaluate(() => ({
-      barre: (document.querySelector('.barre') as HTMLElement | null)?.inert,
-      ficheHote: (document.querySelector('.fiche-hote') as HTMLElement | null)?.inert
+      haut: (document.querySelector('.haut') as HTMLElement | null)?.inert,
+      volet: (document.querySelector('.volet') as HTMLElement | null)?.inert
     }));
-    verifier('apercu : rien n’est inert', apercu.barre === false && apercu.ficheHote === false, JSON.stringify(apercu));
+    verifier('apercu : rien n’est inert', apercu.haut === false && apercu.volet === false, JSON.stringify(apercu));
 
     await page.getByRole('button', { name: 'Agrandir la fiche' }).click();
     await page.waitForTimeout(350);
-    verifier('la poignee deplie la feuille', (await page.locator('.fiche-hote.plein').count()) === 1);
+    verifier('la poignee deplie la feuille', (await page.locator('.volet.plein').count()) === 1);
     const plein = await page.evaluate(() => ({
-      barre: (document.querySelector('.barre') as HTMLElement | null)?.inert,
-      ficheHote: (document.querySelector('.fiche-hote') as HTMLElement | null)?.inert
+      haut: (document.querySelector('.haut') as HTMLElement | null)?.inert,
+      volet: (document.querySelector('.volet') as HTMLElement | null)?.inert
     }));
-    verifier('depliee : la barre est inert, la feuille ne l’est pas', plein.barre === true && plein.ficheHote === false, JSON.stringify(plein));
+    verifier('depliee : le haut est inert, la feuille ne l’est pas', plein.haut === true && plein.volet === false, JSON.stringify(plein));
 
+    // Fermer la fiche rend la liste : c'est le retour des cartes en ligne.
+    await page.locator('.fiche .fermer').click();
+    await page.waitForTimeout(400);
+    verifier('fermer la fiche rend la liste', (await page.locator('.contenu-liste:not([hidden])').count()) === 1);
+    await page.locator('.liste li button').first().click();
+    await attendre(page, '.fiche .fermer');
     await page.goBack();
     await page.waitForTimeout(900);
-    verifier('retour arriere referme la feuille', (await page.locator('.fiche-hote.ouvert').count()) === 0, page.url().slice(-40));
-    await page.locator('.onglets button', { hasText: 'Carte' }).click();
+    verifier('retour arriere referme la fiche', (await page.locator('.fiche-hote.ouvert').count()) === 0, page.url().slice(-40));
+    await page.getByRole('button', { name: /^Réduire la liste|^Agrandir la liste/ }).click().catch(() => {});
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(400);
+    verifier('Echap replie la feuille', (await page.locator('.volet.ouvert').count()) === 0);
   });
 
   verifier('aucune erreur console (mobile)', erreursConsole.length === 0, erreursConsole.slice(0, 3).join(' | '));
@@ -204,7 +227,7 @@ test('la fiche défile jusqu’au bout', async () => {
   // Un defilement en apercu deplie la feuille.
   await p.locator('.fiche').evaluate((el) => el.scrollBy(0, 40));
   await p.waitForTimeout(350);
-  verifier('defiler en apercu deplie la feuille', (await p.locator('.fiche-hote.plein').count()) === 1);
+  verifier('defiler en apercu deplie la feuille', (await p.locator('.volet.plein').count()) === 1);
 
   const mesure = await p.locator('.fiche').evaluate((el) => {
     el.scrollTop = el.scrollHeight;
@@ -267,7 +290,7 @@ test('géolocalisation et tri à proximité', async ({ browser }: { browser: Bro
   await attendre(p, '.maplibregl-user-location-dot');
   verifier('le point de position est pose', (await p.locator('.maplibregl-user-location-dot').count()) === 1);
 
-  await p.locator('.onglets button', { hasText: 'Liste' }).click();
+  await p.locator('.entete-feuille').click();
   await attendre(p, '.tri');
   verifier('la liste passe d’elle-meme en proximite', (await p.getByRole('button', { name: 'À proximité' }).getAttribute('aria-pressed')) === 'true');
   await attendre(p, '.meta .distance');
@@ -300,6 +323,9 @@ test('géolocalisation et tri à proximité', async ({ browser }: { browser: Bro
   verifier('le lien copie apres geolocalisation porte la notice', /[?&]ref=PA/.test(lien), lien.split('?')[1] ?? lien);
   verifier('et tait la vue centree sur l’utilisateur', !/[?&]c=/.test(lien), lien.split('?')[1] ?? lien);
 
+  // La fiche occupe la feuille : la refermer rend la liste et son tri.
+  await p.locator('.fiche .fermer').click();
+  await p.waitForTimeout(400);
   await p.getByRole('button', { name: 'Mobilier' }).click();
   await p.waitForTimeout(600);
   verifier('retour au tri par mobilier : plus de distances', (await p.locator('.meta .distance').count()) === 0);
@@ -369,13 +395,12 @@ test('points précalculés avant le moteur', async ({ browser }: { browser: Brow
   await lent.close();
 });
 
-test('tablette et ordinateur n’ont pas d’onglets', async ({ browser }: { browser: Browser }) => {
+test('tablette et ordinateur : la vue se choisit sous la recherche', async ({ browser }: { browser: Browser }) => {
   const large = await browser.newContext({ viewport: { width: 1280, height: 800 }, colorScheme: 'dark' });
   const p = await large.newPage();
   await p.goto(infos.url, { waitUntil: 'domcontentloaded' });
   await attendre(p, '.chiffres b');
-  verifier('pas d’onglets a 1280 px', !(await p.locator('.onglets').isVisible()));
-  verifier('selecteur de vue dans la barre a 1280 px', await p.locator('.bascule').isVisible());
+  verifier('selecteur de vue sous la recherche a 1280 px', await p.locator('.bascule').isVisible());
   verifier('pas de poignee de feuille a 1280 px', !(await p.locator('.poignee').isVisible()));
   await large.close();
 });

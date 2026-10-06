@@ -415,7 +415,7 @@ a {
    pastille ardoise elles disparaissent. Elles ne sont pas des jetons — on ne
    peut pas leur donner une couleur — d'ou l'inversion, seul levier disponible
    sur une image de fond. */
-:root[data-theme='sombre'] .maplibregl-ctrl-group button:not(.maplibregl-ctrl-geolocate) .maplibregl-ctrl-icon {
+:root[data-theme='sombre'] .maplibregl-ctrl-group button:not(.maplibregl-ctrl-geolocate):not(.maplibregl-ctrl-accueil) .maplibregl-ctrl-icon {
   filter: invert(1);
 }
 
@@ -440,6 +440,15 @@ a {
 .maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-active-error .maplibregl-ctrl-icon,
 .maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-background-error .maplibregl-ctrl-icon {
   background-color: var(--erreur);
+}
+
+/* Le bouton « France entiere » : quatre coins qui cadrent, en masque peint
+   par jeton, comme l'icone de geolocalisation — d'ou son exclusion de
+   l'inversion du theme sombre ci-dessus. */
+.maplibregl-ctrl button.maplibregl-ctrl-accueil .maplibregl-ctrl-icon {
+  background-color: var(--texte-moyen);
+  -webkit-mask: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4'/%3E%3Ccircle cx='12' cy='12' r='2.2'/%3E%3C/svg%3E") center / 22px 22px no-repeat;
+  mask: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4'/%3E%3Ccircle cx='12' cy='12' r='2.2'/%3E%3C/svg%3E") center / 22px 22px no-repeat;
 }
 
 /* `.maplibregl-map` en tete : la feuille de MapLibre est importee par le

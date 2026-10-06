@@ -5,31 +5,27 @@ composants `FacetPanel`, `Jetons`, `Timeline`, `DetailPanel`. Lire
 cette page avant de toucher à la mise en page, au focus, au clavier ou à
 l'accessibilité.
 
-**La barre porte trois blocs, et le groupe médian est centré par ses flancs.**
-`marque` et `chiffres` portent `flex: 1 1 0` : ils se partagent à parts égales ce que
-le groupe médian laisse, donc celui-ci tombe au milieu sans qu'aucune largeur ne soit
-écrite. Quatre points à ne pas défaire :
+**Plus de barre d'en-tête : la carte prend tout l'écran** (phase 4 de
+`PLAN_REFONTE_INTERFACE.md`). Ce qu'on y pose flotte dessus, à la manière des cartes en
+ligne :
 
-- **`.centre-barre` déclare une base (`flex: 0 1 700px`), pas `auto`.** La contribution
-  max-content d'un conteneur flex imbriqué ne reprend pas la base de ses enfants : avec
-  `auto`, le champ retombait à 197 px, une vingtaine de caractères entre ses deux
-  boutons. Mesuré, pas déduit ;
-- **la marque tient sur deux lignes** — le titre, puis sa signature. Sous 1320 px les
-  dates cèdent avant le sous-titre : la part de chaque flanc passe alors sous la largeur
-  de la signature complète, et les dates se relisent dans la frise ;
-- **un seul compteur.** Le total suit les filtres et répond à « combien en reste-t-il ».
-  Classés, inscrits et objets se lisent dans la facette « statut », qui les donne déjà
-  croisés — les répéter dans la barre était une triple lecture du même état. Le bloc
-  `.chiffres` porte `aria-live="polite"` et `aria-atomic="true"` : c'est le compte qui
-  doit être relu au changement de filtre, pas toute la barre, et `aria-atomic` fait
-  relire le nombre entier plutôt que le seul chiffre modifié — ce texte vivait
-  auparavant sur la fiche (`aside.fiche aria-live="polite"`), où il annonçait une
-  notice entière à chaque ouverture, y compris son contenu déjà lu par le focus qui
-  s'y déplace (cf. plus bas) ;
-- **le thème est une pastille sans libellé** (soleil / lune), et son nom accessible
-  reste `Clair` / `Sombre` : l'icône dit la destination, l'`aria-label` la nomme. Le
-  trait des deux SVG est `currentColor`, sinon la règle « toute couleur vit dans
-  `app.css` » tomberait avec eux.
+- **le bloc du haut** (`.haut`), en haut à gauche, large de `--largeur-volet` (440 px,
+  400 sous 1 100 px, toute la largeur sur téléphone) : la carte de recherche (`.barre` —
+  le titre `Mérimée`, le champ, « Historiques », le dé « Au hasard »), puis la rangée
+  d'outils (`.outils` — le compteur, la bascule Carte / Liste, Filtres, Frises), puis
+  les puces des filtres posés. La rangée d'outils doit tenir sur une ligne : c'est ce
+  qui fixe la largeur ;
+- **le titre est un `<h1>`** : visible au large, en tête de la carte de recherche ;
+  réservé aux lecteurs d'écran sur téléphone, où la largeur va au champ ;
+- **un seul compteur** (`.chiffres`), qui suit les filtres et porte `aria-live="polite"`
+  et `aria-atomic="true"` : c'est le compte qui doit être relu au changement, et en
+  entier ;
+- **le thème est une pastille sans libellé**, au coin haut droit de la carte au large,
+  au bout de la rangée d'outils sur téléphone — deux boutons, un seul jamais visible
+  (`display: none` sur l'autre, que `getByRole` ignore). L'icône dit la destination,
+  l'`aria-label` la nomme (`Clair` / `Sombre`) ;
+- **les commandes de MapLibre descendent en bas à droite** au-dessus de l'attribution,
+  sur téléphone sous le bloc du haut (cf. `docs/conception-carte.md`).
 
 **Les deux panneaux repliables sont fermés au chargement, à toutes les largeurs.** Le
 tiroir des filtres s'ouvrait dès qu'il y avait la place de le poser à côté de la carte,
@@ -46,23 +42,9 @@ conséquences :
   dénoue, pas une panne — mais la suite e2e, elle, doit le refermer avant d'éprouver le
   bouton flottant, qui s'efface tant que le tiroir est ouvert.
 
-**Le bouton « Filtres » vit au coin de la carte, pas dans la barre.** Il se pose là où
-le tiroir s'ouvre et **s'efface tant qu'il est ouvert** : la croix de l'en-tête du
-tiroir est alors le seul geste de fermeture, et le bouton revient avec elle. Deux
-conséquences :
-
-- **z-index 4**, au-dessus de la liste (3), qui recouvre la scène et pour laquelle
-  les filtres comptent autant, mais sous le voile (5) et le tiroir (6) ;
-- **son empreinte est une variable héritée**, `--reserve-filtres`, posée par la scène et
-  lue par le titre de la liste. Même procédé que `--marge-gauche` pour les commandes
-  MapLibre : la liste n'a pas à connaître l'existence de ce bouton. Elle tombe à zéro quand le tiroir est ouvert, et
-  sur gabarit étroit, où le bouton passe **au-dessus** du titre et non à côté ;
-- **c'est une surface posée, pas un aplat plein.** Le fond de carte suit désormais le
-  thème, mais cela ne change rien ici : le bouton appartient à l'interface et suit le
-  thème comme la légende, calcaire en clair, ardoise en sombre, détaché de la carte par
-  son filet (`--bord-flottant`) et son ombre. En aplat inversé (`--plein-fond`), il
-  était noir sur une carte noire en sombre, et il serait ardoise sur du grège en clair :
-  dans les deux cas un trou, jamais une commande.
+**Le bouton « Filtres » vit dans la rangée d'outils** et reste visible tiroir
+ouvert : `aria-expanded` dit son état, un second appui referme. Il porte le nombre de
+critères posés.
 
 **La frise est un panneau, pas un socle.** Trois décisions tenues ensemble :
 
@@ -72,9 +54,10 @@ conséquences :
   supposent, une frise ne suppose rien. En clair, `--barre-sourde` (les siècles non
   retenus) doit rester un gris **chaud** et non un gris de texte : sur le calcaire, un
   gris neutre passe pour une barre désactivée ;
-- **elle se replie à toutes les largeurs**, plus seulement sur téléphone. Même
-  dispositif que le tiroir des facettes : la croix est dans le panneau, et le bandeau
-  qui le rouvre prend sa place — il ne coûte sa hauteur que lorsque la frise est partie ;
+- **elle se replie à toutes les largeurs.** Elle s'ouvre depuis le bouton « Frises » de
+  la rangée d'outils (`aria-expanded`), se referme par lui ou par sa croix — qui garde
+  seule le nom « Masquer les frises » : deux boutons de même nom seraient
+  indiscernables ;
 - **les deux axes répondent aux mêmes gestes** : clic pour une valeur, glissement pour
   une plage, et recliquer la même valeur l'efface.
 
@@ -116,28 +99,31 @@ portant `annees=` arrivait **sans son voile**, l'échelle étant encore nulle au
 calcul de `$derived`. Le second n'est lu que dans un gestionnaire d'événement, donc
 toujours après. Invisible tant que les bornes affichaient la plage en chiffres.
 
-**Les deux panneaux sont des calques, pas des colonnes.** Le tiroir des facettes et la
-fiche flottent au-dessus de la carte (`position: absolute` dans `.scene`), et non plus
-dans une grille `246px | 1fr | 340px` qui compressait le canevas en permanence — 340 px
-étaient réservés pour afficher « Sélectionnez un point ». Trois conséquences à ne pas
-défaire :
+**Un seul volet pour ce qu'on lit : la liste, la fiche, les filtres** (`.volet`).
+Au large, une colonne sous le bloc du haut, de la même largeur ; sur téléphone, la
+feuille du bas. Quatre points à ne pas défaire :
 
-- **les ouvrir ne redimensionne pas le canevas WebGL.** C'est la raison d'être du choix.
-  `le tiroir ne prend pas de largeur à la carte` le mesure, avant/après, en pixels ;
-- **MapLibre ne redimensionne pas son canevas tout seul.** La bande de puces qui
-  apparaît au premier filtre change la hauteur de la scène : `MonumentMap` porte donc un
-  `ResizeObserver` → `map.resize()`. Sans lui la carte reste dessinée à l'ancienne taille
-  et décalée du pointeur ;
-- **les commandes MapLibre doivent s'écarter des calques.** L'attribution CARTO est
-  posée à la main (`attributionControl: false` puis `addControl(...)`) : une mention de
-  licence masquée n'est pas une mention. Elle a d'abord fui la droite, que la fiche
-  recouvrait, pour le **bas à gauche** — où sa pastille « i » s'est mise à chevaucher la
-  légende. Elle est donc **revenue en bas à droite**, cette fois derrière
-  `--marge-droite`, la même variable qui écarte le zoom : la fiche ne la recouvre plus.
-  Un test le verrouille par la **géométrie** — les boîtes de l'attribution et de la
-  légende doivent être disjointes — et non par la lecture d'une règle CSS. Les marges
-  sont posées par la page ; le composant carte n'a pas à connaître l'existence d'un
-  panneau de facettes.
+- **un seul contenu à la fois, par priorité** : la fiche devant les filtres, les filtres
+  devant la liste (`contenu`, dérivé de `selection`, `facettesOuvertes` et `vue`).
+  Refermer l'un découvre le suivant — c'est le « retour » des cartes en ligne, sans pile
+  à tenir. Ouvrir les filtres referme la fiche ;
+- **ce que le volet ne montre pas porte `hidden`** : ni visible, ni atteignable au
+  clavier. Le tiroir fermé gardait douze arrêts de tabulation, translaté hors de la
+  scène. `.volet [hidden]` redit `display: none !important`, sans quoi le `display` d'une
+  classe l'emporte ;
+- **c'est un calque**, jamais une colonne de grille : l'ouvrir ne redimensionne pas le
+  canevas WebGL (`01-amorcage-et-donnees.spec.ts` le mesure). La carte reçoit ce qu'il
+  masque par `marges` (cf. `docs/conception-carte.md`, « Caméra ») : un point choisi
+  dessous est ramené à côté ;
+- **le fond est porté par le volet**, jamais par ce qui défile dedans (`.fiche`, le
+  `.panneau` des facettes, la liste) ; l'en-tête de la liste est hors de ce qui défile,
+  plus en `sticky` dedans. Un élément opaque dans un conteneur défilant, sous la
+  feuille translatée du téléphone, fait croire au compositeur de Chromium qu'il masque
+  la carte là où il serait sans la translation — cf. `docs/contraintes.md`.
+
+`MonumentMap`, `Calques` et `Legende` lisent `--marge-gauche` (le volet ouvert au
+large) et `--reserve-bas` (la feuille repliée sur téléphone), posées par la page : aucun
+n'a à connaître le volet.
 
 Pas de `backdrop-filter` sur ces calques : un flou plein écran au-dessus d'un canevas
 WebGL se paie à chaque image.
@@ -153,6 +139,9 @@ compris), ne déplace jamais le focus — rouvrir un lien ne doit pas voler le f
 lecteur d'écran qui n'a rien demandé. Si le foyer d'origine a disparu (un filtre qui
 retire la ligne de liste visée), le repli se fait sur la carte plutôt que nulle part.
 
+**Fermer la fiche rend le focus après `tick`** : la ligne de liste qui l'avait ouverte
+était masquée (`hidden`) sous la fiche, et un élément masqué ne prend pas le focus.
+
 **Ces `focus()` portent tous `preventScroll: true`, et ce n'est pas une précaution.**
 Un calque est encore translaté hors de la scène à l'instant où il reçoit le focus ; le
 navigateur fait alors défiler `.scene` pour l'amener à l'écran — `overflow: hidden`
@@ -164,14 +153,17 @@ focus, tout était juste. `09-mobile.spec.ts` vérifie désormais la **position*
 classes.
 
 **Un seul écouteur `Échap` global**, posé sur `window` (`surEchap`), ferme le calque le
-plus haut avec les mêmes fonctions que sa croix. Convention partagée avec les
+plus haut avec les mêmes fonctions que sa croix — le panneau des calques, puis la fiche,
+puis les filtres, puis la liste. Convention partagée avec les
 composants qui gèrent `Échap` localement (le panneau des calques, par
 exemple) : ils appellent `event.preventDefault()`, et l'écouteur global ignore tout
 événement déjà traité. Un champ de texte non vide se vide au premier `Échap` —
 comportement natif des `<input type="search">` du produit — la fermeture d'un calque
 n'intervient qu'au passage suivant.
 
-**`inert` est posé depuis `+page.svelte`, jamais par les composants qu'il couvre.** Sur
+**`inert` est posé depuis `+page.svelte`, jamais par les composants qu'il couvre.** Seul
+calque modal désormais : le volet **déplié sur téléphone**. Le texte qui suit décrit
+l'ancien tiroir ; le principe tient. Sur
 gabarit étroit, quand un calque devient modal (fiche ouverte, ou tiroir ouvert), tout ce
 qui n'est pas ce calque — la carte, la frise, appartenant chacune à un autre
 composant — reçoit `inert` depuis l'extérieur, par sélection DOM sur les enfants de
@@ -229,7 +221,7 @@ garde sa taille, son fond et son filet ; seule la surface qui répond au doigt s
 Quatre points à ne pas défaire :
 
 - **`-v` étend la hauteur seule, et ce n'est pas un raffinement.** Sur des boutons en
-  rang — les onglets de vue, les puces de filtres,
+  rang — la bascule Carte / Liste, les puces de filtres,
   les deux fonds historiques — deux zones de 44 px se recouvriraient latéralement, et le
   dernier dans l'ordre du DOM prendrait le clic de son voisin ;
 - **trois éléments n'ont pas pu la recevoir.** Un `<input>` n'accepte pas de
@@ -339,8 +331,8 @@ contorsions. `14-camera.spec.ts` vérifie les deux fonds. Cf. `docs/contraintes.
 pour la méthode de mesure — une capture découpée (`clip`) ne montre **pas** le défaut.
 
 **Sur téléphone, la feuille ouverte efface la légende** (`--legende-visibilite`,
-posée par la page) : elle est entièrement dessous, et gardait ses boutons dans l'ordre
-de tabulation.
+posée par la page) : elle serait dessous, et garderait ses boutons dans l'ordre de
+tabulation.
 
 **La fiche en feuille ne défilait pas, et la cause était la grille.** `.fiche-hote`
 héritait de `.colonne` un `display: grid`, et le gabarit téléphone ne lui donnait qu'un
@@ -352,29 +344,31 @@ s'y voyait pas. Correctif : **hauteur définie** (`calc(100% - 8px)`) et flex co
 l'enfant en `min-height: 0`. Ne pas revenir à un `max-height` : c'est lui qui rend la
 hauteur indéfinie. `09-mobile.spec.ts` vérifie que la dernière section est atteignable.
 
-**Sur téléphone, la fiche est une feuille à deux crans.** Poignée en tête : un toucher
-bascule, un glissement suit le doigt, tirer d'un quart sous l'aperçu ferme ; au clavier,
-Entrée bascule (`click` de `detail` nul). Cinq points à ne pas défaire :
+**Sur téléphone, le volet est une feuille à trois crans.** Repliée (`REPLIEE`, 68 px :
+la poignée et « Liste des notices »), aperçu, dépliée. Poignée en tête, 44 px réels : un
+toucher bascule — repliée, il montre la liste —, un glissement suit le doigt, tirer d'un
+quart sous l'aperçu referme le contenu ; au clavier, Entrée bascule (`click` de `detail`
+nul). Cinq points à ne pas défaire :
 
 - **les crans passent par `transform`, jamais par la hauteur** : la hauteur définie est
-  ce qui fait défiler la feuille, et la translater ne provoque aucun reflow.
-  `PART_CACHEE` (0,55, script) et `translateY(55%)` (style) doivent rester égaux ;
-- **l'aperçu n'est pas modal.** `calqueModal` ne vaut `'fiche'` qu'en `plein` : l'aperçu
+  ce qui fait défiler la fiche, et la translater ne provoque aucun reflow.
+  `PART_CACHEE` (0,55, script) et `translateY(55%)` (style) doivent rester égaux, comme
+  `REPLIEE` et `--feuille-repliee` ;
+- **l'aperçu n'est pas modal.** `calqueModal` ne vaut `'volet'` qu'en `plein` : l'aperçu
   laisse 55 % de carte au-dessus de lui, et c'est tout son intérêt — toucher le monument
-  voisin sans refermer. Dépliée, la feuille couvre l'écran et redevient modale (`inert`) ;
-- **un défilement en aperçu déplie** (`ondefile` de `DetailPanel`) : on ne lit pas un
-  historique dans 45 % d'écran ;
+  voisin sans refermer. Déplié, le volet couvre l'écran et redevient modal (`inert`) ;
+- **un défilement en aperçu déplie** (`ondefile` de `DetailPanel` et de
+  `ListeResultats`) : on ne lit pas un historique dans 45 % d'écran ;
 - **la photographie est bornée à 20dvh en aperçu**, sinon elle remplit toute la part
   visible et le titre reste sous le bord ;
-- **la carte ramène le point choisi au-dessus de la feuille** (`reserveBas`), seulement
-  s'il tombe dessous, sans `essential: true`.
+- **la carte ramène le point choisi au-dessus de la feuille** (`marges.bottom`),
+  seulement s'il tombe dessous, sans `essential: true`.
 
-**Sur téléphone, les vues passent au pied de l'écran.** `.onglets` (Carte / Liste /
-Frises) remplace `.bascule` et `.replier`, masqués sous 768 px : les vues sous le
-pouce, et la barre du haut rendue à la marque, au compteur et à la recherche (≤ 120 px au
-lieu d'environ 150). « Au hasard » y devient un dé, nom accessible inchangé. Les onglets
-entrent dans la liste `dehors` de l'effet `inert`. Tablette et ordinateur n'en voient
-rien — les sélecteurs `.bascule` de la suite e2e restent valables au large.
+**Plus d'onglets au pied.** La feuille porte la liste ; « Frises » et « Filtres » sont
+dans la rangée d'outils du haut, la bascule Carte / Liste y est masquée. Les surfaces du
+pied — légende, vignette des calques, attribution — se posent au-dessus de la feuille
+repliée (`--reserve-bas`) et s'effacent quand elle monte (`--legende-visibilite`,
+posée par `main.volet-ouvert`).
 
 **Les champs de saisie montent à 16 px au doigt** (`@media (pointer: coarse)`),
 recherche de la barre et recherche de facette. Sous 16 px, Safari iOS zoome la page

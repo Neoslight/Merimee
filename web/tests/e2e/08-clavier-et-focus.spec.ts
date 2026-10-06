@@ -52,13 +52,13 @@ test('clavier et focus', async () => {
   });
 
   await test.step('le bouton Filtres place le focus sur le titre du tiroir, la croix le rend', async () => {
-    // Translate hors de la scene, le tiroir ferme gardait ses arrets de
-    // tabulation : il est inerte tant qu'il n'est pas ouvert, au large aussi.
-    const inerte = () => page.evaluate(() => (document.querySelector('.facettes') as HTMLElement).inert);
-    verifier('tiroir ferme inerte a 1600 px', (await inerte()) === true);
+    // Le tiroir ferme gardait ses arrets de tabulation, translate hors de la
+    // scene : ce que le volet ne montre pas porte desormais `hidden`.
+    const masque = () => page.evaluate(() => (document.querySelector('.facettes') as HTMLElement).hidden);
+    verifier('filtres fermes : masques a 1600 px', (await masque()) === true);
     await page.getByRole('button', { name: /^Filtres/ }).click();
     await attendre(page, '.facettes.ouvert .option', 20_000);
-    verifier('tiroir ouvert : plus inerte', (await inerte()) === false);
+    verifier('filtres ouverts : plus masques', (await masque()) === false);
     const focusH2 = await page.evaluate(() => {
       const h2 = document.querySelector('.entete-tiroir h2');
       return h2 !== null && document.activeElement === h2;
@@ -69,7 +69,7 @@ test('clavier et focus', async () => {
     await page.waitForTimeout(300);
     const focusBoutonFiltres = await page.evaluate(() => document.activeElement?.classList.contains('filtres'));
     verifier('fermer le tiroir rend le focus au bouton Filtres', Boolean(focusBoutonFiltres));
-    verifier('tiroir referme : de nouveau inerte', (await inerte()) === true);
+    verifier('filtres refermes : de nouveau masques', (await masque()) === true);
   });
 
   await test.step('la fiche a perdu son aria-live', async () => {

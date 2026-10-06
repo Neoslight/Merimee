@@ -100,15 +100,15 @@ test('amorçage et données', async () => {
     const largeurCarte = (await page.locator('.maplibregl-canvas').boundingBox())!.width;
     verifier('tiroir referme par defaut au large', (await page.locator('.facettes.ouvert').count()) === 0);
     verifier(
-      'le bouton des filtres est pose sur la carte',
-      (await page.locator('.scene > button.filtres').count()) === 1
+      'le bouton des filtres est pose sur la carte, sous la recherche',
+      (await page.locator('.scene .haut button.filtres').count()) === 1
     );
     await page.getByRole('button', { name: /^Filtres/ }).click();
     await page.waitForTimeout(300);
     verifier('le bouton des filtres ouvre le tiroir', (await page.locator('.facettes.ouvert').count()) === 1);
     verifier(
-      'le bouton des filtres s efface quand le tiroir est ouvert',
-      (await page.locator('.scene > button.filtres').count()) === 0
+      'le bouton des filtres dit qu’il est ouvert',
+      (await page.locator('button.filtres').getAttribute('aria-expanded')) === 'true'
     );
     const largeurOuverte = (await page.locator('.maplibregl-canvas').boundingBox())!.width;
     verifier(
@@ -120,8 +120,8 @@ test('amorçage et données', async () => {
     await page.waitForTimeout(300);
     verifier('la croix referme le tiroir au large', (await page.locator('.facettes.ouvert').count()) === 0);
     verifier(
-      'le bouton des filtres revient avec la croix',
-      (await page.locator('.scene > button.filtres').count()) === 1
+      'la croix le rend ferme',
+      (await page.locator('button.filtres').getAttribute('aria-expanded')) === 'false'
     );
   });
 
@@ -144,7 +144,7 @@ test('amorçage et données', async () => {
       `${requetesChunk.length} requete(s) vers ${chunkPlot}`
     );
 
-    await page.getByRole('button', { name: 'Afficher les frises' }).click();
+    await page.getByRole('button', { name: 'Frises', exact: true }).click();
     await attendre(page, '.piste-siecles svg', 20_000);
     verifier(
       'ouvrir la frise charge le chunk Plot et l’affiche',

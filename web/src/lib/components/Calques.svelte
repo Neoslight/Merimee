@@ -452,7 +452,7 @@
   @media (max-width: 900px) {
     .coin {
       left: 8px;
-      bottom: 36px;
+      bottom: calc(var(--reserve-bas, 0px) + 36px);
       width: 56px;
       height: 56px;
     }
@@ -471,10 +471,12 @@
   /* Sur telephone le panneau est une feuille basse, pleine largeur : quatre
      tuiles de 72 px n'y tiendraient pas autrement. */
   @media (max-width: 768px) {
+    /* Au-dessus de la feuille du volet, repliee au pied de l'ecran. */
     .panneau-calques {
       left: 0;
       right: 0;
       bottom: 0;
+      z-index: 8;
       width: auto;
       max-height: 78%;
       padding-bottom: calc(12px + var(--sa-bas));

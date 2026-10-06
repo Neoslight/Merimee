@@ -334,7 +334,7 @@
     .legende.depliee {
       left: calc(8px + var(--empreinte-calques) + 8px);
       right: 8px;
-      bottom: 36px;
+      bottom: calc(var(--reserve-bas, 0px) + 36px);
       max-width: none;
       border-radius: var(--r-m);
       font-size: 10.5px;

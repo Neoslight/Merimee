@@ -125,6 +125,16 @@ balayage n'émette pas une requête par point traversé, et gardée en mémoire.
 posé par `textContent` + `setDOMContent`, **jamais `setHTML`** — c'est le chemin de
 l'avis GHSA-jrc7-96c5-q579. Elle se retire à l'ouverture de la fiche.
 
+**Les commandes de MapLibre descendent en bas à droite** (phase 4) : zoom, « France
+entière » (`ControleAccueil`, même groupe et même icône en masque que la
+géolocalisation, d'où son exclusion de l'inversion du thème sombre), géolocalisation.
+Elles sont ajoutées en `top-right` — MapLibre ne déplace pas une commande d'un coin à
+l'autre — et c'est leur conteneur qui descend au large, au-dessus de l'attribution
+restée en `bottom-right`. Sur téléphone il remonte sous le bloc de recherche
+(`--hauteur-haut`) : le pied de l'écran appartient à la feuille. Les boutons de zoom
+restent au doigt : le pincement est un geste à deux doigts, WCAG 2.5.7 demande une
+alternative à un seul pointeur.
+
 **Un toucher vise une boîte, pas un pixel.** L'écouteur de couche MapLibre
 (`map.on('click', 'monuments-points')`) ne répond qu'au pixel exact d'un cercle : un
 point mesure 1,2 à 4,5 px de rayon jusqu'à z10, et au doigt le toucher relevait du

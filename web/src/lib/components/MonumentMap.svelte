@@ -84,6 +84,36 @@
 
   const VIDE: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 
+  /** Bouton « France entiere », dans le langage des commandes natives : meme
+   *  groupe, meme icone en masque peinte par jeton (`app.css`). */
+  class ControleAccueil implements maplibregl.IControl {
+    groupe: HTMLElement | undefined;
+    rentrer: () => void;
+    constructor(rentrer: () => void) {
+      this.rentrer = rentrer;
+    }
+    onAdd(): HTMLElement {
+      const groupe = document.createElement('div');
+      groupe.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+      const bouton = document.createElement('button');
+      bouton.type = 'button';
+      bouton.className = 'maplibregl-ctrl-accueil';
+      bouton.title = 'Revenir à la France entière';
+      bouton.setAttribute('aria-label', 'Revenir à la France entière');
+      const icone = document.createElement('span');
+      icone.className = 'maplibregl-ctrl-icon';
+      icone.setAttribute('aria-hidden', 'true');
+      bouton.append(icone);
+      bouton.addEventListener('click', this.rentrer);
+      groupe.append(bouton);
+      this.groupe = groupe;
+      return groupe;
+    }
+    onRemove(): void {
+      this.groupe?.remove();
+    }
+  }
+
   /** Couches interrogees au toucher : la couche ACR n'y entre que visible —
    *  `queryRenderedFeatures` ignore deja une couche masquee, mais la nommer
    *  avant qu'elle existe leverait. */
@@ -445,6 +475,23 @@
       }
     };
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+    // Revenir a la France entiere : apres un vol ou trois zooms, le geste que
+    // l'on cherche sans le trouver. Meme cadrage qu'au depart, marges des
+    // panneaux ouverts comprises.
+    map.addControl(
+      new ControleAccueil(() => {
+        const depart = margesDepart(conteneur.clientWidth);
+        map.fitBounds([...METROPOLE] as [number, number, number, number], {
+          padding: {
+            top: depart.top + marges.top,
+            bottom: depart.bottom + marges.bottom,
+            left: depart.left + marges.left,
+            right: depart.right + marges.right
+          }
+        });
+      }),
+      'top-right'
+    );
     // Sous le zoom, dans la meme colonne : c'est un outil de cadrage, comme
     // lui. Le controle natif porte deja le point, le cercle de precision, le
     // suivi et l'etat de permission — le reecrire n'apporterait qu'un bouton
@@ -898,17 +945,31 @@
     inset: 0;
   }
 
-  /* Les commandes MapLibre s'ecartent des panneaux. La variable est posee par
-     la page.
-
-     L'attribution est repassee **en bas a droite** : a gauche, sa pastille
-     « i » se posait sur la legende. La raison qui l'en avait chassee — la fiche
-     la recouvrait — tombe avec `--marge-droite`, qui l'ecarte du calque comme
-     elle ecarte le zoom. */
-  .carte :global(.maplibregl-ctrl-bottom-right),
+  /* Les commandes descendent en bas a droite, au-dessus de l'attribution, a
+     la maniere des cartes en ligne : le haut de la carte appartient a la
+     recherche et au theme. Elles sont ajoutees en `top-right` — MapLibre ne
+     deplace pas une commande d'un coin a l'autre — et c'est leur conteneur
+     qui descend. L'attribution reste au pied, en `bottom-right` : une mention
+     de licence masquee n'est pas une mention. */
   .carte :global(.maplibregl-ctrl-top-right) {
-    right: var(--marge-droite, 0px);
-    transition: right 160ms ease;
+    top: auto;
+    bottom: 26px;
+  }
+
+  /* Sur telephone, la feuille repliee tient le pied de l'ecran : l'attribution
+     se pose au-dessus (`--reserve-bas`), et s'efface quand la feuille monte
+     (`--legende-visibilite`). Les commandes, elles, remontent sous le bloc de
+     recherche, ou rien ne les recouvre. */
+  .carte :global(.maplibregl-ctrl-bottom-right) {
+    bottom: var(--reserve-bas, 0px);
+    visibility: var(--legende-visibilite, visible);
+  }
+
+  @media (max-width: 768px) {
+    .carte :global(.maplibregl-ctrl-top-right) {
+      top: calc(var(--hauteur-haut, 0px) + 10px);
+      bottom: auto;
+    }
   }
 
 </style>

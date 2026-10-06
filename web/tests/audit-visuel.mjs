@@ -66,9 +66,17 @@ const REF_SANS_PHOTO = 'PA48000036';
 
 const attendre = (page, selecteur, timeout = 45_000) => page.waitForSelector(selecteur, { timeout });
 
-// Le selecteur de vue vit dans la barre au large et dans les onglets du pied
-// sur telephone ; l'autre est masque. On vise celui qui est visible.
-const SELECTEUR_VUE = '.bascule button:visible, .onglets button:visible';
+// Le selecteur de vue vit sous la recherche au large ; sur telephone, c'est
+// la feuille du bas qui porte la liste.
+const SELECTEUR_VUE = '.bascule button:visible';
+
+/** Montre la liste : bascule au large, en-tete de la feuille sur telephone. */
+async function ouvrirListe(page) {
+  const bascule = page.locator(SELECTEUR_VUE, { hasText: 'Liste' });
+  if ((await bascule.count()) === 1) await bascule.click();
+  else await page.locator('.entete-feuille').click();
+  await attendre(page, '.liste header p');
+}
 
 /** Le panneau des calques est replie au chargement et se referme a chaque
  *  toucher de la carte : on l'ouvre la ou on s'en sert. */
@@ -94,9 +102,7 @@ async function ouvrirFiltres(page) {
 
 async function ouvrirFrises(page) {
   if ((await page.locator('.frise').count()) === 1) return;
-  const onglet = page.locator('.onglets button:visible', { hasText: 'Frises' });
-  if ((await onglet.count()) === 1) await onglet.click();
-  else await page.getByRole('button', { name: 'Afficher les frises' }).click();
+  await page.getByRole('button', { name: 'Frises', exact: true }).click();
   await attendre(page, '.piste-siecles svg', 20_000);
   await page.waitForTimeout(600);
 }
@@ -149,6 +155,10 @@ async function raz(page) {
   const carte = page.locator(SELECTEUR_VUE, { hasText:'Carte' });
   if ((await carte.count()) === 1) {
     await carte.click();
+    await page.waitForTimeout(500);
+  } else if ((await page.locator('.volet.ouvert').count()) === 1) {
+    // Telephone : la feuille se replie a Echap, liste comprise.
+    await page.keyboard.press('Escape');
     await page.waitForTimeout(500);
   }
   // Calques, une fois revenu a la carte — la liste recouvre la vignette :
@@ -288,8 +298,7 @@ const ETATS = [
     cle: 'defaut',
     vue: 'liste',
     poser: async (page) => {
-      await page.locator(SELECTEUR_VUE, { hasText:'Liste' }).click();
-      await attendre(page, '.liste header p');
+      await ouvrirListe(page);
       await page.waitForTimeout(900);
     }
   },
@@ -298,8 +307,7 @@ const ETATS = [
     cle: 'scroll-mi-page',
     vue: 'liste',
     poser: async (page) => {
-      await page.locator(SELECTEUR_VUE, { hasText:'Liste' }).click();
-      await attendre(page, '.liste header p');
+      await ouvrirListe(page);
       await page.waitForTimeout(900);
       await page.evaluate(() => {
         // La scene fait 100dvh : rien ne defile au niveau du document, c'est le
@@ -318,8 +326,7 @@ const ETATS = [
     cle: 'recherche-historiques',
     vue: 'liste',
     poser: async (page) => {
-      await page.locator(SELECTEUR_VUE, { hasText:'Liste' }).click();
-      await attendre(page, '.liste header p');
+      await ouvrirListe(page);
       await page.locator('button.cible').click();
       await page.fill('.recherche', 'jubé');
       await page.waitForTimeout(3500);
@@ -498,7 +505,7 @@ const RELEVE = () => {
 
   // --- Chevauchements -------------------------------------------------------
   const PANNEAUX =
-    '.legende, .coin, .panneau-calques, .fiche, .facettes, .jetons, .frise, .bascule, .chiffres, .marque, .centre-barre, .liste, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-top-right, .scene > button.filtres, .renvoi-photo';
+    '.legende, .coin, .panneau-calques, .fiche, .facettes, .jetons, .frise, .bascule, .chiffres, .barre, .outils, .volet, .liste, .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-top-right, .scene > button.filtres, .renvoi-photo';
   const candidats = [
     ...new Set([...interactifs, ...[...document.querySelectorAll(PANNEAUX)].filter(visible)])
   ].slice(0, 140);

@@ -14,8 +14,10 @@ sont des tiroirs qui flottent au-dessus de la carte au lieu de la compresser. Le
 qui ouvre les facettes se pose au coin de la carte, là où le tiroir apparaît, et
 s'efface tant qu'il est ouvert.
 
-Les commandes de la carte sont rangées par question, à la manière des cartes en
-ligne : une vignette en bas à gauche ouvre les calques — plan, photo aérienne IGN,
+La carte occupe tout l'écran ; recherche, compteur, liste et filtres flottent en haut
+à gauche, et ce qu'on lit — liste, fiche, filtres — s'ouvre dans un seul volet,
+feuille à crans sur téléphone. Les commandes de la carte sont rangées par question, à
+la manière des cartes en ligne : une vignette en bas à gauche ouvre les calques — plan, photo aérienne IGN,
 cartes de Cassini et de l'état-major, couleur des points, densité, architecture
 contemporaine ; à côté, la légende dit ce que les couleurs signifient — niveau de
 protection, glose, définition et effectif sur demande — et filtre d'un toucher ; et

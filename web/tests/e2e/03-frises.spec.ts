@@ -122,7 +122,7 @@ test('frises', async () => {
     await page.getByRole('button', { name: 'Masquer les frises' }).click();
     await page.waitForTimeout(400);
     verifier('les frises se replient au large', (await page.locator('.frise').count()) === 0);
-    await page.getByRole('button', { name: 'Afficher les frises' }).click();
+    await page.getByRole('button', { name: 'Frises', exact: true }).click();
     await page.waitForTimeout(600);
     verifier('les frises reviennent', (await page.locator('.frise').count()) === 1);
 

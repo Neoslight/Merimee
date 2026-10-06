@@ -82,7 +82,7 @@ export async function ouvrirCalques(page: Page): Promise<void> {
 /** La frise est repliee au chargement : on la rouvre la ou on s'en sert. */
 export async function ouvrirFrises(page: Page): Promise<void> {
   if ((await page.locator('.frise').count()) === 1) return;
-  await page.getByRole('button', { name: 'Afficher les frises' }).click();
+  await page.getByRole('button', { name: 'Frises', exact: true }).click();
   await attendre(page, '.piste-siecles svg', 20_000);
   await page.waitForTimeout(400);
 }

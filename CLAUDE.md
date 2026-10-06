@@ -62,8 +62,8 @@ data/raw/merimee.csv  ──ETL Python──▶  web/static/data/  ──▶  Du
 | `web/src/lib/format.ts` | `romain`, `nf`, formats de nombres — étaient recopiés dans plusieurs composants |
 | `web/src/service-worker.ts` | cache des actifs hachés uniquement |
 | `web/scripts/precharger.mjs` | injecte le préchargement du wasm dans le shell HTML après build, chaîné à `build` et `build:pages` |
-| `web/src/lib/components/` | `MonumentMap` (rendu seul), `Calques`, `Legende`, `FacetPanel`, `Jetons`, `Timeline`, `DetailPanel` |
-| `web/tests/e2e/` | 332 vérifications en Chromium réel : 15 fichiers `NN-domaine.spec.ts` + `_soutien.ts` (`verifier()` adossé à `expect.soft`), `playwright.config.ts` en `workers: 1` / `retries: 0` |
+| `web/src/lib/components/` | `MonumentMap` (rendu seul), `Calques`, `Legende`, `ListeResultats`, `FacetPanel`, `Jetons`, `Timeline`, `DetailPanel` |
+| `web/tests/e2e/` | 334 vérifications en Chromium réel : 15 fichiers `NN-domaine.spec.ts` + `_soutien.ts` (`verifier()` adossé à `expect.soft`), `playwright.config.ts` en `workers: 1` / `retries: 0` |
 | `web/tests/unit/` | 79 tests Vitest sur la logique pure : `buildWhere`, `permalien`, `shards`, `teinte`, `points`, `acr`, `camera`, distances |
 | `web/tests/apercu-social.mjs` | régénère la vignette Open Graph depuis l'application |
 | `web/tests/audit-visuel.mjs` | 120 captures + relevés WCAG chiffrés, **hors** `npm run test` |
@@ -81,7 +81,7 @@ cd etl  && python -m pytest tests -q    # 103 tests (79 + 24 dans test_annexes.p
 cd web  && npm run dev                  # http://localhost:5173
 cd web  && npm run check                # svelte-check, doit rester à 0/0
 cd web  && npm run test:unit            # Vitest, 79 tests, logique pure
-cd web  && npm run build && npm run test # build statique + 332 vérifications en Chromium (tests/e2e/)
+cd web  && npm run build && npm run test # build statique + 334 vérifications en Chromium (tests/e2e/)
 cd web  && npm run apercu               # régénère static/apercu-social.png
 cd web  && npm run audit                # 120 captures + relevés dans .audit-screenshots/
 cd web  && npm run deploy               # predeploy (check + test:unit) puis build /Merimee + push sur gh-pages
@@ -198,12 +198,12 @@ avant de toucher à ce domaine** : cet index oriente, il ne remplace pas la lect
 
 ### Interface — [docs/conception-interface.md](docs/conception-interface.md)
 
-- la barre à trois blocs est centrée par ses flancs (`flex: 1 1 0`), base flex explicite au centre
-- les deux panneaux repliables sont fermés au chargement à toutes les largeurs (3 requêtes au démarrage plutôt que 14)
-- le bouton Filtres vit au coin de la carte et s'efface tant qu'il est ouvert
+- plus de barre d'en-tête : bloc du haut flottant (recherche, compteur, Carte/Liste, Filtres, Frises), thème au coin haut droit
+- un seul volet (liste ↔ fiche ↔ filtres, par priorité), colonne au large, feuille à trois crans sur téléphone ; ce qu'il ne montre pas porte `hidden`
+- volet et frise fermés au chargement à toutes les largeurs (3 requêtes au démarrage plutôt que 14)
 - la frise suit le thème, se replie partout, et les deux axes ont désormais un chemin clavier complet
 - `Timeline` est chargée en `import()` dynamique, hors du chunk de page
-- les deux panneaux sont des calques (`position: absolute`), jamais une colonne de grille qui comprime la carte
+- le volet est un calque (`position: absolute`), jamais une colonne de grille qui comprime la carte ; son fond, jamais celui de ce qui défile dedans
 - le focus suit les calques ouverts par un geste, jamais ceux posés par un permalien, toujours en `preventScroll` ; `inert` est posé depuis la page, tiroir fermé compris
 - `Échap` global ferme le calque le plus haut ; les composants qui le gèrent localement appellent `preventDefault`
 - deux états vides (`.vide-liste`, `.vide-carte`) évitent qu'un filtre trop serré laisse un écran blanc
@@ -212,8 +212,8 @@ avant de toucher à ce domaine** : cet index oriente, il ne remplace pas la lect
 - trois défauts mobiles partagés : `100dvh`, `overscroll-behavior: contain`, un seul redessin de graphique par image
 - les jetons `--sa-*` (+ `viewport-fit=cover`) tiennent la mise en page hors des zones physiques iOS
 - `.scene` en `overflow: clip` ; le fond de la fiche sur `.fiche-hote`, jamais sur `.fiche` qui défile
-- la feuille de fiche doit avoir une **hauteur définie** (flex, pas grille + `max-height`) sinon elle ne défile pas ; crans par `transform`, aperçu non modal
-- sous 768 px les vues passent en onglets au pied (`.onglets`), `.bascule`/`.replier` masqués ; champs à 16 px au doigt contre le zoom iOS
+- la feuille doit avoir une **hauteur définie** (flex, pas grille + `max-height`) sinon elle ne défile pas ; crans par `transform` (`REPLIEE` / `PART_CACHEE` égaux au style), aperçu non modal
+- sous 768 px plus d'onglets : la feuille porte la liste, `.bascule` masquée ; champs à 16 px au doigt contre le zoom iOS
 
 ### Photographies — [docs/conception-photographies.md](docs/conception-photographies.md)
 

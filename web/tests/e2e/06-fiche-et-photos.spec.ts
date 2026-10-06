@@ -218,7 +218,7 @@ test('fiche et photographies', async () => {
   await test.step('alias notice= et lien avec plage d’annees', async () => {
     await page.goto(`${infos.url}?annees=1920-1935`, { waitUntil: 'domcontentloaded' });
     await attendre(page, '.chiffres b');
-    await page.getByRole('button', { name: 'Afficher les frises' }).click();
+    await page.getByRole('button', { name: 'Frises', exact: true }).click();
     await attendre(page, '.piste-siecles svg', 20_000);
     await page.waitForTimeout(1200);
     verifier('un lien avec une plage arrive avec son voile', (await page.locator('.piste-annees .brosse').count()) === 1);

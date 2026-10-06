@@ -106,7 +106,7 @@ test('facettes et filtres', async () => {
     const puces = page.locator('.jetons button:not(.raz)');
     verifier('une puce pour le filtre pose', (await puces.count()) === 1, `${await puces.count()} puce(s)`);
 
-    await page.getByRole('button', { name: 'Afficher les frises' }).click();
+    await page.getByRole('button', { name: 'Frises', exact: true }).click();
     await attendre(page, '.piste-siecles svg', 20_000);
     await page.waitForTimeout(400);
 
@@ -326,7 +326,7 @@ test('facettes et filtres', async () => {
     await attendre(page, '.vide-carte');
     const boiteVide = (await page.locator('.vide-carte').boundingBox())!;
     const boiteZoom = (await page.locator('.maplibregl-ctrl-top-right').boundingBox())!;
-    const boiteFiltres = (await page.locator('.scene > button.filtres').boundingBox())!;
+    const boiteFiltres = (await page.locator('.haut button.filtres').boundingBox())!;
     const boiteLegende = (await page.locator('.legende').boundingBox())!;
     verifier(
       'l’etat vide en carte est visible et disjoint du zoom, des filtres et de la legende',

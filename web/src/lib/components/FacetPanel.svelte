@@ -205,7 +205,10 @@
     overflow-y: auto;
     /* Cf. `.liste` : un tiroir modal ne rend pas son geste a la page. */
     overscroll-behavior: contain;
-    background: var(--fond-carte);
+    /* Pas de fond : il est porte par le volet qui l'heberge. Un conteneur
+       defilant opaque sous un parent translate fait croire au compositeur
+       de Chromium qu'il masque la carte la ou il serait sans la translation
+       (cf. `docs/contraintes.md`). */
     padding: 4px 22px 28px;
     transition: opacity var(--t-rapide);
   }
